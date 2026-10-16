@@ -154,10 +154,15 @@ impl App {
     /// A decisão de [`App::janela_de_boas_vindas`], sem as travas (testável).
     pub(super) fn boas_vindas_pendente(&mut self) -> Option<Auxiliar> {
         let atual = super::atualizacao::versao_atual();
-        let janela = if !self.config.primeiros_passos_vistos {
+        // Instalação nova: sem preferências de antes. Quem já usava uma
+        // versão anterior (até a 0.0.2 não havia `versao_vista`) está
+        // atualizando e vê as novidades; os Primeiros passos ficam no menu.
+        let instalacao_nova = !self.config.existia && !self.config.primeiros_passos_vistos;
+        let janela = if instalacao_nova {
             self.config.primeiros_passos_vistos = true;
             Some(Auxiliar::PrimeirosPassos)
         } else if self.config.versao_vista != atual {
+            self.config.primeiros_passos_vistos = true;
             self.novidades_versao = 0;
             Some(Auxiliar::Novidades)
         } else {
@@ -386,6 +391,7 @@ mod testes {
         let mut app = App::default();
         app.config.primeiros_passos_vistos = false;
         app.config.versao_vista.clear();
+        app.config.existia = false;
         assert_eq!(app.boas_vindas_pendente(), Some(Auxiliar::PrimeirosPassos));
         // Já viu tudo desta versão: nada abre.
         assert_eq!(app.boas_vindas_pendente(), None);
@@ -393,6 +399,14 @@ mod testes {
         app.config.versao_vista = "0.0.1".into();
         assert_eq!(app.boas_vindas_pendente(), Some(Auxiliar::Novidades));
         assert_eq!(app.boas_vindas_pendente(), None);
+        // Atualizou da 0.0.2 (preferências antigas, sem os campos novos):
+        // as novidades, não o assistente.
+        let mut antigo = App::default();
+        antigo.config.existia = true;
+        antigo.config.primeiros_passos_vistos = false;
+        antigo.config.versao_vista.clear();
+        assert_eq!(antigo.boas_vindas_pendente(), Some(Auxiliar::Novidades));
+        assert_eq!(antigo.boas_vindas_pendente(), None);
         // Nunca sozinha nos testes.
         app.config.primeiros_passos_vistos = false;
         assert_eq!(app.janela_de_boas_vindas(), None);

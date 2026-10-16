@@ -21,6 +21,19 @@ pub struct Versao {
 /// Da mais nova para a mais antiga. A primeira é a desta compilação.
 pub const VERSOES: &[Versao] = &[
     Versao {
+        numero: "0.0.4",
+        data: "16/10/2026",
+        resumo: "Novidades ao atualizar",
+        ilustracao: Ilustracao::Atualizacao,
+        destaques: &[
+            ("sparkles", "O que há de novo ao atualizar", "Quem vem de uma versão anterior vê esta janela na primeira abertura."),
+            ("rocket", "Primeiros passos na instalação", "O assistente abre sozinho só numa instalação nova; depois, no menu Ajuda."),
+        ],
+        tambem: &[
+            "Na 0.0.3, quem atualizava da 0.0.2 recebia os Primeiros passos em vez das novidades.",
+        ],
+    },
+    Versao {
         numero: "0.0.3",
         data: "16/10/2026",
         resumo: "Gráficos no visual novo e recuperação automática",

@@ -1761,7 +1761,7 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-gui"
-version = "0.0.3"
+version = "0.0.4"
 dependencies = [
  "arboard",
  "base64 0.22.1",

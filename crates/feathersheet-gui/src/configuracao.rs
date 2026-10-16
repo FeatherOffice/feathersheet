@@ -80,6 +80,10 @@ pub struct Configuracao {
     /// Última versão cujas novidades a pessoa viu; diferente da atual abre
     /// "O que há de novo" sozinha.
     pub versao_vista: String,
+    /// O arquivo de preferências já existia ao abrir (não é instalação nova).
+    /// Não é gravado.
+    #[serde(skip)]
+    pub existia: bool,
 }
 fn csv_detectar_padrao() -> bool { true }
 
@@ -119,6 +123,7 @@ impl Default for Configuracao {
             autor_organizacao: String::new(),
             primeiros_passos_vistos: false,
             versao_vista: String::new(),
+            existia: false,
         }
     }
 }
@@ -175,9 +180,11 @@ impl Configuracao {
     /// Permite testar leitura real em arquivos temporários sem redirecionar
     /// HOME ou XDG_CONFIG_HOME (que são globais entre threads).
     fn carregar_de(path: &std::path::Path) -> Self {
-        let mut c: Self = std::fs::read(path).ok()
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default();
+        let lido: Option<Self> = std::fs::read(path).ok()
+            .and_then(|b| serde_json::from_slice(&b).ok());
+        let existia = lido.is_some();
+        let mut c = lido.unwrap_or_default();
+        c.existia = existia;
         if !matches!(c.idioma.as_str(), "pt-BR" | "en-US") { c.idioma = "pt-BR".into(); }
         c.acento = c.acento.min(feather_ui::tema::ACENTOS.len().saturating_sub(1));
         c.linhas_visiveis = c.linhas_visiveis.clamp(10, 50);
@@ -242,6 +249,20 @@ mod testes_ui010 {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     static CONTADOR: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn preferencias_da_0_0_2_contam_como_atualizacao_e_sem_arquivo_e_instalacao_nova() {
+        let arquivo = arquivo_teste();
+        assert!(!Configuracao::carregar_de(&arquivo).existia);
+        // Arquivo da 0.0.2: sem versao_vista nem primeiros_passos_vistos.
+        std::fs::create_dir_all(arquivo.parent().unwrap()).unwrap();
+        std::fs::write(&arquivo, r#"{"zoom":125,"acento":5}"#).unwrap();
+        let c = Configuracao::carregar_de(&arquivo);
+        assert!(c.existia && c.versao_vista.is_empty() && !c.primeiros_passos_vistos);
+        // O campo não vai para o arquivo.
+        c.gravar_em(&arquivo).unwrap();
+        assert!(!std::fs::read_to_string(&arquivo).unwrap().contains("existia"));
+    }
 
     #[test]
     fn ribbon_restaura_aba_fixa_e_ignora_contextual_ou_config_antiga() {
