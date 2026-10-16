@@ -170,3 +170,96 @@ App vazio: **127,8 MB** (medido pelo usuário). Hoje, com a Planilha Pesada:
 Cada passo mede **todas** as linhas da tabela de metas antes e depois
 (`examples/medir_memoria.rs`, `examples/medir_xlsx_formulas.rs`); entra só se
 nenhuma piorar.
+
+## Execução — 16/10/2026 (passos 1 a 3)
+
+Bancada: `crates/feathersheet-io/examples/medir_memoria.rs` (ganhou
+`--salvar DESTINO`, a contagem de fórmulas limpas por coluna e o tempo por
+aba das primeiras 40 linhas) e `medir_xlsx_formulas.rs`; release, sem a
+janela, arquivos do usuário em `~/Documentos/FeatherSheet/`. "Planilha
+Pesada.fshz" é o arquivo gravado pela versão anterior (1 milhão de `PROCX`
+como avulsas e 6 milhões de estilos por célula); "regravado" é o mesmo
+arquivo salvo de novo pelo código deste dia.
+
+### Passo 1 — Fase 4 (`PROCX` na coluna compacta)
+
+Já estava no código: a aba Dados abre com **0 avulsas** e 7 milhões de
+fórmulas empacotadas, tanto do `.xlsx` quanto do `.fshz` antigo (a carga
+converte as avulsas antigas em coluna). Nada a fazer.
+
+### Passo 2 — Fase 2 (estilo por faixa) + carga em lote do `.fshz`
+
+- `Sheet::styles` virou [`EstilosCelula`](../../crates/feathersheet-core/src/celulas/estilos_celula.rs):
+  por coluna, faixas `(linha inicial, linha final, estilo)`, fundidas quando
+  vizinhas e iguais. A Planilha Pesada: 6 milhões de entradas → 13 faixas.
+  Mesma interface (`insert`/`remove`/`get`/`contains_key`/`keys`/`iter`/`len`),
+  mais `inserir_faixa`, `chaves_no_retangulo`, `limites`, `inserir_linhas`/
+  `excluir_linhas`/`inserir_colunas`/`excluir_colunas` (deslocar não refaz
+  mais o mapa inteiro).
+- Arquivo: `sf` no `AbaMeta` (`[coluna, r0, r1, índice do estilo]`);
+  `AbaBruta::estilos_faixa`; o `st` por célula continua sendo lido (arquivos
+  antigos). O gravador montava **um JSON por célula estilizada** (6 milhões
+  de clones: o Ctrl+S de 12 GB); agora é um JSON por entrada da tabela.
+- Carga: colunas de número e texto entram em bloco
+  (`Sheet::carregar_coluna_numeros`/`carregar_coluna_textos` →
+  `DataTable::carregar_coluna_num`/`_txt` → `load_flat`), fórmulas por
+  `FormulaTable::load_column_partes` (sem clonar os vetores de 1 milhão).
+
+| Medida | Antes | Depois |
+|---|---|---|
+| Abrir `.fshz` antigo | 6,2 s (ler 0,8 + montar 5,4) | 5,5 s (sobra: 1 M de `PROCX` avulsas no arquivo antigo) |
+| Abrir `.fshz` regravado | — | **0,5 s** (ler 0,3 + montar 0,2) |
+| RAM depois de abrir | 361 MB | 213 MB (antigo) · **147 MB** (regravado) |
+| RAM Dados calculada e consolidada | 448 MB | **281 MB** |
+| Pico ao abrir e calcular | 672 MB | 544 MB (antigo) · 381 MB (regravado) |
+| Salvar `.fshz` (Ctrl+S na bancada) | — (no app: 3,3 s, 12 GB) | 2,1 s, pico +360 MB, arquivo 43,7 → 25,0 MB |
+| Abrir `.xlsx` | 26,8 s · 315 MB | 25,7 s · 175 MB |
+| Pico ao calcular (xlsx) | 939 MB | 799 MB |
+
+Testes: `feathersheet-core` 839 (829 + 10 do módulo), `feathersheet-io` 229
+(228 + ida e volta do estilo por faixa), `feathersheet-gui` compila.
+
+### Passo 3 — V2 (critério agrupado) + busca exata indexada + corrente iterativa
+
+- [`planilha/agregado.rs`](../../crates/feathersheet-core/src/planilha/agregado.rs):
+  uma passada por conjunto de faixas agrupa as linhas pela tupla dos valores
+  de critério (soma, contagem, máximo, mínimo por grupo); `SOMASE(S)`,
+  `CONT.SE(S)`, `MÉDIASE(S)`, `MÁXIMOSES`, `MÍNIMOSES` consultam o mapa
+  quando todos os critérios são de igualdade simples (número ≠ 0, texto sem
+  operador/curinga). `CONT.SES` reaproveita o agregado de qualquer soma com
+  os mesmos critérios. Guardado em `Sheet::agregados` até a aba mudar
+  (mesma `geracao` das faixas lidas); `EvalContext::agregado`. Lê o cru
+  colunar (`Sheet::cru_rapido`) e passa cada texto do pool para minúscula
+  uma vez por id, não uma por célula.
+- `FaixaLida::posicao_exata`: índice de busca exata montado na primeira
+  consulta (`OnceLock`), usado pelo `PROCX` modo 0 (1 M × 200 comparações →
+  1 M consultas). Vale também no cálculo paralelo, que usa a mesma faixa.
+- `CalcCache` com o hash barato de `mapa_chave` (SplitMix, não SipHash).
+- Corrente (`K3=K2+I3`): `Sheet::calcular_corrente` acha o começo sujo e
+  calcula de cima para baixo, uma célula por vez, em vez de rodadas de 200
+  níveis que jogavam fora o que calcularam na volta.
+
+| Medida | Antes | Depois |
+|---|---|---|
+| Resumo, 40 linhas (`.fshz` regravado, valores do arquivo) | 4,40 s | **0,40 s** (0,18 s é montar o primeiro agregado) |
+| Produtos, 40 linhas | 1,14 s | **0,12 s** |
+| Primeiras 40 linhas de todas as abas | 5,5 s | 0,5 s |
+| Resumo inteira (`.xlsx`, tudo sujo) | 6,66 s | 2,22 s (1,96 s é calcular 1 M de `PROCX`, 2 µs cada) |
+| Corrente de 1 milhão (`.xlsx`) | 9,98 s | 4,36 s (medido com uma compilação em paralelo) |
+| RAM depois da Resumo (`.fshz` regravado) | 381 MB | 185 MB |
+
+Testes: `feathersheet-core` 844. A meta "Resumo < 0,3 s" fica a 0,1 s de
+distância num arquivo já calculado; no `.xlsx` recém-aberto o que sobra é o
+cálculo em si das colunas de Dados (passos 4 e 9).
+
+### Não entrou (ainda)
+
+- Fase 5 (resultado direto na coluna, sem `calc.cache`): o pico de
+  ~360 MB da Resumo recém-aberta do `.xlsx` e a consolidação de 1,5 s
+  continuam. Desenho previsto: colunas da `FormulaTable` com atômicos
+  (`AtomicI32`/`AtomicU64`), para gravar por `&self` sem perder o `Sync`
+  que o cálculo paralelo exige; texto que ainda não está no pool continua
+  indo para o `calc.cache`.
+- Fase 3 (XLSX tipado): a reserva de 2 M textos (`"374.99"`,
+  `"14/12/2026"`) continua.
+- Gravar em fluxo (pico +360 MB ao salvar), V4, Fase 6, V5.

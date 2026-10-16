@@ -107,6 +107,9 @@ pub struct Workbook {
     pub estilos_celula: Option<String>,
     /// Autor, última alteração e organização (gravados no .fshz e no .xlsx).
     pub propriedades: Propriedades,
+    /// As macros desta pasta (catálogo JSON opaco, como os estilos de
+    /// célula): cada arquivo leva as suas; o motor não as lê.
+    pub macros: Option<String>,
 }
 
 /// Uma duplicação de aba, desfazível. `aba` é `Some` enquanto a cópia está
@@ -155,6 +158,7 @@ impl Workbook {
             hist_abas: HistoricoAbas::default(),
             estilos_celula: None,
             propriedades: Propriedades::default(),
+            macros: None,
         }
     }
 

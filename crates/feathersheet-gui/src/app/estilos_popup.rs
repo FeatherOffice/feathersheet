@@ -188,8 +188,8 @@ impl App {
         let corpo = iced::widget::column![
             mini_tabela(nome),
             text(match nome {
-                "padrao" => "Padrão", "azul" => "Azul", "laranja" => "Laranja",
-                "verde" => "Verde", "vermelho" => "Vermelho", "roxo" => "Roxo", _ => "Cinza",
+                "padrao" => tr!("Padrão"), "azul" => tr!("Azul"), "laranja" => tr!("Laranja"),
+                "verde" => tr!("Verde"), "vermelho" => tr!("Vermelho"), "roxo" => tr!("Roxo"), _ => tr!("Cinza"),
             }).size(10).color(COR_TEXTO()),
         ].spacing(2).align_x(Alignment::Center);
         button(corpo)
@@ -211,10 +211,10 @@ impl App {
             grade = grade.push(linha);
         }
         let botoes = iced::widget::column![
-            secao("CRIAR TABELA"),
+            secao(tr!("CRIAR TABELA")),
             button(row![
                 icone_tabela(),
-                text("Tabela…").size(13),
+                text(tr!("Tabela…")).size(13),
                 Space::with_width(Length::Fill),
                 text("Ctrl+T").size(11).color(COR_TEXTO_MUTED()),
             ].spacing(9).align_y(Alignment::Center))
@@ -222,12 +222,12 @@ impl App {
                 .style(estilo_item_menu(false, true))
                 .on_press(Msg::TabelaCriarPeloMenu),
             separador(),
-            secao("ESTILOS DE TABELA"),
+            secao(tr!("ESTILOS DE TABELA")),
             grade,
             container(text(if ativa.is_some() {
-                "Selecione um estilo para a tabela atual."
+                tr!("Selecione um estilo para a tabela atual.")
             } else {
-                "Escolha uma cor para criar uma nova tabela."
+                tr!("Escolha uma cor para criar uma nova tabela.")
             }).size(11).color(COR_TEXTO_MUTED())).padding([6, 4]),
         ].spacing(5).padding(9);
         container(iced::widget::scrollable(botoes)
@@ -236,7 +236,7 @@ impl App {
             .style(estilo_popup_menu).into()
     }
     fn item_celula(&self, p: &'static Preset, largura: f32) -> Element<'_, Msg> {
-        let nome = p.nome;
+        let nome = tr!(p.nome);
         let cor = cor_hex(p.texto);
         let fundo = cor_hex(p.fundo);
         let tamanho = if p.tamanho >= 20.0 { 17.0 }
@@ -312,20 +312,20 @@ impl App {
         let largura_item = Self::largura_cartao_celula(largura);
         let itens = iced::widget::column![
             self.grupo_pessoais(colunas, largura_item),
-            self.grupo_celulas("BOM, RUIM E NEUTRO", BASICOS, colunas, largura_item),
-            self.grupo_celulas("DADOS E MODELO", DADOS, colunas, largura_item),
-            self.grupo_celulas("TÍTULOS E CABEÇALHOS", TITULOS, colunas, largura_item),
-            self.grupo_celulas("ESTILOS DE CÉLULA COM TEMA", ACENTOS, colunas, largura_item),
+            self.grupo_celulas(tr!("BOM, RUIM E NEUTRO"), BASICOS, colunas, largura_item),
+            self.grupo_celulas(tr!("DADOS E MODELO"), DADOS, colunas, largura_item),
+            self.grupo_celulas(tr!("TÍTULOS E CABEÇALHOS"), TITULOS, colunas, largura_item),
+            self.grupo_celulas(tr!("ESTILOS DE CÉLULA COM TEMA"), ACENTOS, colunas, largura_item),
             button(row![
                 feather_ui::icones::icone("plus", 16.0),
-                text("Novo estilo de célula…").size(12.5),
+                text(tr!("Novo estilo de célula…")).size(12.5),
             ].spacing(8).align_y(Alignment::Center))
                 .width(Length::Fill).padding([9, 10])
                 .style(estilo_item_menu(false, true))
                 .on_press(Msg::NovoEstilo(estilo_novo::Evento::Abrir)),
             button(row![
                 feather_ui::icones::icone("eraser", 16.0),
-                text("Limpar formatação").size(12.5),
+                text(tr!("Limpar formatação")).size(12.5),
             ].spacing(8).align_y(Alignment::Center))
                 .width(Length::Fill).padding([9, 10])
                 .style(estilo_item_menu(false, true))
@@ -370,7 +370,7 @@ impl App {
         let area = self.area_selecionada();
         self.workbook.editar(self.folha, |aba| aba.set_style(&area, &patch));
         self.alterado = true;
-        self.status = format!("Estilo de célula \"{}\" aplicado.", p.nome);
+        self.status = trf!("Estilo de célula \"{}\" aplicado.", tr!(p.nome));
     }
 }
 

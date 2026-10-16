@@ -37,7 +37,7 @@ static LIMITES: [&str; 10] = ["0 GB (desligado)", "2 GB", "4 GB", "6 GB", "8 GB"
 /// confere é o próprio leitor.
 pub(super) fn verificar(limite_gb: u16) -> Result<(), String> {
     memoria::definir_limite_gb(limite_gb);
-    memoria::verificar("A abertura do arquivo")
+    memoria::verificar(tr!("A abertura do arquivo"))
 }
 
 #[cfg(test)]

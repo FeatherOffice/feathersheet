@@ -114,8 +114,8 @@ impl App {
             Some((p.historico, p.ms))) else { return };
         self.macro_saida = r.saida.join("\n");
         self.status = match r.erro {
-            Some(e) => format!("Erro ao executar {}: {e}. Escritas revertidas.", p.nome),
-            None => r.status.unwrap_or_else(|| format!("Macro {} concluída.", p.nome)),
+            Some(e) => trf!("Erro ao executar {}: {e}. Escritas revertidas.", p.nome),
+            None => r.status.unwrap_or_else(|| trf!("Macro {} concluída.", p.nome)),
         };
         self.trocar_selecao(self.linha, self.coluna);
     }
@@ -128,7 +128,7 @@ impl App {
         let (titulo, icone, corpo) = if let Some(p) = &self.macro_pergunta {
             (p.nome.clone(), "help", p.texto.as_str())
         } else if let Some(texto) = self.macro_mensagens.first() {
-            ("Mensagem da macro".to_string(), "info-circle", texto.as_str())
+            (tr!("Mensagem da macro").to_string(), "info-circle", texto.as_str())
         } else {
             return base;
         };
@@ -137,8 +137,8 @@ impl App {
             .largura(460.0)
             .clique_fora_fecha(false);
         let d = if self.macro_pergunta.is_some() {
-            d.botao(dlg::botao_secundario("Não", Some(Msg::MacroResponder(false))))
-                .primario("Sim", Some(Msg::MacroResponder(true)))
+            d.botao(dlg::botao_secundario(tr!("Não"), Some(Msg::MacroResponder(false))))
+                .primario(tr!("Sim"), Some(Msg::MacroResponder(true)))
         } else {
             d.primario("OK", Some(Msg::MacroMensagemOk))
         };

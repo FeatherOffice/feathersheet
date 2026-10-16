@@ -24,14 +24,14 @@ impl App {
                 });
                 self.alterado=true;
                 self.trocar_selecao(self.linha,self.coluna);
-                self.status="Célula e formato limpos".into();
+                self.status=tr!("Célula e formato limpos").into();
                 return;
             }
         };
         patch.insert(chave.into(),valor);
         self.workbook.editar(self.folha,|sheet| sheet.set_style(&area,&patch));
         self.alterado=true;
-        self.status=format!("Formatação aplicada em {}",cell_name(self.linha,self.coluna));
+        self.status=trf!("Formatação aplicada em {}",cell_name(self.linha,self.coluna));
     }
 
     pub(super) fn cor_da_celula(&self, alvo: AlvoCor) -> String {
@@ -240,7 +240,7 @@ impl App {
             sheet.fechar_transacao();
         });
         self.alterado = true;
-        self.status = "Formatação atualizada".into();
+        self.status = tr!("Formatação atualizada").into();
     }
 
     pub(super) fn alternar_estilo_menu(&mut self, chave: &str) {
@@ -257,9 +257,9 @@ impl App {
             });
             self.alterado = true;
             self.status = match novo {
-                Sublinhado::Duplo => "Sublinhado duplo aplicado",
-                Sublinhado::Simples => "Sublinhado aplicado",
-                Sublinhado::Nenhum => "Sublinhado removido",
+                Sublinhado::Duplo => tr!("Sublinhado duplo aplicado"),
+                Sublinhado::Simples => tr!("Sublinhado aplicado"),
+                Sublinhado::Nenhum => tr!("Sublinhado removido"),
             }.into();
             return;
         }
@@ -294,13 +294,13 @@ impl App {
             self.alterado = true;
             self.trocar_selecao(self.linha, self.coluna);
             self.status = match (tabela, mescla) {
-                (Ok(()), Ok(())) => "Estrutura, tabelas e mesclagens atualizadas".into(),
-                (Err(e), Ok(())) => format!("Estrutura alterada; tabela requer revisão: {e}"),
-                (Ok(()), Err(e)) => format!("Estrutura alterada; mesclagem requer revisão: {e}"),
-                (Err(a), Err(b)) => format!("Estrutura alterada; tabela: {a}; mesclagem: {b}"),
+                (Ok(()), Ok(())) => tr!("Estrutura, tabelas e mesclagens atualizadas").into(),
+                (Err(e), Ok(())) => trf!("Estrutura alterada; tabela requer revisão: {e}"),
+                (Ok(()), Err(e)) => trf!("Estrutura alterada; mesclagem requer revisão: {e}"),
+                (Err(a), Err(b)) => trf!("Estrutura alterada; tabela: {a}; mesclagem: {b}"),
             };
         } else {
-            self.status = "Não foi possível inserir nesse local".into();
+            self.status = tr!("Não foi possível inserir nesse local").into();
         }
     }
 
@@ -325,13 +325,13 @@ impl App {
             self.alterado=true;
             self.trocar_selecao(self.linha,self.coluna);
             self.status=match (tabela, mescla) {
-                (Ok(()),Ok(()))=>"Estrutura, tabelas e mesclagens atualizadas".into(),
-                (Err(e),Ok(()))=>format!("Estrutura alterada; tabela requer revisão: {e}"),
-                (Ok(()),Err(e))=>format!("Estrutura alterada; mesclagem requer revisão: {e}"),
-                (Err(a),Err(b))=>format!("Estrutura alterada; tabela: {a}; mesclagem: {b}"),
+                (Ok(()),Ok(()))=>tr!("Estrutura, tabelas e mesclagens atualizadas").into(),
+                (Err(e),Ok(()))=>trf!("Estrutura alterada; tabela requer revisão: {e}"),
+                (Ok(()),Err(e))=>trf!("Estrutura alterada; mesclagem requer revisão: {e}"),
+                (Err(a),Err(b))=>trf!("Estrutura alterada; tabela: {a}; mesclagem: {b}"),
             };
         } else {
-            self.status="Não foi possível alterar a estrutura".into();
+            self.status=tr!("Não foi possível alterar a estrutura").into();
         }
     }
 
@@ -394,7 +394,7 @@ impl App {
         if matches!(modo, ModoColagem::SomenteFormato | ModoColagem::ValoresComFormato)
             && internas.is_none()
         {
-            self.status = "Esta colagem com formatação requer células copiadas do FeatherSheet".into();
+            self.status = tr!("Esta colagem com formatação requer células copiadas do FeatherSheet").into();
             return;
         }
         let com_formatacao = internas.is_some()
@@ -468,7 +468,7 @@ impl App {
                             }
                             Ok(_) => {}
                             Err(erro) => {
-                                self.status = format!("Colagem cancelada em {}: {}",
+                                self.status = trf!("Colagem cancelada em {}: {}",
                                     cell_name(r, c), erro);
                                 return;
                             }
@@ -562,24 +562,24 @@ impl App {
                 "{}:{}", cell_name(area.r0, area.c0), cell_name(area.r1, area.c1),
             );
         }
-        self.status = format!(
+        self.status = trf!(
             "{} células coladas{}",
             plano.altura * plano.largura,
             match modo {
-                ModoColagem::Completa if com_formatacao => " com formatação",
+                ModoColagem::Completa if com_formatacao => tr!(" com formatação"),
                 ModoColagem::Completa => "",
-                ModoColagem::Transposta => " (transposta)",
-                ModoColagem::SomenteValores => " (somente valores)",
-                ModoColagem::ValoresComFormato => " (valores com formatação)",
-                ModoColagem::FormulasSemFormato => " (fórmulas sem formatação)",
-                ModoColagem::SomenteFormato => " (somente formatação)",
+                ModoColagem::Transposta => tr!(" (transposta)"),
+                ModoColagem::SomenteValores => tr!(" (somente valores)"),
+                ModoColagem::ValoresComFormato => tr!(" (valores com formatação)"),
+                ModoColagem::FormulasSemFormato => tr!(" (fórmulas sem formatação)"),
+                ModoColagem::SomenteFormato => tr!(" (somente formatação)"),
             },
         );
         if let Some(erro) = erro_tabela {
-            self.status.push_str(&format!("; não foi possível ampliar a tabela: {erro}"));
+            self.status.push_str(&trf!("; não foi possível ampliar a tabela: {erro}"));
         }
         if let Some(aviso) = aviso_validacao {
-            self.status.push_str(&format!("; aviso de validação: {aviso}"));
+            self.status.push_str(&trf!("; aviso de validação: {aviso}"));
         }
     }
 
@@ -599,7 +599,7 @@ impl App {
                 self.coluna_inicio=fixas_colunas;
                 self.trocar_selecao(0,0);
                 self.alterado = true;
-                self.status = if refazer { "Refazer" } else { "Desfazer" }.into();
+                self.status = if refazer { tr!("Refazer") } else { tr!("Desfazer") }.into();
                 return;
             }
         }
@@ -622,7 +622,7 @@ impl App {
             self.invalidar_cache_objetos();
             self.recarregar_grafico_aberto();
             self.trocar_selecao(self.linha,self.coluna);
-            self.status = if refazer { "Refazer" } else { "Desfazer" }.into();
+            self.status = if refazer { tr!("Refazer") } else { tr!("Desfazer") }.into();
         }
     }
 
@@ -633,11 +633,11 @@ impl App {
         let chamada = feathersheet_core::formula::assistente::active_call(
             &self.edicao, self.editor_formula.posicao(&self.edicao))?;
         let ajuda = feathersheet_core::formula::assistente::ajuda(&chamada.name)?;
-        let assinatura = feathersheet_core::funcoes::function_help::signature(
-            &chamada.name, ajuda);
-        let argumento = ajuda.args.get(chamada.arg_index)
-            .copied().unwrap_or("argumento adicional").to_owned();
-        Some((assinatura, chamada.arg_index + 1, argumento, ajuda.doc.to_owned()))
+        let assinatura = crate::idioma::assinatura(&chamada.name, ajuda);
+        let (args, doc) = crate::idioma::ajuda_traduzida(ajuda);
+        let argumento = args.get(chamada.arg_index)
+            .cloned().unwrap_or_else(|| tr!("argumento adicional").to_owned());
+        Some((assinatura, chamada.arg_index + 1, argumento, doc))
     }
 
 }

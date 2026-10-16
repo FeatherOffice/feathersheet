@@ -38,6 +38,13 @@ use crate::fshz_read::{AbaLida, PastaLida};
 /// jogando fora o valor que acabou de vir do arquivo. O teste "abrir um FSH2
 /// não recalcula fórmula nenhuma" do lado TypeScript existe por causa disso.
 pub fn para_workbook(lida: &PastaLida) -> Workbook {
+    // A barra da montagem anda por célula carregada.
+    crate::progresso::etapa_total(lida.sheets.iter().map(|a| {
+        a.avulsas.len() as u64
+            + a.colunas_num.iter().map(|c| c.values.len() as u64).sum::<u64>()
+            + a.colunas_txt.iter().map(|c| c.indices.len() as u64).sum::<u64>()
+            + a.colunas_formula.iter().map(|c| c.slots.len() as u64).sum::<u64>()
+    }).sum());
     let mut pasta = Workbook::vazia();
     for aba in &lida.sheets {
         let indice = pasta.criar_aba(aba.n.clone());
@@ -66,6 +73,7 @@ pub fn para_workbook(lida: &PastaLida) -> Workbook {
     if let Some(pr) = &lida.pr {
         pasta.propriedades = propriedades_de_json(pr);
     }
+    pasta.macros = lida.mc.as_ref().map(|v| v.to_string());
     pasta
 }
 
@@ -229,7 +237,8 @@ fn carregar_aba(sheet: &mut feathersheet_core::planilha::sheet::Sheet, aba: &Aba
     use feathersheet_core::planilha::sheet::carga::{CelulaPreparada, Padroes};
     let mut padroes = Padroes::default();
     let mut sobras = Vec::new();
-    for celula in &aba.avulsas {
+    for (i, celula) in aba.avulsas.iter().enumerate() {
+        if i % 65_536 == 65_535 { crate::progresso::etapa_somar(65_536); }
         let row = (celula.k / 16384) as u32;
         let col = (celula.k % 16384) as u32;
         let idx = celula.estilo.and_then(|i| estilo_idx(sheet, i));
@@ -247,56 +256,42 @@ fn carregar_aba(sheet: &mut feathersheet_core::planilha::sheet::Sheet, aba: &Aba
     }
     sheet.terminar_carga();
 
-    // 2) as colunas de número.
+    // 2) as colunas de número, inteiras de uma vez (eram 6 milhões de
+    //    `set_cell_valor` na Planilha Pesada).
     for coluna in &aba.colunas_num {
-        for (linha, valor) in coluna.values.iter().enumerate() {
-            if !tem_bit(&coluna.bitmap, linha) {
-                continue;
-            }
-            sheet.set_cell_valor(linha as u32, coluna.col, feathersheet_core::celulas::values::Value::Number(*valor));
-        }
+        sheet.carregar_coluna_numeros(coluna.col, &coluna.values, &coluna.bitmap);
+        crate::progresso::etapa_somar(coluna.values.len() as u64);
     }
 
-    // 3) as colunas de texto, que vêm por dicionário.
+    // 3) as colunas de texto, que vêm por dicionário: o dicionário entra no
+    //    pool uma vez por texto distinto, os ids vão em bloco.
     for coluna in &aba.colunas_txt {
-        for (linha, indice) in coluna.indices.iter().enumerate() {
-            if !tem_bit(&coluna.bitmap, linha) {
-                continue;
-            }
-            let Some(texto) = coluna.dict.get(*indice as usize) else {
-                continue;
-            };
-            sheet.set_cell_valor(
-                linha as u32,
-                coluna.col,
-                feathersheet_core::celulas::values::Value::Text(texto.clone()),
-            );
-        }
+        sheet.carregar_coluna_textos(coluna.col, &coluna.indices, &coluna.bitmap, &coluna.dict);
+        crate::progresso::etapa_somar(coluna.indices.len() as u64);
     }
 
-    // 4) as fórmulas empacotadas: padrão e valor direto na tabela colunar.
+    // 4) as fórmulas empacotadas: padrão e valor direto na tabela colunar,
+    //    emprestando os vetores lidos (sem cópia de 1 milhão de linhas).
     if !aba.padroes_formula.is_empty() {
         sheet.formulas.load_patterns(&aba.padroes_formula);
     }
     let mut vazia = sheet.is_empty();
     for coluna in &aba.colunas_formula {
-        let salva = feathersheet_core::formula::formula_table::ColunaSalva {
-            slots: coluna.slots.clone(),
-            payload: coluna.payload.clone(),
-            bitmap: coluna.bitmap.clone(),
-            dict: coluna.dict.clone(),
-            erros: coluna
-                .erros
-                .iter()
-                .map(|e| feathersheet_core::formula::formula_table::ErroSalvo { code: e.code.clone(), detail: e.detail.clone() })
-                .collect(),
-        };
+        let erros: Vec<(&str, Option<&str>)> = coluna.erros.iter().map(|e| (e.code.as_str(), e.detail.as_deref())).collect();
         let linhas = coluna.slots.len() as u32;
-        sheet.formulas.load_column(coluna.col, &salva, linhas, &mut sheet.pool);
+        sheet.formulas.load_column_partes(coluna.col, &coluna.slots, &coluna.payload, &coluna.bitmap,
+            &coluna.dict, &erros, linhas, &mut sheet.pool);
         estender_limites(sheet, coluna.col, &coluna.bitmap, linhas, &mut vazia);
+        crate::progresso::etapa_somar(linhas as u64);
     }
 
-    // 5) o estilo direto das literais colunares.
+    // 5) o estilo direto: por faixa (arquivos de 16/10/2026 em diante) e por
+    //    célula (arquivos anteriores — cada célula entra na faixa da coluna
+    //    e as vizinhas iguais se fundem).
+    for &(col, r0, r1, i) in &aba.estilos_faixa {
+        let Some(idx) = estilo_idx(sheet, i) else { continue };
+        sheet.styles.inserir_faixa(col, r0, r1, idx);
+    }
     for &(chave, i) in &aba.estilos_diretos {
         let Some(idx) = estilo_idx(sheet, i) else { continue };
         sheet.set_style_idx((chave / 16384) as u32, (chave % 16384) as u32, idx);
@@ -630,6 +625,7 @@ mod testes {
             names: None,
             es: None,
             pr: None,
+            mc: None,
             sheets: vec![AbaLida {
                 estilos: Default::default(),
                 n: "Planilha1".into(),
@@ -641,6 +637,7 @@ mod testes {
                 cm: None,
                 avulsas: vec![],
                 estilos_diretos: vec![],
+                estilos_faixa: vec![],
                 estilos_coluna: vec![],
                 estilos_linha: vec![],
                 estilo_aba: None,
@@ -722,6 +719,7 @@ mod testes {
             names: None,
             es: None,
             pr: None,
+            mc: None,
             sheets: vec![AbaLida {
                 estilos: Default::default(),
                 n: "Planilha1".into(),
@@ -733,6 +731,7 @@ mod testes {
                 cm: None,
                 avulsas: vec![],
                 estilos_diretos: vec![],
+                estilos_faixa: vec![],
                 estilos_coluna: vec![],
                 estilos_linha: vec![],
                 estilo_aba: None,

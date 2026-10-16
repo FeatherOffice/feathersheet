@@ -127,12 +127,12 @@ impl App {
     ) -> Element<'a, Msg> {
         let script = e.script_avancado.is_some();
         let editor = e.editor_avancado.as_ref().expect("editor avançado aberto");
-        let titulo = if script { "Script completo · visualização" }
-            else { "Editor avançado · etapas JavaScript" };
+        let titulo = if script { tr!("Script completo · visualização") }
+            else { tr!("Editor avançado · etapas JavaScript") };
         let nota = if script {
-            "Código ilustrativo do fluxo completo. Não é executado como JavaScript: as etapas são processadas pelo motor Rust."
+            tr!("Código ilustrativo do fluxo completo. Não é executado como JavaScript: as etapas são processadas pelo motor Rust.")
         } else {
-            "Edite const etapas = [ ... ]; para transformar os dados. Aplicar valida todas as etapas antes de modificar a consulta."
+            tr!("Edite const etapas = [ ... ]; para transformar os dados. Aplicar valida todas as etapas antes de modificar a consulta.")
         };
         let codigo: Element<'a, Msg> = if let Some(gerado) = e.script_avancado.as_ref() {
             text_editor(gerado).font(iced::Font::MONOSPACE).size(13)
@@ -148,13 +148,13 @@ impl App {
                 feather_ui::icones::icone_colorido("code", 20.0, "#7d5cc6"),
                 text(titulo).size(17).font(negrito()),
                 Space::with_width(Length::Fill),
-                ide::botao_icone("Fechar editor avançado sem aplicar", "x",
+                ide::botao_icone(tr!("Fechar editor avançado sem aplicar"), "x",
                     Some(om(Evento::FecharEditorAvancado)), false),
             ].spacing(9).align_y(Alignment::Center),
             row![
-                ide::botao_aba("Etapas JavaScript", "code",
+                ide::botao_aba(tr!("Etapas JavaScript"), "code",
                     Some(om(Evento::VoltarEditorAvancado)), !script),
-                ide::botao_aba("Script completo", "code",
+                ide::botao_aba(tr!("Script completo"), "code",
                     Some(om(Evento::MostrarScriptAvancado)), script),
             ].spacing(4),
             text(nota).size(12).color(ide::cor_secundaria(escuro)),
@@ -165,11 +165,11 @@ impl App {
             corpo = corpo.push(text(e.erro_avancado.clone()).size(12).color(cor_erro()));
         }
         corpo = corpo.push(row![
-            text(format!("{} etapas atuais · execução em Rust", e.passos.len()))
+            text(trf!("{} etapas atuais · execução em Rust", e.passos.len()))
                 .size(11).color(ide::cor_secundaria(escuro)),
             Space::with_width(Length::Fill),
-            ide::botao("Cancelar", Some(om(Evento::FecharEditorAvancado)), false),
-            ide::botao_primario("Aplicar etapas", "checks",
+            ide::botao(tr!("Cancelar"), Some(om(Evento::FecharEditorAvancado)), false),
+            ide::botao_primario(tr!("Aplicar etapas"), "checks",
                 Some(om(Evento::AplicarEditorAvancado))),
         ].spacing(10).align_y(Alignment::Center));
         container(corpo).width(Length::Fill).height(Length::Fill)
@@ -179,55 +179,55 @@ impl App {
     /// Esquerda: somente as consultas, com nome editável no cabeçalho do painel.
     fn esquerda_openquery<'a>(&'a self, e: &'a Estado, escuro: bool) -> Element<'a, Msg> {
         let mut arvore = column![
-            text("NOME DA CONSULTA").size(10).color(ide::cor_secundaria(escuro)),
-            entrada(&e.nome, "Nome da consulta", Evento::Nome),
+            text(tr!("NOME DA CONSULTA")).size(10).color(ide::cor_secundaria(escuro)),
+            entrada(&e.nome, tr!("Nome da consulta"), Evento::Nome),
             Space::with_height(Length::Fixed(8.0)),
-            ide::grupo_arvore("Consultas salvas", "folder-open", escuro),
+            ide::grupo_arvore(tr!("Consultas salvas"), "folder-open", escuro),
         ].spacing(3).padding(7);
         for (id, nome) in e.salvas.iter().take(35) {
             let atual = e.edicao.as_deref() == Some(id.as_str());
             arvore = arvore.push(row![
                 ide::item_arvore(nome, "table", 12.0, Some(om(Evento::EditarSalva(id.clone()))), atual),
-                botao_so_icone("refresh", "Atualizar o resultado desta consulta",
+                botao_so_icone("refresh", tr!("Atualizar o resultado desta consulta"),
                     Evento::AtualizarSalva(id.clone())),
-                botao_so_icone("x", "Desvincular consulta (os valores da aba permanecem)",
+                botao_so_icone("x", tr!("Desvincular consulta (os valores da aba permanecem)"),
                     Evento::PedirExclusao(id.clone())),
             ].align_y(Alignment::Center));
         }
         if e.salvas.is_empty() {
-            arvore = arvore.push(container(legenda_oq("Nenhuma consulta gravada neste arquivo."))
+            arvore = arvore.push(container(legenda_oq(tr!("Nenhuma consulta gravada neste arquivo.")))
                 .padding([4, 12]));
         }
         if let Some(id) = &e.exclusao_pendente {
             let nome = e.salvas.iter().find(|(chave, _)| chave == id)
-                .map(|(_, nome)| nome.as_str()).unwrap_or("Consulta");
+                .map(|(_, nome)| nome.as_str()).unwrap_or(tr!("Consulta"));
             arvore = arvore.push(container(column![
-                texto_oq(format!("Desvincular '{nome}'? Os valores da aba permanecem.")),
+                texto_oq(trf!("Desvincular '{nome}'? Os valores da aba permanecem.")),
                 row![
-                    ide::botao("Cancelar", Some(om(Evento::CancelarExclusao)), false),
-                    ide::botao("Desvincular", Some(om(Evento::ConfirmarExclusao)), true),
+                    ide::botao(tr!("Cancelar"), Some(om(Evento::CancelarExclusao)), false),
+                    ide::botao(tr!("Desvincular"), Some(om(Evento::ConfirmarExclusao)), true),
                 ].spacing(ESPACO_PEQUENO),
             ].spacing(ESPACO_PEQUENO)).padding([4, 8]));
         }
-        arvore = arvore.push(ide::grupo_arvore("Origem da consulta", "folder-open", escuro));
+        arvore = arvore.push(ide::grupo_arvore(tr!("Origem da consulta"), "folder-open", escuro));
         if e.fonte.cabecalho.is_empty() {
-            arvore = arvore.push(container(legenda_oq("Nenhuma fonte escolhida."))
+            arvore = arvore.push(container(legenda_oq(tr!("Nenhuma fonte escolhida.")))
                 .padding([4, 12]));
         } else {
             arvore = arvore.push(container(column![
                 texto_oq(e.origem_aba.clone()),
-                legenda_oq(format!("{} colunas • {} linhas", e.fonte.cabecalho.len(), e.fonte.linhas.len())),
+                legenda_oq(trf!("{} colunas • {} linhas", e.fonte.cabecalho.len(), e.fonte.linhas.len())),
             ].spacing(2)).padding([3, 12]));
         }
-        arvore = arvore.push(ide::grupo_arvore("Tabelas existentes", "table", escuro));
+        arvore = arvore.push(ide::grupo_arvore(tr!("Tabelas existentes"), "table", escuro));
         let tabelas = tabelas_existentes(&self.workbook);
         if tabelas.is_empty() {
             arvore = arvore.push(container(legenda_oq(
-                "Nenhuma tabela encontrada. Crie uma na planilha com Ctrl+T."
+                tr!("Nenhuma tabela encontrada. Crie uma na planilha com Ctrl+T.")
             )).padding([4, 12]));
         }
         for (indice, nome, _) in tabelas.into_iter().take(35) {
-            let chave = format!("Tabela: {nome}");
+            let chave = trf!("Tabela: {nome}");
             if e.fonte.cabecalho.is_empty() {
                 arvore = arvore.push(ide::item_arvore(&nome, "table", 12.0,
                     Some(om(Evento::CarregarTabela(indice, nome.clone()))), false));
@@ -239,12 +239,12 @@ impl App {
         }
         if !e.fonte.cabecalho.is_empty() {
             arvore = arvore.push(container(legenda_oq(
-                "Clique em outra tabela para adicioná-la à combinação."
+                tr!("Clique em outra tabela para adicioná-la à combinação.")
             )).padding([4, 12]));
         }
 
         container(painel(
-            &format!("Consultas [{}]", e.salvas.len() + 1),
+            &trf!("Consultas [{}]", e.salvas.len() + 1),
             "sitemap", arvore.into(), Length::Fill, escuro,
         )).width(Length::Fixed(LARGURA_ESQUERDA)).height(Length::Fill).into()
     }
@@ -252,50 +252,50 @@ impl App {
     /// Tela de entrada: nenhuma aba é importada automaticamente.
     fn selecionar_fonte_openquery<'a>(&'a self, e: &'a Estado, escuro: bool) -> Element<'a, Msg> {
         let mut conteudo = column![
-            text("Obter dados").size(21).font(negrito()),
-            texto_oq("Escolha uma fonte externa ou uma tabela já existente nesta pasta."),
+            text(tr!("Obter dados")).size(21).font(negrito()),
+            texto_oq(tr!("Escolha uma fonte externa ou uma tabela já existente nesta pasta.")),
             row![
                 dica(button(column![
                     feather_ui::icones::icone_colorido("folder-open", 30.0, "#d68126"),
-                    text("Arquivo externo").size(14).font(negrito()),
-                    legenda_oq("CSV, TSV, JSON ou Excel"),
+                    text(tr!("Arquivo externo")).size(14).font(negrito()),
+                    legenda_oq(tr!("CSV, TSV, JSON ou Excel")),
                 ].spacing(8)).on_press(om(Evento::ImportarArquivo))
                     .padding(16).style(ide::estilo_botao_ide(false)),
-                    "Selecionar arquivo do computador"),
+                    tr!("Selecionar arquivo do computador")),
                 dica(button(column![
                     feather_ui::icones::icone_colorido("link", 30.0, "#2179a7"),
-                    text("Internet / API").size(14).font(negrito()),
-                    legenda_oq("API, CSV ou tabela HTML"),
+                    text(tr!("Internet / API")).size(14).font(negrito()),
+                    legenda_oq(tr!("API, CSV ou tabela HTML")),
                 ].spacing(8)).on_press(om(Evento::MostrarWeb))
                     .padding(16).style(ide::estilo_botao_ide(e.mostrar_web)),
-                    "Buscar dados de uma URL"),
+                    tr!("Buscar dados de uma URL")),
             ].spacing(10),
             row![
                 dica(button(column![
                     feather_ui::icones::icone_colorido("table", 30.0, "#21865c"),
-                    text("Tabela existente").size(14).font(negrito()),
-                    legenda_oq("Tabelas Ctrl+T desta pasta"),
+                    text(tr!("Tabela existente")).size(14).font(negrito()),
+                    legenda_oq(tr!("Tabelas Ctrl+T desta pasta")),
                 ].spacing(8)).on_press(om(Evento::MostrarTabelas))
                     .padding(16).style(ide::estilo_botao_ide(e.mostrar_tabelas)),
-                    "Escolher tabela estruturada, não uma aba"),
+                    tr!("Escolher tabela estruturada, não uma aba")),
                 dica(button(column![
                     feather_ui::icones::icone_colorido("edit", 30.0, "#7d5cc6"),
-                    text("Inserir dados").size(14).font(negrito()),
-                    legenda_oq("Digitar ou colar CSV/TSV"),
+                    text(tr!("Inserir dados")).size(14).font(negrito()),
+                    legenda_oq(tr!("Digitar ou colar CSV/TSV")),
                 ].spacing(8)).on_press(om(Evento::AbaCentro(2)))
                     .padding(16).style(ide::estilo_botao_ide(e.mostrar_manual)),
-                    "Criar uma tabela manual"),
+                    tr!("Criar uma tabela manual")),
             ].spacing(10),
         ].spacing(16).padding(24).width(Length::Fill);
         if e.mostrar_web {
             conteudo = conteudo.push(container(column![
-                text("Endereço Web / API").size(13).font(negrito()),
+                text(tr!("Endereço Web / API")).size(13).font(negrito()),
                 entrada(&e.url_web, "https://exemplo.com/api/dados.json", Evento::UrlWeb),
                 row![
-                    ide::botao_primario("Conectar e analisar", "link",
+                    ide::botao_primario(tr!("Conectar e analisar"), "link",
                         Some(om(Evento::ImportarWeb))),
-                    legenda_oq("JSON, CSV, TSV ou HTML com tabelas • 8 MiB • 25 s"),
-                    legenda_oq("JSON aninhado: use #json=dados.itens[0] no final da URL."),
+                    legenda_oq(tr!("JSON, CSV, TSV ou HTML com tabelas • 8 MiB • 25 s")),
+                    legenda_oq(tr!("JSON aninhado: use #json=dados.itens[0] no final da URL.")),
                 ].spacing(10).align_y(Alignment::Center),
             ].spacing(9).padding(16)).width(Length::Fill)
                 .style(ide::estilo_cabecalho(escuro)));
@@ -304,15 +304,15 @@ impl App {
             let mut escolher = column![
                 row![
                     feather_ui::icones::icone_colorido("table", 20.0, "#21865c"),
-                    text(format!("{} tabelas encontradas na página", e.tabelas_web.len()))
+                    text(trf!("{} tabelas encontradas na página", e.tabelas_web.len()))
                         .size(14).font(negrito()),
                 ].spacing(8).align_y(Alignment::Center),
-                legenda_oq("Selecione a tabela antes de importar; a fonte atual não será alterada."),
+                legenda_oq(tr!("Selecione a tabela antes de importar; a fonte atual não será alterada.")),
             ].spacing(8);
             let mut opcoes = column![].spacing(3);
             for (indice, tabela) in e.tabelas_web.iter().enumerate() {
                 opcoes = opcoes.push(ide::item_arvore(
-                    &format!("Tabela {}  •  {} linhas  •  {} colunas",
+                    &trf!("Tabela {}  •  {} linhas  •  {} colunas",
                         indice + 1, tabela.linhas.len(), tabela.cabecalho.len()),
                     "table", 0.0,
                     Some(om(Evento::SelecionarTabelaWeb(indice))),
@@ -321,7 +321,7 @@ impl App {
             }
             escolher = escolher.push(scrollable(opcoes).height(Length::Fixed(120.0)));
             if let Some(tabela) = e.tabelas_web.get(e.indice_tabela_web) {
-                escolher = escolher.push(text(format!(
+                escolher = escolher.push(text(trf!(
                     "Pré-visualização da tabela {} (primeiras 8 linhas e 6 colunas)",
                     e.indice_tabela_web + 1,
                 )).size(12).font(negrito()));
@@ -351,12 +351,12 @@ impl App {
                 .is_some_and(|tabela| !tabela.linhas.is_empty());
             if !possui_linhas {
                 escolher = escolher.push(legenda_oq(
-                    "A tabela selecionada não possui registros para importar."
+                    tr!("A tabela selecionada não possui registros para importar.")
                 ));
             }
             escolher = escolher.push(row![
-                ide::botao("Cancelar seleção", Some(om(Evento::CancelarSelecaoWeb)), false),
-                ide::botao_primario("Importar tabela selecionada", "checks",
+                ide::botao(tr!("Cancelar seleção"), Some(om(Evento::CancelarSelecaoWeb)), false),
+                ide::botao_primario(tr!("Importar tabela selecionada"), "checks",
                     possui_linhas.then(|| om(Evento::ConfirmarTabelaWeb))),
             ].spacing(10).align_y(Alignment::Center));
             conteudo = conteudo.push(container(escolher.spacing(9).padding(12))
@@ -364,18 +364,18 @@ impl App {
         }
         if e.mostrar_tabelas || (e.fonte.cabecalho.is_empty() && !e.mostrar_web) {
             let tabelas = tabelas_existentes(&self.workbook);
-            conteudo = conteudo.push(text("Tabelas existentes na pasta")
+            conteudo = conteudo.push(text(tr!("Tabelas existentes na pasta"))
                 .size(14).font(negrito()));
             if tabelas.is_empty() {
                 conteudo = conteudo.push(legenda_oq(
-                    "Não há tabelas estruturadas. Selecione células no FeatherSheet e crie uma tabela (Ctrl+T)."
+                    tr!("Não há tabelas estruturadas. Selecione células no FeatherSheet e crie uma tabela (Ctrl+T).")
                 ));
             } else {
                 for (indice, nome, area) in tabelas.into_iter().take(50) {
                     let aba = self.workbook.aba(indice)
                         .map(|a| a.sheet.name.as_str()).unwrap_or("?");
                     conteudo = conteudo.push(ide::item_arvore(
-                        &format!("{}  •  {}  ({} colunas)", nome, aba, area.c1 - area.c0 + 1),
+                        &trf!("{}  •  {}  ({} colunas)", nome, aba, area.c1 - area.c0 + 1),
                         "table", 0.0,
                         Some(om(Evento::CarregarTabela(indice, nome))), false,
                     ));
@@ -397,21 +397,21 @@ impl App {
         }
         let ativa = if e.mostrar_manual { 2 } else if e.exibir_codigo { 1 } else if e.exibir_script { 3 } else { 0 };
         let abas = container(row![
-            ide::botao_aba("Prévia de dados", "table", Some(om(Evento::AbaCentro(0))), ativa == 0),
+            ide::botao_aba(tr!("Prévia de dados"), "table", Some(om(Evento::AbaCentro(0))), ativa == 0),
             ide::botao_aba("JavaScript", "code", Some(om(Evento::AbaCentro(1))), ativa == 1),
-            ide::botao_aba("Tabela manual", "forms", Some(om(Evento::AbaCentro(2))), ativa == 2),
-            ide::botao_aba("Script gerado", "code", Some(om(Evento::AbaCentro(3))), ativa == 3),
+            ide::botao_aba(tr!("Tabela manual"), "forms", Some(om(Evento::AbaCentro(2))), ativa == 2),
+            ide::botao_aba(tr!("Script gerado"), "code", Some(om(Evento::AbaCentro(3))), ativa == 3),
         ].spacing(3)).width(Length::Fill).padding([4, 6])
             .style(ide::estilo_cabecalho(escuro));
         let conteudo: Element<'_, Msg> = match ativa {
             2 => container(column![
-                texto_oq("Cole CSV ou TSV: cabeçalho na primeira linha; textos são dados, não fórmulas"),
+                texto_oq(tr!("Cole CSV ou TSV: cabeçalho na primeira linha; textos são dados, não fórmulas")),
                 text_editor(&e.entrada_manual)
                     .on_action(|acao| om(Evento::EditarManual(acao)))
                     .font(iced::Font::MONOSPACE).size(TAM_TEXTO).height(Length::Fill),
                 row![
-                    ide::botao("Cancelar entrada", Some(om(Evento::AbaCentro(0))), false),
-                    ide::botao_primario("Usar tabela manual", "checks", Some(om(Evento::AplicarManual))),
+                    ide::botao(tr!("Cancelar entrada"), Some(om(Evento::AbaCentro(0))), false),
+                    ide::botao_primario(tr!("Usar tabela manual"), "checks", Some(om(Evento::AplicarManual))),
                 ].spacing(ESPACO_MEDIO),
             ].spacing(ESPACO_MEDIO).padding(8))
                 .width(Length::Fill).height(Length::Fill)
@@ -420,10 +420,10 @@ impl App {
                 container(column![
                     row![
                         feather_ui::icones::icone_colorido("code", 16.0, "#d68126"),
-                        texto_oq("JavaScript declarativo • const etapas = [ ... ];"),
+                        texto_oq(tr!("JavaScript declarativo • const etapas = [ ... ];")),
                         Space::with_width(Length::Fill),
-                        ide::botao("Editor avançado", Some(om(Evento::AbrirEditorAvancado)), false),
-                        ide::botao_primario("Aplicar", "checks", Some(om(Evento::Atualizar))),
+                        ide::botao(tr!("Editor avançado"), Some(om(Evento::AbrirEditorAvancado)), false),
+                        ide::botao_primario(tr!("Aplicar"), "checks", Some(om(Evento::Atualizar))),
                     ].spacing(8).align_y(Alignment::Center),
                     text_editor(&e.codigo).on_action(|acao| om(Evento::Codigo(acao)))
                         .font(iced::Font::MONOSPACE).size(TAM_TEXTO)
@@ -434,9 +434,9 @@ impl App {
             ].spacing(6).width(Length::Fill).height(Length::Fill).into(),
             3 => {
                 let gerado = script::gerar(&e.nome, &e.fonte.cabecalho, &e.passos)
-                    .unwrap_or_else(|erro| format!("Não foi possível gerar o script: {erro}"));
+                    .unwrap_or_else(|erro| trf!("Não foi possível gerar o script: {erro}"));
                 container(column![
-                    texto_oq("JavaScript gerado para referência • somente leitura • execução real em Rust"),
+                    texto_oq(tr!("JavaScript gerado para referência • somente leitura • execução real em Rust")),
                     scrollable(text(gerado).font(iced::Font::MONOSPACE).size(TAM_TEXTO))
                         .width(Length::Fill).height(Length::Fill),
                 ].spacing(ESPACO_MEDIO).padding(8))
@@ -448,8 +448,8 @@ impl App {
         let mut centro = column![abas].spacing(5).width(Length::Fill).height(Length::Fill);
         if (ativa == 0 || ativa == 1) && e.origem_aba.starts_with("Arquivo: ") {
             centro = centro.push(row![
-                legenda_oq("Origem externa • A atualização sempre exige escolher o arquivo novamente."),
-                ide::botao_icone("Reimportar arquivo e manter etapas", "refresh",
+                legenda_oq(tr!("Origem externa • A atualização sempre exige escolher o arquivo novamente.")),
+                ide::botao_icone(tr!("Reimportar arquivo e manter etapas"), "refresh",
                     Some(om(Evento::ReimportarArquivo)), false),
             ].spacing(ESPACO_MEDIO).align_y(Alignment::Center));
         }
@@ -460,8 +460,8 @@ impl App {
     fn previa_openquery<'a>(&'a self, e: &'a Estado, escuro: bool) -> Element<'a, Msg> {
         let visual = e.tabela_visual();
         let descricao = match e.passo_previa.filter(|i| *i < e.passos.len()) {
-            Some(i) => format!("Etapa {}: {}", i + 1, passo_rotulo(&e.passos[i])),
-            None => format!("Fonte: {}", e.origem_aba),
+            Some(i) => trf!("Etapa {}: {}", i + 1, passo_rotulo(&e.passos[i])),
+            None => trf!("Fonte: {}", e.origem_aba),
         };
         let barra_fx = container(row![
             text("ƒx").size(16).font(negrito()).color(ide::cor_acento()),
@@ -528,7 +528,7 @@ impl App {
     fn etapas_openquery<'a>(&'a self, e: &'a Estado, escuro: bool) -> Element<'a, Msg> {
         let mut lista = column![].spacing(1).padding(4);
         if !e.fonte.cabecalho.is_empty() {
-            lista = lista.push(ide::item_arvore("Fonte", "table", 0.0,
+            lista = lista.push(ide::item_arvore(tr!("Fonte"), "table", 0.0,
                 Some(om(Evento::Prever(None))), e.passo_previa.is_none()));
         }
         for (i, passo) in e.passos.iter().enumerate() {
@@ -536,21 +536,21 @@ impl App {
                 ide::item_arvore(&format!("{}. {}", i + 1, passo_rotulo(passo)),
                     "list-details", 0.0, Some(om(Evento::Prever(Some(i)))),
                     e.passo_previa == Some(i)),
-                botao_seta_cima("Mover para cima", Evento::Mover(i, -1)),
-                botao_so_icone("arrow-down", "Mover para baixo", Evento::Mover(i, 1)),
-                botao_so_icone("x", "Remover esta etapa", Evento::Remover(i)),
+                botao_seta_cima(tr!("Mover para cima"), Evento::Mover(i, -1)),
+                botao_so_icone("arrow-down", tr!("Mover para baixo"), Evento::Mover(i, 1)),
+                botao_so_icone("x", tr!("Remover esta etapa"), Evento::Remover(i)),
             ].align_y(Alignment::Center));
         }
         if e.passos.is_empty() {
             lista = lista.push(container(legenda_oq(
                 if e.fonte.cabecalho.is_empty() {
-                    "Selecione uma fonte de dados para iniciar."
+                    tr!("Selecione uma fonte de dados para iniciar.")
                 } else {
-                    "Nenhuma transformação aplicada. Use a faixa de opções."
+                    tr!("Nenhuma transformação aplicada. Use a faixa de opções.")
                 }
             )).padding([6, 8]));
         }
-        container(painel("Etapas aplicadas", "list", lista.into(), Length::Fill, escuro))
+        container(painel(tr!("Etapas aplicadas"), "list", lista.into(), Length::Fill, escuro))
             .width(Length::Fixed(LARGURA_ETAPAS)).height(Length::Fill).into()
     }
 
@@ -560,9 +560,9 @@ impl App {
     ) -> Element<'a, Msg> {
         let erros = if e.erro.is_empty() { 0 } else { 1 };
         let rotulos = [
-            (format!("Erros ({erros})"), "bug"),
-            (format!("Colunas ({})", visual.cabecalho.len()), "columns"),
-            ("Log".to_string(), "terminal"),
+            (trf!("Erros ({erros})"), "bug"),
+            (trf!("Colunas ({})", visual.cabecalho.len()), "columns"),
+            (tr!("Log").to_string(), "terminal"),
         ];
         let mut abas = row![].spacing(4);
         for (i, (rotulo, nome_icone)) in rotulos.iter().enumerate() {
@@ -571,7 +571,7 @@ impl App {
         }
         let corpo: Element<'_, Msg> = match e.painel_inferior {
             0 => if e.erro.is_empty() {
-                column![text("Nenhum erro nas etapas aplicadas.").size(12)
+                column![text(tr!("Nenhum erro nas etapas aplicadas.")).size(12)
                     .color(ide::cor_secundaria(escuro))].padding(12).into()
             } else {
                 scrollable(column![text(e.erro.clone()).size(12).color(cor_erro())]
@@ -587,12 +587,12 @@ impl App {
                 scrollable(colunas.width(Length::Fill)).height(Length::Fill).into()
             }
             _ => scrollable(column![
-                text(format!("Última mensagem: {}", self.status)).font(iced::Font::MONOSPACE).size(12),
-                text(format!("Etapas aplicadas: {}", e.passos.len()))
+                text(trf!("Última mensagem: {}", self.status)).font(iced::Font::MONOSPACE).size(12),
+                text(trf!("Etapas aplicadas: {}", e.passos.len()))
                     .font(iced::Font::MONOSPACE).size(12),
-                text(format!("Fontes adicionais: {}", e.fontes.len()))
+                text(trf!("Fontes adicionais: {}", e.fontes.len()))
                     .font(iced::Font::MONOSPACE).size(12),
-                text(format!("Limites: fonte até {MAX_CELULAS_FONTE} células, saída até {MAX_CELULAS_SAIDA}."))
+                text(trf!("Limites: fonte até {MAX_CELULAS_FONTE} células, saída até {MAX_CELULAS_SAIDA}."))
                     .font(iced::Font::MONOSPACE).size(12).color(ide::cor_secundaria(escuro)),
             ].spacing(4).padding(12).width(Length::Fill)).height(Length::Fill).into(),
         };
@@ -609,17 +609,17 @@ impl App {
         let secundaria = ide::cor_secundaria(escuro);
         let erros = if e.erro.is_empty() { 0 } else { 1 };
         container(row![
-            text(format!("{} colunas", visual.cabecalho.len())).size(11),
-            text(format!("{} linhas", visual.linhas.len())).size(11),
-            text(format!("Fonte: {}", e.origem_aba)).size(10).color(secundaria),
+            text(trf!("{} colunas", visual.cabecalho.len())).size(11),
+            text(trf!("{} linhas", visual.linhas.len())).size(11),
+            text(trf!("Fonte: {}", e.origem_aba)).size(10).color(secundaria),
             Space::with_width(Length::Fill),
-            ide::botao_icone(&format!("Erros ({erros})"), "bug",
+            ide::botao_icone(&trf!("Erros ({erros})"), "bug",
                 Some(om(Evento::PainelInferior(0))), e.painel_inferior_aberto && e.painel_inferior == 0),
-            ide::botao_icone("Colunas", "columns",
+            ide::botao_icone(tr!("Colunas"), "columns",
                 Some(om(Evento::PainelInferior(1))), e.painel_inferior_aberto && e.painel_inferior == 1),
-            ide::botao_icone("Log", "terminal",
+            ide::botao_icone(tr!("Log"), "terminal",
                 Some(om(Evento::PainelInferior(2))), e.painel_inferior_aberto && e.painel_inferior == 2),
-            text(if e.erro.is_empty() { "Nenhum erro" } else { "Verificar erros" })
+            text(if e.erro.is_empty() { tr!("Nenhum erro") } else { tr!("Verificar erros") })
                 .size(11).color(if e.erro.is_empty() {
                     iced::Color::from_rgb8(34, 138, 91)
                 } else { cor_erro() }),
@@ -633,10 +633,10 @@ impl App {
 fn barra_menus<'a>(e: &Estado, escuro: bool) -> Element<'a, Msg> {
     let mut linha = row![].spacing(3).align_y(Alignment::Center);
     for (rotulo, aba) in [
-        ("Página Inicial", AbaFaixa::Inicio),
-        ("Transformar", AbaFaixa::Transformar),
-        ("Adicionar Coluna", AbaFaixa::Adicionar),
-        ("Exibir", AbaFaixa::Exibir),
+        (tr!("Página Inicial"), AbaFaixa::Inicio),
+        (tr!("Transformar"), AbaFaixa::Transformar),
+        (tr!("Adicionar Coluna"), AbaFaixa::Adicionar),
+        (tr!("Exibir"), AbaFaixa::Exibir),
     ] {
         linha = linha.push(ide::botao_menu(rotulo, Some(om(Evento::Aba(aba))), e.aba_faixa == aba));
     }
@@ -681,84 +681,84 @@ fn barra_faixa<'a>(e: &Estado, escuro: bool) -> Element<'a, Msg> {
     let grupos = match e.aba_faixa {
         AbaFaixa::Inicio => vec![
             grupo_ribbon("FECHAR", vec![
-                botao_ribbon("Salvar e\ncarregar", "device-floppy", VERDE, Evento::Carregar, false),
-                botao_ribbon("Fechar", "x", VERMELHO, Evento::Fechar, false),
+                botao_ribbon(tr!("Salvar e\ncarregar"), "device-floppy", VERDE, Evento::Carregar, false),
+                botao_ribbon(tr!("Fechar"), "x", VERMELHO, Evento::Fechar, false),
                 botao_ribbon("Carregar\nem...", "file-export", AZUL, Evento::AbrirDestino, e.parametros_abertos && e.acao_parametros.is_none()),
             ], escuro),
-            grupo_ribbon("OBTER DADOS", vec![
-                botao_ribbon("De arquivo", "folder-open", LARANJA, Evento::ImportarArquivo, false),
-                botao_ribbon("Da Web", "link", AZUL, Evento::MostrarWeb, e.mostrar_web),
-                botao_ribbon("De tabela", "table", VERDE, Evento::MostrarTabelas, e.mostrar_tabelas),
+            grupo_ribbon(tr!("OBTER DADOS"), vec![
+                botao_ribbon(tr!("De arquivo"), "folder-open", LARANJA, Evento::ImportarArquivo, false),
+                botao_ribbon(tr!("Da Web"), "link", AZUL, Evento::MostrarWeb, e.mostrar_web),
+                botao_ribbon(tr!("De tabela"), "table", VERDE, Evento::MostrarTabelas, e.mostrar_tabelas),
             ], escuro),
             grupo_ribbon("CONSULTA", vec![
                 botao_ribbon("Atualizar\nfonte", "refresh", VERDE, Evento::AtualizarFonte, false),
-                botao_ribbon("Editor\navançado", "code", ROXO, Evento::AbrirEditorAvancado, e.editor_avancado.is_some()),
+                botao_ribbon(tr!("Editor\navançado"), "code", ROXO, Evento::AbrirEditorAvancado, e.editor_avancado.is_some()),
             ], escuro),
             grupo_ribbon("COLUNAS", vec![
-                botao_ribbon("Renomear", "edit", AZUL, Evento::Adicionar("renomear"), false),
-                botao_ribbon("Remover", "trash", VERMELHO, Evento::Adicionar("remover_coluna"), false),
+                botao_ribbon(tr!("Renomear"), "edit", AZUL, Evento::Adicionar("renomear"), false),
+                botao_ribbon(tr!("Remover"), "trash", VERMELHO, Evento::Adicionar("remover_coluna"), false),
             ], escuro),
             grupo_ribbon("LINHAS", vec![
-                botao_ribbon("Filtrar", "filter", ROXO, Evento::Adicionar("filtrar"), false),
-                botao_ribbon("Manter N", "list-numbers", VERDE, Evento::Adicionar("limite"), false),
-                botao_ribbon("Distintos", "list-select", AZUL, Evento::Adicionar("distintas"), false),
+                botao_ribbon(tr!("Filtrar"), "filter", ROXO, Evento::Adicionar("filtrar"), false),
+                botao_ribbon(tr!("Manter N"), "list-numbers", VERDE, Evento::Adicionar("limite"), false),
+                botao_ribbon(tr!("Distintos"), "list-select", AZUL, Evento::Adicionar("distintas"), false),
             ], escuro),
             grupo_ribbon("COMBINAR", vec![
-                botao_ribbon("Mesclar", "sitemap", AZUL,
+                botao_ribbon(tr!("Mesclar"), "sitemap", AZUL,
                     Evento::Assistente(assistentes::Evento::Abrir(assistentes::Tipo::Juntar)), false),
-                botao_ribbon("Acrescentar", "list", VERDE,
+                botao_ribbon(tr!("Acrescentar"), "list", VERDE,
                     Evento::Assistente(assistentes::Evento::Abrir(assistentes::Tipo::Acrescentar)), false),
             ], escuro),
         ],
         AbaFaixa::Transformar => vec![
-            grupo_ribbon("TIPO DE DADOS", vec![
-                botao_ribbon("Texto", "text-size", AZUL, Evento::Adicionar("texto"), false),
-                botao_ribbon("Número", "math-function", VERDE, Evento::Adicionar("numero"), false),
+            grupo_ribbon(tr!("TIPO DE DADOS"), vec![
+                botao_ribbon(tr!("Texto"), "text-size", AZUL, Evento::Adicionar("texto"), false),
+                botao_ribbon(tr!("Número"), "math-function", VERDE, Evento::Adicionar("numero"), false),
             ], escuro),
             grupo_ribbon("LINHAS", vec![
-                botao_ribbon("Filtrar", "filter", ROXO, Evento::Adicionar("filtrar"), false),
+                botao_ribbon(tr!("Filtrar"), "filter", ROXO, Evento::Adicionar("filtrar"), false),
                 botao_ribbon("Remover\nerros", "eraser", VERMELHO, Evento::Adicionar("remover_erros"), false),
-                botao_ribbon("Agrupar", "chart-bar", LARANJA, Evento::Adicionar("agrupar"), false),
+                botao_ribbon(tr!("Agrupar"), "chart-bar", LARANJA, Evento::Adicionar("agrupar"), false),
             ], escuro),
             grupo_ribbon("ESTRUTURA", vec![
-                botao_ribbon("Dividir\nem linhas", "columns", AZUL, Evento::Adicionar("dividir"), false),
-                botao_ribbon("Pivotar", "pivot-table", ROXO,
+                botao_ribbon(tr!("Dividir\nem linhas"), "columns", AZUL, Evento::Adicionar("dividir"), false),
+                botao_ribbon(tr!("Pivotar"), "pivot-table", ROXO,
                     Evento::Assistente(assistentes::Evento::Abrir(assistentes::Tipo::Pivotar)), false),
-                botao_ribbon("Despivotar", "layout-grid", AZUL, Evento::Adicionar("despivotar"), false),
+                botao_ribbon(tr!("Despivotar"), "layout-grid", AZUL, Evento::Adicionar("despivotar"), false),
             ], escuro),
-            grupo_ribbon("CABEÇALHO", vec![
-                botao_ribbon("Promover", "table", VERDE, Evento::Adicionar("promover"), false),
-                botao_ribbon("Rebaixar", "list", LARANJA, Evento::Adicionar("rebaixar"), false),
+            grupo_ribbon(tr!("CABEÇALHO"), vec![
+                botao_ribbon(tr!("Promover"), "table", VERDE, Evento::Adicionar("promover"), false),
+                botao_ribbon(tr!("Rebaixar"), "list", LARANJA, Evento::Adicionar("rebaixar"), false),
             ], escuro),
             grupo_ribbon("ORDENAR", vec![
-                botao_ribbon("A → Z", "sort-ascending", AZUL, Evento::Adicionar("ordenar"), false),
-                botao_ribbon("Z → A", "sort-descending", AZUL, Evento::Adicionar("decrescente"), false),
+                botao_ribbon(tr!("A → Z"), "sort-ascending", AZUL, Evento::Adicionar("ordenar"), false),
+                botao_ribbon(tr!("Z → A"), "sort-descending", AZUL, Evento::Adicionar("decrescente"), false),
             ], escuro),
         ],
         AbaFaixa::Adicionar => vec![
-            grupo_ribbon("NOVA COLUNA", vec![
-                botao_ribbon("Índice", "list-numbers", AZUL, Evento::Adicionar("indice"), false),
+            grupo_ribbon(tr!("NOVA COLUNA"), vec![
+                botao_ribbon(tr!("Índice"), "list-numbers", AZUL, Evento::Adicionar("indice"), false),
                 botao_ribbon("Mesclar\ncolunas", "link", VERDE, Evento::Adicionar("mesclar"), false),
             ], escuro),
             grupo_ribbon("CONSULTAS", vec![
-                botao_ribbon("Juntar", "arrow-step", ROXO, Evento::Adicionar("juntar"), false),
-                botao_ribbon("Acrescentar", "list", AZUL,
+                botao_ribbon(tr!("Juntar"), "arrow-step", ROXO, Evento::Adicionar("juntar"), false),
+                botao_ribbon(tr!("Acrescentar"), "list", AZUL,
                     Evento::Assistente(assistentes::Evento::Abrir(assistentes::Tipo::Acrescentar)), false),
             ], escuro),
         ],
         AbaFaixa::Exibir => vec![
-            grupo_ribbon("PAINÉIS", vec![
-                botao_ribbon("Consultas", "layout-sidebar", AZUL,
+            grupo_ribbon(tr!("PAINÉIS"), vec![
+                botao_ribbon(tr!("Consultas"), "layout-sidebar", AZUL,
                     Evento::AlternarConsultas, !e.consultas_recolhidas),
-                botao_ribbon("Etapas", "list-details", VERDE,
+                botao_ribbon(tr!("Etapas"), "list-details", VERDE,
                     Evento::AlternarEtapas, !e.etapas_recolhidas),
-                botao_ribbon("Erros e\nlog", "terminal", ROXO,
+                botao_ribbon(tr!("Erros e\nlog"), "terminal", ROXO,
                     Evento::AlternarPainelInferior, e.painel_inferior_aberto),
             ], escuro),
-            grupo_ribbon("PRÉVIA", vec![
+            grupo_ribbon(tr!("PRÉVIA"), vec![
                 botao_ribbon("Fonte\ninicial", "table", VERDE,
                     Evento::Prever(None), e.passo_previa.is_none()),
-                botao_ribbon("Ver dados", "table", AZUL, Evento::AbaCentro(0), !e.exibir_codigo && !e.mostrar_manual),
+                botao_ribbon(tr!("Ver dados"), "table", AZUL, Evento::AbaCentro(0), !e.exibir_codigo && !e.mostrar_manual),
                 botao_ribbon("JavaScript", "code", ROXO, Evento::AbaCentro(1), e.exibir_codigo),
             ], escuro),
         ],
@@ -777,21 +777,21 @@ fn barra_faixa<'a>(e: &Estado, escuro: bool) -> Element<'a, Msg> {
 fn barra_parametros<'a>(e: &'a Estado, escuro: bool) -> Element<'a, Msg> {
     let mut faixa = row![].spacing(9).align_y(Alignment::Center);
     let (titulo, campo): (&str, Option<Element<'a, Msg>>) = match e.acao_parametros {
-        Some("filtrar") => ("Filtrar coluna:", Some(entrada(&e.filtro, "Ex.: >100 ou SP*", Evento::Filtro))),
-        Some("renomear") => ("Novo nome:", Some(entrada(&e.renomear, "Nome da coluna", Evento::Renomear))),
-        Some("limite") => ("Manter primeiras linhas:", Some(entrada(&e.quantidade, "100", Evento::Quantidade))),
-        Some("dividir") => ("Separador:", Some(entrada(&e.separador, ";", Evento::Separador))),
-        _ => ("Carregar resultado em:", None),
+        Some("filtrar") => (tr!("Filtrar coluna:"), Some(entrada(&e.filtro, tr!("Ex.: >100 ou SP*"), Evento::Filtro))),
+        Some("renomear") => (tr!("Novo nome:"), Some(entrada(&e.renomear, tr!("Nome da coluna"), Evento::Renomear))),
+        Some("limite") => (tr!("Manter primeiras linhas:"), Some(entrada(&e.quantidade, "100", Evento::Quantidade))),
+        Some("dividir") => (tr!("Separador:"), Some(entrada(&e.separador, ";", Evento::Separador))),
+        _ => (tr!("Carregar resultado em:"), None),
     };
     faixa = faixa.push(text(titulo).size(12).font(negrito()));
     if let Some(campo) = campo {
         faixa = faixa.push(container(campo).width(Length::Fixed(260.0)));
-        faixa = faixa.push(ide::botao_primario("Aplicar", "checks", Some(om(Evento::AplicarParametros))));
+        faixa = faixa.push(ide::botao_primario(tr!("Aplicar"), "checks", Some(om(Evento::AplicarParametros))));
     } else {
         for (rotulo, modo) in [
-            ("Nova aba", DestinoModo::NovaAba),
-            ("Aba atual", DestinoModo::AbaAtual),
-            ("Apenas conexão", DestinoModo::ApenasConexao),
+            (tr!("Nova aba"), DestinoModo::NovaAba),
+            (tr!("Aba atual"), DestinoModo::AbaAtual),
+            (tr!("Apenas conexão"), DestinoModo::ApenasConexao),
         ] {
             faixa = faixa.push(ide::botao(rotulo, Some(om(Evento::Destino(modo))), e.destino_modo == modo));
         }

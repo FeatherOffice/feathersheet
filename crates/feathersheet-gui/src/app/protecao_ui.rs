@@ -33,7 +33,7 @@ fn hash_excel(senha: &str, sal: &[u8], giros: u32) -> Vec<u8> {
 
 pub(super) fn criar_senha(senha: &str) -> Result<SenhaPlanilha, String> {
     let mut sal = [0_u8; 16];
-    getrandom::getrandom(&mut sal).map_err(|_| "O gerador criptográfico não está disponível.")?;
+    getrandom::getrandom(&mut sal).map_err(|_| tr!("O gerador criptográfico não está disponível."))?;
     Ok(SenhaPlanilha {
         algoritmo: "SHA-512".into(),
         hash: STANDARD.encode(hash_excel(senha, &sal, GIROS)),
@@ -44,11 +44,11 @@ pub(super) fn criar_senha(senha: &str) -> Result<SenhaPlanilha, String> {
 
 pub(super) fn conferir(senha: &str, guardada: &SenhaPlanilha) -> Result<bool, String> {
     if !guardada.algoritmo.eq_ignore_ascii_case("SHA-512") {
-        return Err(format!("Senha protegida com {}, que o FeatherSheet ainda não confere.", guardada.algoritmo));
+        return Err(trf!("Senha protegida com {}, que o FeatherSheet ainda não confere.", guardada.algoritmo));
     }
-    if guardada.giros > GIROS_MAXIMO { return Err("Proteção com número de giros inválido.".into()); }
-    let sal = STANDARD.decode(&guardada.sal).map_err(|_| "Sal da proteção inválido.")?;
-    let hash = STANDARD.decode(&guardada.hash).map_err(|_| "Hash da proteção inválido.")?;
+    if guardada.giros > GIROS_MAXIMO { return Err(tr!("Proteção com número de giros inválido.").into()); }
+    let sal = STANDARD.decode(&guardada.sal).map_err(|_| tr!("Sal da proteção inválido."))?;
+    let hash = STANDARD.decode(&guardada.hash).map_err(|_| tr!("Hash da proteção inválido."))?;
     let obtido = hash_excel(senha, &sal, guardada.giros);
     Ok(obtido.len() == hash.len() && obtido.iter().zip(&hash).fold(0u8, |d, (a, b)| d | (a ^ b)) == 0)
 }
@@ -118,7 +118,7 @@ impl App {
                 let refazer = matches!(msg, Msg::Refazer);
                 s.celulas_do_proximo(refazer).iter()
                     .any(|a| s.area_bloqueada(&Rect::new(a[0], a[1], a[2], a[3])))
-                    .then(|| Recusa("A planilha está protegida: o que seria desfeito mexe em células bloqueadas.".into()))
+                    .then(|| Recusa(tr!("A planilha está protegida: o que seria desfeito mexe em células bloqueadas.").into()))
             }
             Msg::Selecionar(r, c) | Msg::Estender(r, c) => {
                 let p = if s.celula_marcada_bloqueada(*r, *c) { Permissao::SelecionarBloqueadas } else { Permissao::SelecionarDesbloqueadas };
@@ -159,7 +159,7 @@ impl App {
                     Some(p) if p.senha.is_none() => {
                         self.workbook.editar(self.folha, |s| { s.desproteger(); });
                         self.alterado = true;
-                        self.status = "Planilha desprotegida.".into();
+                        self.status = tr!("Planilha desprotegida.").into();
                     }
                     Some(_) => self.protecao_modal = Some(Estado { desproteger: true, senha: String::new(),
                         confirmacao: String::new(), permitidas: BTreeSet::new(), erro: None }),
@@ -180,8 +180,8 @@ impl App {
                 let bloqueada = self.workbook.aba(self.folha)
                     .is_some_and(|a| a.sheet.celula_marcada_bloqueada(self.linha, self.coluna));
                 self.aplicar_estilo_menu("locked", Campo::Logico(!bloqueada));
-                self.status = if bloqueada { "Células desbloqueadas: ficam editáveis com a planilha protegida." }
-                    else { "Células bloqueadas." }.into();
+                self.status = if bloqueada { tr!("Células desbloqueadas: ficam editáveis com a planilha protegida.") }
+                    else { tr!("Células bloqueadas.") }.into();
             }
         }
         Task::none()
@@ -197,15 +197,15 @@ impl App {
                     self.workbook.editar(self.folha, |s| { s.desproteger(); });
                     self.protecao_modal = None;
                     self.alterado = true;
-                    self.status = "Planilha desprotegida.".into();
+                    self.status = tr!("Planilha desprotegida.").into();
                 }
-                Ok(false) => if let Some(m) = &mut self.protecao_modal { m.erro = Some("Senha incorreta.".into()); },
+                Ok(false) => if let Some(m) = &mut self.protecao_modal { m.erro = Some(tr!("Senha incorreta.").into()); },
                 Err(erro) => if let Some(m) = &mut self.protecao_modal { m.erro = Some(erro); },
             }
             return;
         }
         if e.senha != e.confirmacao {
-            if let Some(m) = &mut self.protecao_modal { m.erro = Some("A confirmação não confere com a senha.".into()); }
+            if let Some(m) = &mut self.protecao_modal { m.erro = Some(tr!("A confirmação não confere com a senha.").into()); }
             return;
         }
         let senha = if e.senha.is_empty() { None } else {
@@ -218,7 +218,7 @@ impl App {
         self.workbook.editar(self.folha, |s| { s.proteger(protecao); });
         self.protecao_modal = None;
         self.alterado = true;
-        self.status = "Planilha protegida. Só as células desbloqueadas (menu Formatar, Bloquear célula) aceitam digitação.".into();
+        self.status = tr!("Planilha protegida. Só as células desbloqueadas (menu Formatar, Bloquear célula) aceitam digitação.").into();
     }
 
     fn view_protecao(&self) -> super::dialogo_interno::Dialogo<'_, Msg> {
@@ -229,7 +229,7 @@ impl App {
         };
         let mut painel = iced::widget::column![].spacing(10);
         if e.desproteger {
-            painel = painel.push(campo("Senha", &e.senha, |t| Msg::Protecao(Evento::Senha(t))));
+            painel = painel.push(campo(tr!("Senha"), &e.senha, |t| Msg::Protecao(Evento::Senha(t))));
         } else {
             let mut lista = iced::widget::column![].spacing(7);
             for (p, rotulo, _) in Permissao::TODAS {
@@ -237,10 +237,10 @@ impl App {
                     .on_toggle(move |v| Msg::Protecao(Evento::Permitir(p, v))).size(14).text_size(12.5));
             }
             painel = painel
-                .push(text("Senha para desproteger (opcional)").size(12).color(COR_TEXTO_MUTED()))
-                .push(campo("Sem senha", &e.senha, |t| Msg::Protecao(Evento::Senha(t))))
-                .push(campo("Confirme a senha", &e.confirmacao, |t| Msg::Protecao(Evento::Confirmacao(t))))
-                .push(text("Permitir que todos os usuários desta planilha possam").size(12).color(COR_TEXTO_MUTED()))
+                .push(text(tr!("Senha para desproteger (opcional)")).size(12).color(COR_TEXTO_MUTED()))
+                .push(campo(tr!("Sem senha"), &e.senha, |t| Msg::Protecao(Evento::Senha(t))))
+                .push(campo(tr!("Confirme a senha"), &e.confirmacao, |t| Msg::Protecao(Evento::Confirmacao(t))))
+                .push(text(tr!("Permitir que todos os usuários desta planilha possam")).size(12).color(COR_TEXTO_MUTED()))
                 .push(container(container(super::dialogo_interno::dlg::rolagem(lista.width(Length::Fill))).max_height(190.0))
                     .width(Length::Fill).padding([8, 10]).style(super::dialogo_interno::dlg::estilo_bloco));
         }
@@ -250,17 +250,17 @@ impl App {
                 .spacing(6).align_y(Alignment::Center));
         }
         let (titulo, sub) = if e.desproteger {
-            ("Desproteger planilha", "Digite a senha usada para proteger a aba.")
+            (tr!("Desproteger planilha"), tr!("Digite a senha usada para proteger a aba."))
         } else {
-            ("Proteger planilha", "Células bloqueadas não mudam. Desbloqueie antes as que devem aceitar \
-                digitação (menu Formatar, Bloquear célula).")
+            (tr!("Proteger planilha"), tr!("Células bloqueadas não mudam. Desbloqueie antes as que devem aceitar \
+                digitação (menu Formatar, Bloquear célula)."))
         };
         self.dialogo(titulo, painel)
             .icone("lock")
             .subtitulo(sub)
             .largura(460.0)
             .ao_fechar(Msg::Protecao(Evento::Fechar))
-            .secundario("Cancelar", Some(Msg::Protecao(Evento::Fechar)))
+            .secundario(tr!("Cancelar"), Some(Msg::Protecao(Evento::Fechar)))
             .primario("OK", Some(Msg::Protecao(Evento::Aplicar)))
     }
 

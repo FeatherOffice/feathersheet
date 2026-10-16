@@ -42,23 +42,23 @@ impl Estado {
     /// A imagem antiga permanece íntegra se a seleção de arquivo falhar.
     pub fn carregar(&mut self, bytes: &[u8], nome: &str) -> Result<(), String> {
         if bytes.is_empty() || bytes.len() > MAX_BYTES {
-            return Err("Imagem vazia ou acima de 16 MiB.".into());
+            return Err(tr!("Imagem vazia ou acima de 16 MiB.").into());
         }
         let formato = image::guess_format(bytes)
-            .map_err(|_| "O arquivo não é PNG/JPEG válido.".to_string())?;
+            .map_err(|_| tr!("O arquivo não é PNG/JPEG válido.").to_string())?;
         if !matches!(formato, ImageFormat::Png | ImageFormat::Jpeg) {
-            return Err("São aceitas somente imagens PNG e JPEG.".into());
+            return Err(tr!("São aceitas somente imagens PNG e JPEG.").into());
         }
         let (w, h) = ImageReader::with_format(Cursor::new(bytes), formato)
             .into_dimensions()
-            .map_err(|e| format!("Cabeçalho de imagem inválido: {e}"))?;
+            .map_err(|e| trf!("Cabeçalho de imagem inválido: {e}"))?;
         if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PIXELS {
-            return Err("A imagem excede 4 milhões de pixels.".into());
+            return Err(tr!("A imagem excede 4 milhões de pixels.").into());
         }
         let rgba = image::load_from_memory(bytes)
-            .map_err(|e| format!("Imagem corrompida: {e}"))?.to_rgba8();
+            .map_err(|e| trf!("Imagem corrompida: {e}"))?.to_rgba8();
         let original = ImagemRgba::de_image(rgba)
-            .map_err(|e| format!("Buffer RGBA inválido: {e:?}"))?;
+            .map_err(|e| trf!("Buffer RGBA inválido: {e:?}"))?;
         let previa = iced_image::Handle::from_rgba(w, h, original.pixels().to_vec());
         self.original = Some(original.clone());
         self.processado = Some(original);
@@ -73,10 +73,10 @@ impl Estado {
     /// Renderiza sempre a partir da fonte, sem acumular erros ao alternar filtros.
     pub fn aplicar(&mut self, chave: &'static str) -> Result<(), String> {
         let efeito = EfeitoRapido::da_chave(chave)
-            .ok_or_else(|| "Efeito de imagem desconhecido.".to_string())?;
-        let origem = self.original.as_ref().ok_or("Abra uma imagem antes de aplicar efeitos.")?;
+            .ok_or_else(|| tr!("Efeito de imagem desconhecido.").to_string())?;
+        let origem = self.original.as_ref().ok_or(tr!("Abra uma imagem antes de aplicar efeitos."))?;
         let imagem = efeito.executar(origem)
-            .map_err(|e| format!("Efeito inválido: {e:?}"))?;
+            .map_err(|e| trf!("Efeito inválido: {e:?}"))?;
         let (w, h) = imagem.dimensoes();
         let handle = iced_image::Handle::from_rgba(w, h, imagem.pixels().to_vec());
         self.processado = Some(imagem);
@@ -86,11 +86,11 @@ impl Estado {
     }
 
     pub fn png_exportacao(&self) -> Result<Vec<u8>, String> {
-        let imagem = self.processado.as_ref().ok_or("Nenhuma imagem processada.")?;
+        let imagem = self.processado.as_ref().ok_or(tr!("Nenhuma imagem processada."))?;
         let mut buffer = Vec::new();
         DynamicImage::ImageRgba8(imagem.clone().em_image())
             .write_to(&mut Cursor::new(&mut buffer), ImageFormat::Png)
-            .map_err(|e| format!("Erro ao codificar PNG: {e}"))?;
+            .map_err(|e| trf!("Erro ao codificar PNG: {e}"))?;
         Ok(buffer)
     }
 
@@ -101,16 +101,16 @@ impl Estado {
                 .height(Length::Fixed(180.0)))
                 .into()
         } else {
-            container(text("Abra um arquivo PNG/JPEG para visualizar efeitos.").size(12)).into()
+            container(text(tr!("Abra um arquivo PNG/JPEG para visualizar efeitos.")).size(12)).into()
         };
         container(column![
             row![
-                text(format!("Efeitos de imagem · {}", self.nome)).size(13),
-                button("Trocar imagem").on_press(Msg::ImagemLaboratorioAbrir),
-                button("Exportar PNG").on_press_maybe(
+                text(trf!("Efeitos de imagem · {}", self.nome)).size(13),
+                button(tr!("Trocar imagem")).on_press(Msg::ImagemLaboratorioAbrir),
+                button(tr!("Exportar PNG")).on_press_maybe(
                     self.processado.is_some().then_some(Msg::ImagemLaboratorioSalvar)
                 ),
-                button("Fechar").on_press(Msg::ImagemLaboratorioFechar),
+                button(tr!("Fechar")).on_press(Msg::ImagemLaboratorioFechar),
             ].spacing(10),
             row![
                 visual,
@@ -120,7 +120,7 @@ impl Estado {
                     Msg::ImagemLaboratorioFechar,
                 ),
             ].spacing(12),
-            text("Prévia independente: o .fshz e as células permanecem inalterados.").size(11),
+            text(tr!("Prévia independente: o .fshz e as células permanecem inalterados.")).size(11),
         ].spacing(8))
         .padding(12)
         .width(Length::Fill)

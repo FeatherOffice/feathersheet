@@ -21,14 +21,14 @@ impl App {
                 self.workbook.editar(self.folha, |sheet| {
                     mudou = mesclas::desmesclar(sheet, area.clone());
                 });
-                if mudou { "Mesclagem desfeita".into() }
-                else { "Não há células mescladas na seleção".into() }
+                if mudou { tr!("Mesclagem desfeita").into() }
+                else { tr!("Não há células mescladas na seleção").into() }
             }
-            _ if area.area() < 2 => "Selecione duas ou mais células para mesclar".into(),
+            _ if area.area() < 2 => tr!("Selecione duas ou mais células para mesclar").into(),
             ModoMescla::Atraves if area.c0 == area.c1 =>
-                "Selecione mais de uma coluna para mesclar através".into(),
+                tr!("Selecione mais de uma coluna para mesclar através").into(),
             ModoMescla::Atraves if area.r1 - area.r0 + 1 > TETO_LINHAS_ATRAVES =>
-                format!("Mesclar através aceita até {TETO_LINHAS_ATRAVES} linhas"),
+                trf!("Mesclar através aceita até {TETO_LINHAS_ATRAVES} linhas"),
             ModoMescla::Atraves => {
                 self.workbook.editar(self.folha, |sheet| {
                     sheet.abrir_transacao();
@@ -41,7 +41,7 @@ impl App {
                     sheet.fechar_transacao();
                 });
                 let linhas = area.r1 - area.r0 + 1;
-                format!("{linhas} {} mesclada{} de {} a {}",
+                trf!("{linhas} {} mesclada{} de {} a {}",
                     if linhas == 1 { "linha" } else { "linhas" },
                     if linhas == 1 { "" } else { "s" },
                     col_name(area.c0), col_name(area.c1))
@@ -59,9 +59,9 @@ impl App {
                     }
                     sheet.fechar_transacao();
                 });
-                format!("Células {}:{} mescladas{}",
+                trf!("Células {}:{} mescladas{}",
                     cell_name(area.r0, area.c0), cell_name(area.r1, area.c1),
-                    if centralizar { " e centralizadas" } else { "" })
+                    if centralizar { tr!(" e centralizadas") } else { "" })
             }
         };
         self.alterado |= mudou;

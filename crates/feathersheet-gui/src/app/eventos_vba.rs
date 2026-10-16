@@ -61,13 +61,13 @@ impl App {
         // Nos testes não: o diário é global e outro teste do console o confere.
         if !cfg!(test) {
             feathersheet_core::diario::anotar(format!("[evento] {evento} da aba {aba}{}",
-                alvo.map(|a| format!(" em {a}")).unwrap_or_default()));
+                alvo.map(|a| trf!(" em {a}")).unwrap_or_default()));
         }
         if let Some(r) = self.rodar_macro(historico_macros::GatilhoMacro::Evento {
             evento: evento.to_owned(), aba: aba.to_owned(), intervalo: alvo.map(str::to_owned),
         }, &e.modulo, &codigo, Vec::new()) {
             if let Some(erro) = r.erro {
-                self.status = format!("Evento {evento} da aba {aba}: {erro}. Escritas revertidas.");
+                self.status = trf!("Evento {evento} da aba {aba}: {erro}. Escritas revertidas.");
             }
         }
     }

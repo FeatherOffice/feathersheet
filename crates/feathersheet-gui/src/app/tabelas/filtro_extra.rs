@@ -248,8 +248,8 @@ fn amostra(alvo: AlvoCor, cor: Option<&str>) -> Element<'static, Msg> {
 fn item_cor(alvo: AlvoCor, cor: &Option<String>, acao: Acao, ativo: bool) -> Element<'static, Msg> {
     let rotulo = match (cor, alvo) {
         (Some(h), _) => h.to_uppercase(),
-        (None, AlvoCor::Fundo) => "Sem preenchimento".into(),
-        (None, AlvoCor::Fonte) => "Automático".into(),
+        (None, AlvoCor::Fundo) => tr!("Sem preenchimento").into(),
+        (None, AlvoCor::Fonte) => tr!("Automático").into(),
     };
     let marca: Element<'static, Msg> = if ativo { icone("checks", 14.0).into() }
         else { Space::with_width(14).into() };
@@ -314,18 +314,18 @@ impl App {
     pub(in crate::app) fn itens_classificar_extra(&self) -> [Element<'_, Msg>; 2] {
         let tem_cor = self.tabela_filtro_extra.tem_cor();
         [
-            submenu_principal("bucket", "Classificar por cor", tem_cor.then_some(Acao::Submenu(PAG_ORD_COR))),
-            submenu_principal("list", "Classificar por lista", Some(Acao::Submenu(PAG_ORD_LISTA))),
+            submenu_principal("bucket", tr!("Classificar por cor"), tem_cor.then_some(Acao::Submenu(PAG_ORD_COR))),
+            submenu_principal("list", tr!("Classificar por lista"), Some(Acao::Submenu(PAG_ORD_LISTA))),
         ]
     }
 
     /// Itens novos do menu principal, antes de "Filtrar por condição".
     pub(in crate::app) fn itens_filtro_extra(&self) -> Vec<Element<'_, Msg>> {
         let e = &self.tabela_filtro_extra;
-        let mut v = vec![submenu_principal("bucket", "Filtrar por cor", e.tem_cor().then_some(Acao::Submenu(PAG_COR)))];
+        let mut v = vec![submenu_principal("bucket", tr!("Filtrar por cor"), e.tem_cor().then_some(Acao::Submenu(PAG_COR)))];
         match e.tipo {
-            TipoColuna::Numero => v.push(submenu_principal("list-numbers", "Filtros de número", Some(Acao::Submenu(PAG_NUMERO)))),
-            TipoColuna::Data => v.push(submenu_principal("clock", "Filtros de data", Some(Acao::Submenu(PAG_DATA)))),
+            TipoColuna::Numero => v.push(submenu_principal("list-numbers", tr!("Filtros de número"), Some(Acao::Submenu(PAG_NUMERO)))),
+            TipoColuna::Data => v.push(submenu_principal("clock", tr!("Filtros de data"), Some(Acao::Submenu(PAG_DATA)))),
             TipoColuna::Texto => {}
         }
         v
@@ -415,13 +415,13 @@ impl App {
         let e = &self.tabela_filtro_extra;
         let atual = self.criterio_atual();
         let (titulo, voltar) = match pagina {
-            PAG_COR => ("Filtrar por cor", false),
-            PAG_NUMERO => ("Filtros de número", false),
-            PAG_TOP10 => ("10 primeiros", true),
-            PAG_DATA => ("Filtros de data", false),
-            PAG_PERIODO => ("Todas as datas no período", true),
-            PAG_ORD_COR => ("Classificar por cor", false),
-            _ => ("Classificar por lista", false),
+            PAG_COR => (tr!("Filtrar por cor"), false),
+            PAG_NUMERO => (tr!("Filtros de número"), false),
+            PAG_TOP10 => (tr!("10 primeiros"), true),
+            PAG_DATA => (tr!("Filtros de data"), false),
+            PAG_PERIODO => (tr!("Todas as datas no período"), true),
+            PAG_ORD_COR => (tr!("Classificar por cor"), false),
+            _ => (tr!("Classificar por lista"), false),
         };
         let mut cabecalho = row![].spacing(4).align_y(Alignment::Center);
         if voltar {
@@ -443,8 +443,8 @@ impl App {
             PAG_COR | PAG_ORD_COR => {
                 let filtrar = pagina == PAG_COR;
                 for (alvo, lista, rotulo) in [
-                    (AlvoCor::Fundo, &e.fundos, if filtrar { "Filtrar por cor da célula" } else { "Classificar por cor da célula" }),
-                    (AlvoCor::Fonte, &e.fontes, if filtrar { "Filtrar por cor da fonte" } else { "Classificar por cor da fonte" }),
+                    (AlvoCor::Fundo, &e.fundos, if filtrar { tr!("Filtrar por cor da célula") } else { tr!("Classificar por cor da célula") }),
+                    (AlvoCor::Fonte, &e.fontes, if filtrar { tr!("Filtrar por cor da fonte") } else { tr!("Classificar por cor da fonte") }),
                 ] {
                     if !lista.iter().any(Option::is_some) { continue; }
                     corpo = corpo.push(secao(rotulo));
@@ -463,21 +463,21 @@ impl App {
                 }
             }
             PAG_NUMERO => {
-                for (rotulo, op) in [("É igual a…", "eq_num"), ("É diferente de…", "neq_num"),
-                    ("É maior do que…", "gt"), ("É maior ou igual a…", "gte"),
-                    ("É menor do que…", "lt"), ("É menor ou igual a…", "lte")] {
+                for (rotulo, op) in [(tr!("É igual a…"), "eq_num"), (tr!("É diferente de…"), "neq_num"),
+                    (tr!("É maior do que…"), "gt"), (tr!("É maior ou igual a…"), "gte"),
+                    (tr!("É menor do que…"), "lt"), (tr!("É menor ou igual a…"), "lte")] {
                     let ativo = atual.is_some_and(|a| a["op"] == op);
                     corpo = corpo.push(item(rotulo, Some(Acao::Operador(op)), ativo));
                 }
                 corpo = corpo.push(divisor());
                 let top = atual.is_some_and(|a| a["op"] == "top10");
-                corpo = corpo.push(button(row![text("10 primeiros…").size(13), Space::with_width(Length::Fill),
+                corpo = corpo.push(button(row![text(tr!("10 primeiros…")).size(13), Space::with_width(Length::Fill),
                         if top { Element::from(icone("checks", 14.0)) } else { icone("chevron-right", 14.0).into() }]
                         .align_y(Alignment::Center))
                     .width(Length::Fill).height(Length::Fixed(28.0)).padding([4, 10])
                     .style(estilo_item_menu(top, true))
                     .on_press(Msg::TabelaAcao(Acao::Submenu(PAG_TOP10))));
-                for (rotulo, d) in [("Acima da média", Dinamico::AcimaDaMedia), ("Abaixo da média", Dinamico::AbaixoDaMedia)] {
+                for (rotulo, d) in [(tr!("Acima da média"), Dinamico::AcimaDaMedia), (tr!("Abaixo da média"), Dinamico::AbaixoDaMedia)] {
                     let crit = criterio_dinamico(d);
                     let ativo = atual.is_some_and(|a| filtro_json_igual(a, &crit));
                     corpo = corpo.push(item(rotulo, Some(Acao::AplicarCriterio(crit)), ativo));
@@ -485,10 +485,10 @@ impl App {
                 altura += 9.0 * 30.0 + 11.0;
             }
             PAG_TOP10 => {
-                corpo = corpo.push(text("Mostrar os itens").size(11.5).color(COR_TEXTO_MUTED()));
+                corpo = corpo.push(text(tr!("Mostrar os itens")).size(11.5).color(COR_TEXTO_MUTED()));
                 corpo = corpo.push(row![
-                    chip("Primeiros", e.top_topo, Acao::Top10Topo(true)),
-                    chip("Últimos", !e.top_topo, Acao::Top10Topo(false)),
+                    chip(tr!("Primeiros"), e.top_topo, Acao::Top10Topo(true)),
+                    chip(tr!("Últimos"), !e.top_topo, Acao::Top10Topo(false)),
                 ].spacing(6));
                 corpo = corpo.push(Space::with_height(4));
                 corpo = corpo.push(row![
@@ -497,16 +497,16 @@ impl App {
                         .on_submit(Msg::TabelaAcao(Acao::AplicarTop10))
                         .style(estilo_entrada_suspensa)
                         .size(12.5).padding([6, 8]).width(Length::Fixed(64.0)),
-                    chip("Itens", !e.top_percentual, Acao::Top10Percentual(false)),
-                    chip("Porcentagem", e.top_percentual, Acao::Top10Percentual(true)),
+                    chip(tr!("Itens"), !e.top_percentual, Acao::Top10Percentual(false)),
+                    chip(tr!("Porcentagem"), e.top_percentual, Acao::Top10Percentual(true)),
                 ].spacing(6).align_y(Alignment::Center));
                 corpo = corpo.push(divisor());
                 corpo = corpo.push(row![
-                    button(text("Cancelar").size(12)).padding([6, 9])
+                    button(text(tr!("Cancelar")).size(12)).padding([6, 9])
                         .style(estilo_botao_secundario)
                         .on_press(Msg::TabelaAcao(Acao::FecharCondicoes)),
                     Space::with_width(Length::Fill),
-                    button(text("Aplicar").size(12)).padding([6, 12])
+                    button(text(tr!("Aplicar")).size(12)).padding([6, 12])
                         .style(estilo_botao_primario)
                         .on_press(Msg::TabelaAcao(Acao::AplicarTop10)),
                 ].align_y(Alignment::Center));
@@ -520,12 +520,12 @@ impl App {
                         Some((rotulo, d)) => {
                             let crit = criterio_dinamico(*d);
                             let ativo = atual.is_some_and(|a| filtro_json_igual(a, &crit));
-                            lista.push(item(*rotulo, Some(Acao::AplicarCriterio(crit)), ativo))
+                            lista.push(item(tr!(*rotulo), Some(Acao::AplicarCriterio(crit)), ativo))
                         }
                     };
                 }
                 lista = lista.push(divisor());
-                lista = lista.push(item_sub("Todas as datas no período", Acao::Submenu(PAG_PERIODO)));
+                lista = lista.push(item_sub(tr!("Todas as datas no período"), Acao::Submenu(PAG_PERIODO)));
                 let alto = self.altura_lista_flyout(560.0);
                 corpo = corpo.push(scrollable(lista).height(Length::Fixed(alto)));
                 altura += alto;
@@ -535,20 +535,20 @@ impl App {
                 for q in 1..=4u8 {
                     let crit = criterio_dinamico(Dinamico::Trimestre(q));
                     let ativo = atual.is_some_and(|a| filtro_json_igual(a, &crit));
-                    lista = lista.push(item(format!("Trimestre {q}"), Some(Acao::AplicarCriterio(crit)), ativo));
+                    lista = lista.push(item(trf!("Trimestre {q}"), Some(Acao::AplicarCriterio(crit)), ativo));
                 }
                 lista = lista.push(divisor());
                 for (i, mes) in MESES.iter().enumerate() {
                     let crit = criterio_dinamico(Dinamico::Mes(i as u8 + 1));
                     let ativo = atual.is_some_and(|a| filtro_json_igual(a, &crit));
-                    lista = lista.push(item(*mes, Some(Acao::AplicarCriterio(crit)), ativo));
+                    lista = lista.push(item(tr!(*mes), Some(Acao::AplicarCriterio(crit)), ativo));
                 }
                 let alto = self.altura_lista_flyout(520.0);
                 corpo = corpo.push(scrollable(lista).height(Length::Fixed(alto)));
                 altura += alto;
             }
             _ => {
-                corpo = corpo.push(secao("Listas prontas"));
+                corpo = corpo.push(secao(tr!("Listas prontas")));
                 for (nome, itens) in ordenacao_ext::listas_prontas() {
                     // Os primeiros itens que cabem na linha, e reticências.
                     let mut rotulo = String::new();
@@ -561,16 +561,16 @@ impl App {
                     corpo = corpo.push(item(rotulo, Some(Acao::OrdenarPor(CriterioOrdem::Lista(itens), true)), false));
                 }
                 corpo = corpo.push(divisor());
-                corpo = corpo.push(secao("Lista própria (separe por ;)"));
+                corpo = corpo.push(secao(tr!("Lista própria (separe por ;)")));
                 let itens = ordenacao_ext::lista_de_texto(&e.lista_texto);
                 let pronto = (!itens.is_empty()).then(|| Msg::TabelaAcao(Acao::OrdenarPor(CriterioOrdem::Lista(itens), true)));
                 corpo = corpo.push(row![
-                    text_input("baixa; média; alta", &e.lista_texto)
+                    text_input(tr!("baixa; média; alta"), &e.lista_texto)
                         .on_input(|v| Msg::TabelaAcao(Acao::ListaTexto(v)))
                         .on_submit_maybe(pronto.clone())
                         .style(estilo_entrada_suspensa)
                         .size(12).padding([6, 8]).width(Length::Fill),
-                    button(text("Classificar").size(12)).padding([6, 10])
+                    button(text(tr!("Classificar")).size(12)).padding([6, 10])
                         .style(estilo_botao_primario)
                         .on_press_maybe(pronto),
                 ].spacing(6).align_y(Alignment::Center));
@@ -595,12 +595,12 @@ impl App {
             let (a, m, d) = feathersheet_core::celulas::date_serial::serial_to_ymd(s);
             format!("{d:02}/{m:02}/{a}")
         };
-        let linhas = [("Caneta", "12", -3, Some("#f4cccc"), None), ("Caderno", "35", 0, None, Some("#c00000")),
-            ("Lápis", "4", 9, Some("#d9ead3"), None), ("Borracha", "7", -40, Some("#f4cccc"), None),
-            ("Mochila", "120", 2, None, None), ("Régua", "9", -1, Some("#cfe2f3"), None)];
-        self.workbook.escrever_celula(self.folha, 0, 0, "Produto".into());
-        self.workbook.escrever_celula(self.folha, 0, 1, "Valor".into());
-        self.workbook.escrever_celula(self.folha, 0, 2, "Data".into());
+        let linhas = [(tr!("Caneta"), "12", -3, Some("#f4cccc"), None), (tr!("Caderno"), "35", 0, None, Some("#c00000")),
+            (tr!("Lápis"), "4", 9, Some("#d9ead3"), None), (tr!("Borracha"), "7", -40, Some("#f4cccc"), None),
+            (tr!("Mochila"), "120", 2, None, None), (tr!("Régua"), "9", -1, Some("#cfe2f3"), None)];
+        self.workbook.escrever_celula(self.folha, 0, 0, tr!("Produto").into());
+        self.workbook.escrever_celula(self.folha, 0, 1, tr!("Valor").into());
+        self.workbook.escrever_celula(self.folha, 0, 2, tr!("Data").into());
         for (i, (nome, valor, dias, fundo, fonte)) in linhas.iter().enumerate() {
             let r = i as u32 + 1;
             self.workbook.escrever_celula(self.folha, r, 0, (*nome).into());

@@ -27,7 +27,7 @@ impl App {
         if extras.len() < TETO_AREAS && !extras.contains(&anterior) { extras.push(anterior); }
         self.trocar_selecao(r, c);
         self.selecoes_extras = extras;
-        self.status = format!("{} áreas selecionadas", self.selecoes_extras.len() + 1);
+        self.status = trf!("{} áreas selecionadas", self.selecoes_extras.len() + 1);
     }
 
     /// Substitui a seleção por estas áreas (Ir para especial). A última

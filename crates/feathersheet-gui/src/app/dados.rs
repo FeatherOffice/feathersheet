@@ -89,7 +89,7 @@ impl App {
     pub(super) fn localizar_direcao(&mut self, reverso: bool) -> Task<Msg> {
         if !self.confirmar() { return Task::none(); }
         if self.busca.texto.is_empty() {
-            self.status = "Digite o conteúdo que deseja localizar.".into();
+            self.status = tr!("Digite o conteúdo que deseja localizar.").into();
             return Task::none();
         }
         let indices = self.abas_da_busca();
@@ -125,7 +125,7 @@ impl App {
             });
         }
         let Some(destino) = destino else {
-            self.status = "Nenhuma ocorrência encontrada.".into();
+            self.status = tr!("Nenhuma ocorrência encontrada.").into();
             return Task::none();
         };
         self.ir_para_resultado(destino)
@@ -134,7 +134,7 @@ impl App {
     /// Navega ao índice da lista "Localizar todos" sem alterar a consulta.
     pub(super) fn ir_para_resultado(&mut self, destino: ResultadoBusca) -> Task<Msg> {
         if self.workbook.aba(destino.aba).is_none_or(|a| a.sheet.oculta) {
-            self.status = "A aba encontrada não está disponível.".into();
+            self.status = tr!("A aba encontrada não está disponível.").into();
             return Task::none();
         }
         let tarefa = if destino.aba != self.folha {
@@ -142,7 +142,7 @@ impl App {
         } else { Task::none() };
         if self.folha == destino.aba {
             self.trocar_selecao(destino.linha, destino.coluna);
-            self.status = format!("Encontrado: {}!{}",
+            self.status = trf!("Encontrado: {}!{}",
                 self.workbook.nomes()[destino.aba],
                 cell_name(destino.linha, destino.coluna));
         }
@@ -156,7 +156,7 @@ impl App {
         self.busca.total = 0;
         self.busca.mostrar_todos = true;
         if self.busca.texto.is_empty() {
-            self.status = "Digite o conteúdo que deseja localizar.".into();
+            self.status = tr!("Digite o conteúdo que deseja localizar.").into();
             return;
         }
         const LIMITE_LISTA: usize = 200;
@@ -168,8 +168,8 @@ impl App {
                 .map(|m| ResultadoBusca { aba: i, linha: m.row, coluna: m.col }));
         }
         self.status = if self.busca.total > LIMITE_LISTA {
-            format!("{} ocorrência(s); a lista mostra as primeiras {LIMITE_LISTA}.", self.busca.total)
-        } else { format!("{} ocorrência(s) encontrada(s).", self.busca.total) };
+            trf!("{} ocorrência(s); a lista mostra as primeiras {LIMITE_LISTA}.", self.busca.total)
+        } else { trf!("{} ocorrência(s) encontrada(s).", self.busca.total) };
     }
 
     /// Substitui a correspondência da célula ativa; se não bater, não altera.
@@ -177,7 +177,7 @@ impl App {
     pub(super) fn substituir_atual(&mut self) -> Task<Msg> {
         if !self.confirmar() { return Task::none(); }
         if self.busca.texto.is_empty() {
-            self.status = "Digite o conteúdo que deseja substituir.".into();
+            self.status = tr!("Digite o conteúdo que deseja substituir.").into();
             return Task::none();
         }
         let (row, col) = (self.linha, self.coluna);
@@ -190,13 +190,13 @@ impl App {
                 &self.workbook.valor(self.folha, row, col))
         };
         if !ops::is_hit(&comparado, &self.busca.texto, self.busca.opcoes) {
-            self.status = "A célula ativa não corresponde ao termo pesquisado.".into();
+            self.status = tr!("A célula ativa não corresponde ao termo pesquisado.").into();
             return Task::none();
         }
         if !self.busca.opcoes.whole_cell && !ops::is_hit(&bruto, &self.busca.texto,
             ops::SearchOptions { in_formulas: true, ..self.busca.opcoes })
         {
-            self.status = "Correspondência somente no valor calculado. Use Célula inteira para substituí-la.".into();
+            self.status = tr!("Correspondência somente no valor calculado. Use Célula inteira para substituí-la.").into();
             return Task::none();
         }
         let mut alteradas = 0;
@@ -209,10 +209,10 @@ impl App {
             self.busca.mostrar_todos = false;
             self.busca.resultados.clear();
             self.trocar_selecao(row, col);
-            self.status = format!("Substituído: {}.", cell_name(row, col));
+            self.status = trf!("Substituído: {}.", cell_name(row, col));
             self.localizar_direcao(false)
         } else {
-            self.status = "Nenhuma alteração na célula atual.".into();
+            self.status = tr!("Nenhuma alteração na célula atual.").into();
             Task::none()
         }
     }
@@ -222,7 +222,7 @@ impl App {
     pub(super) fn substituir_tudo(&mut self) {
         if !self.confirmar() { return; }
         if self.busca.texto.is_empty() {
-            self.status = "Digite o conteúdo que deseja substituir.".into();
+            self.status = tr!("Digite o conteúdo que deseja substituir.").into();
             return;
         }
         let mut quantidade = 0usize;
@@ -246,9 +246,9 @@ impl App {
         self.busca.total = 0;
         self.trocar_selecao(self.linha, self.coluna);
         self.status = if abas_afetadas > 1 {
-            format!("{quantidade} célula(s) substituída(s) em {abas_afetadas} abas (desfazer por aba).")
+            trf!("{quantidade} célula(s) substituída(s) em {abas_afetadas} abas (desfazer por aba).")
         } else {
-            format!("{quantidade} célula(s) substituída(s).")
+            trf!("{quantidade} célula(s) substituída(s).")
         };
     }
 
@@ -262,8 +262,8 @@ impl App {
             self.workbook.editar(self.folha, |sheet| ops::aplicar_ordenacao(sheet,area.c0,area.c1,&plano));
             self.alterado = true;
             self.edicao = self.workbook.aba(self.folha).unwrap().sheet.get_raw(self.linha,self.coluna);
-            self.status = "Seleção ordenada pela coluna da célula ativa".into();
-        } else { self.status = "Seleção já ordenada ou sem linhas suficientes".into(); }
+            self.status = tr!("Seleção ordenada pela coluna da célula ativa").into();
+        } else { self.status = tr!("Seleção já ordenada ou sem linhas suficientes").into(); }
     }
 
     /// Processamento streaming, sem carregar a seleção inteira na memória.
@@ -277,18 +277,18 @@ impl App {
 
         self.confirmar();
         if separador.is_empty() {
-            self.status = "Informe o separador antes de dividir o texto".into();
+            self.status = tr!("Informe o separador antes de dividir o texto").into();
             return;
         }
         let area = self.area_selecionada();
         if area.c0 != area.c1 {
-            self.status = "Selecione apenas uma coluna para dividir o texto".into();
+            self.status = tr!("Selecione apenas uma coluna para dividir o texto").into();
             return;
         }
         let Some(aba) = self.workbook.aba(self.folha) else { return; };
         let ultima_linha = area.r1.min(aba.sheet.used_rect().r1);
         if area.r0 > ultima_linha {
-            self.status = "A seleção não contém texto para dividir".into();
+            self.status = tr!("A seleção não contém texto para dividir").into();
             return;
         }
 
@@ -307,13 +307,13 @@ impl App {
             let partes = texto.split(separador).count();
             if partes <= 1 { continue; }
             if (area.c0 as usize).saturating_add(partes) > MAX_COLS as usize {
-                self.status = "A divisão ultrapassaria a última coluna da planilha".into();
+                self.status = tr!("A divisão ultrapassaria a última coluna da planilha").into();
                 return;
             }
             for deslocamento in 1..partes {
                 let coluna = area.c0 + deslocamento as u32;
                 if !aba.sheet.get_raw(linha, coluna).is_empty() {
-                    self.status = format!(
+                    self.status = trf!(
                         "Divisão cancelada: {} já contém dados", cell_name(linha, coluna)
                     );
                     return;
@@ -323,7 +323,7 @@ impl App {
             quantidade += 1;
         }
         if quantidade == 0 {
-            self.status = format!("Nenhum texto contém o separador {separador:?}");
+            self.status = trf!("Nenhum texto contém o separador {separador:?}");
             return;
         }
 
@@ -369,7 +369,7 @@ impl App {
                 .map(|aba| aba.sheet.get_raw(self.linha, self.coluna))
                 .unwrap_or_default();
         }
-        self.status = format!(
+        self.status = trf!(
             "{alteradas} linha(s) dividida(s) pelo separador {separador:?}"
         );
     }
@@ -381,7 +381,7 @@ impl App {
         self.workbook.editar(self.folha, |sheet| quantidade = ops::trim_spaces(sheet,area));
         if quantidade > 0 { self.alterado = true; }
         self.edicao = self.workbook.aba(self.folha).unwrap().sheet.get_raw(self.linha,self.coluna);
-        self.status = format!("Espaços aparados em {quantidade} célula(s)");
+        self.status = trf!("Espaços aparados em {quantidade} célula(s)");
     }
 
     pub(super) fn autosoma(&mut self) {
@@ -390,7 +390,7 @@ impl App {
             |r,c| self.workbook.valor(self.folha,r,c)) {
             self.edicao = formula;
             self.confirmar();
-        } else { self.status = "Não há números acima ou à esquerda para somar".into(); }
+        } else { self.status = tr!("Não há números acima ou à esquerda para somar").into(); }
     }
 
     /// Janela "Localizar e substituir" no modelo do Excel: flutua sobre a
@@ -420,29 +420,29 @@ impl App {
         let titulo = row![
             iced::widget::mouse_area(row![
                 feather_ui::icones::icone("search", 17.0),
-                text("Localizar e substituir").size(15).font(negrito),
+                text(tr!("Localizar e substituir")).size(15).font(negrito),
                 Space::with_width(Length::Fill),
             ].spacing(8).align_y(Alignment::Center).height(Length::Fixed(28.0)))
                 .on_press(Msg::BuscaArrastoInicio)
                 .interaction(iced::mouse::Interaction::Grab),
-            icone_dica("x", "Fechar (Esc)", Msg::FecharBusca),
+            icone_dica("x", tr!("Fechar (Esc)"), Msg::FecharBusca),
         ].spacing(8).align_y(Alignment::Center);
         let abas = row![
-            aba("Localizar", !b.substituir, false),
-            aba("Substituir", b.substituir, true),
+            aba(tr!("Localizar"), !b.substituir, false),
+            aba(tr!("Substituir"), b.substituir, true),
         ].spacing(4);
 
         let mut campos = column![row![
-            rotulo("Localizar:"),
+            rotulo(tr!("Localizar:")),
             text_input("", &b.texto)
                 .id(text_input::Id::new(ID_CAMPO_BUSCA))
                 .on_input(Msg::BuscaTexto).on_submit(Msg::Localizar)
                 .size(13).padding([5, 8]).width(Length::Fill),
-            icone_dica("chevron-up", "Localizar anterior", Msg::LocalizarAnterior),
+            icone_dica("chevron-up", tr!("Localizar anterior"), Msg::LocalizarAnterior),
         ].spacing(8).align_y(Alignment::Center)].spacing(8);
         if b.substituir {
             campos = campos.push(row![
-                rotulo("Substituir por:"),
+                rotulo(tr!("Substituir por:")),
                 text_input("", &b.substituicao)
                     .on_input(Msg::Substituicao).on_submit(Msg::SubstituirAtual)
                     .size(13).padding([5, 8]).width(Length::Fill),
@@ -451,7 +451,7 @@ impl App {
         }
 
         let opcoes_botao = button(row![
-            text("Opções").size(12.5),
+            text(tr!("Opções")).size(12.5),
             feather_ui::icones::icone(if b.mais_opcoes { "chevron-up" } else { "chevron-down" }, 14.0),
         ].spacing(5).align_y(Alignment::Center))
             .padding([5, 10]).style(estilo_botao_pequeno(b.mais_opcoes))
@@ -459,20 +459,20 @@ impl App {
         let mut corpo = column![titulo, abas, campos].spacing(12);
         if b.mais_opcoes {
             let lista = |opcoes: [&'static str; 2], escolhida: &'static str, msg: fn(&'static str) -> Msg|
-                pick_list(opcoes, Some(escolhida), msg).text_size(12.5)
+                pick_list(opcoes.map(|o| tr!(o)), Some(tr!(escolhida)), msg).text_size(12.5)
                     .width(Length::Fixed(170.0)).padding([4, 8]);
             let esquerda = column![
-                row![rotulo("Dentro:"), lista(DENTRO, DENTRO[b.pasta_inteira as usize],
-                    |s| Msg::BuscaPasta(s == DENTRO[1]))].align_y(Alignment::Center),
-                row![rotulo("Pesquisar:"), lista(PESQUISAR, PESQUISAR[b.por_colunas as usize],
-                    |s| Msg::BuscaPorColunas(s == PESQUISAR[1]))].align_y(Alignment::Center),
-                row![rotulo("Examinar:"), lista(EXAMINAR, EXAMINAR[!b.opcoes.in_formulas as usize],
-                    |s| Msg::BuscaFormulas(s == EXAMINAR[0]))].align_y(Alignment::Center),
+                row![rotulo(tr!("Dentro:")), lista(DENTRO, DENTRO[b.pasta_inteira as usize],
+                    |s| Msg::BuscaPasta(s == tr!(DENTRO[1])))].align_y(Alignment::Center),
+                row![rotulo(tr!("Pesquisar:")), lista(PESQUISAR, PESQUISAR[b.por_colunas as usize],
+                    |s| Msg::BuscaPorColunas(s == tr!(PESQUISAR[1])))].align_y(Alignment::Center),
+                row![rotulo(tr!("Examinar:")), lista(EXAMINAR, EXAMINAR[!b.opcoes.in_formulas as usize],
+                    |s| Msg::BuscaFormulas(s == tr!(EXAMINAR[0])))].align_y(Alignment::Center),
             ].spacing(8);
             let direita = column![
-                checkbox("Diferenciar maiúsculas", b.opcoes.match_case)
+                checkbox(tr!("Diferenciar maiúsculas"), b.opcoes.match_case)
                     .on_toggle(Msg::BuscaMaiusculas).size(15).text_size(12.5),
-                checkbox("Célula inteira", b.opcoes.whole_cell)
+                checkbox(tr!("Célula inteira"), b.opcoes.whole_cell)
                     .on_toggle(Msg::BuscaInteira).size(15).text_size(12.5),
             ].spacing(10);
             corpo = corpo.push(row![esquerda, Space::with_width(Length::Fill), direita]
@@ -485,13 +485,13 @@ impl App {
         let mut botoes = row![].spacing(7).align_y(Alignment::Center);
         if b.substituir {
             botoes = botoes
-                .push(botao("Substituir tudo", Msg::SubstituirTudo))
-                .push(botao("Substituir", Msg::SubstituirAtual));
+                .push(botao(tr!("Substituir tudo"), Msg::SubstituirTudo))
+                .push(botao(tr!("Substituir"), Msg::SubstituirAtual));
         }
         botoes = botoes
             .push(Space::with_width(Length::Fill))
-            .push(botao("Localizar tudo", Msg::LocalizarTodos))
-            .push(button(text("Localizar próxima").size(12.5)).padding([6, 12])
+            .push(botao(tr!("Localizar tudo"), Msg::LocalizarTodos))
+            .push(button(text(tr!("Localizar próxima")).size(12.5)).padding([6, 12])
                 .style(estilo_botao_primario).on_press(Msg::Localizar));
         // Um fechar só: o x da barra de título (e o Esc).
         corpo = corpo.push(botoes);
@@ -543,7 +543,7 @@ impl App {
         ].spacing(8).align_y(Alignment::Center);
         let cab = |t: &'static str| text(t).size(11.5).font(negrito)
             .color(COR_TEXTO_MUTED()).into();
-        let cabecalho = container(colunas(cab("Planilha"), cab("Célula"), cab("Valor"), cab("Fórmula")))
+        let cabecalho = container(colunas(cab(tr!("Planilha")), cab(tr!("Célula")), cab(tr!("Valor")), cab(tr!("Fórmula"))))
             .padding([5, 8]).width(Length::Fill)
             .style(|_| container::Style {
                 background: Some(iced::Background::Color(COR_PAINEL_FAIXA())),
@@ -551,10 +551,10 @@ impl App {
                 ..Default::default()
             });
         let resumo = if b.total == 0 {
-            "Nenhuma ocorrência encontrada.".to_owned()
+            tr!("Nenhuma ocorrência encontrada.").to_owned()
         } else if b.total > b.resultados.len() {
-            format!("{} célula(s) encontrada(s); mostrando as primeiras {}.", b.total, b.resultados.len())
-        } else { format!("{} célula(s) encontrada(s).", b.total) };
+            trf!("{} célula(s) encontrada(s); mostrando as primeiras {}.", b.total, b.resultados.len())
+        } else { trf!("{} célula(s) encontrada(s).", b.total) };
 
         let mut lista = column![].spacing(1);
         for (indice, item) in b.resultados.iter().enumerate() {

@@ -510,7 +510,7 @@ impl Sheet {
     fn estilo_direto(&self, k: CellKey) -> Option<&EstiloParcial> {
         let idx = match self.cells.get(&k) {
             Some(c) => c.style_idx,
-            None => self.styles.get(&k).copied(),
+            None => self.styles.get(k),
         }?;
         self.style_parts.get(idx)
     }
@@ -541,6 +541,24 @@ impl Sheet {
         }
         // Célula vazia que só tem estilo — um fundo pintado.
         style.map(|s| Snap { raw: String::new(), style: Some(s) })
+    }
+
+    /// A cor de fundo (`bg`) ou da fonte (`color`) que vale na célula, sem
+    /// montar o estilo inteiro: a camada de cima que tiver o campo ganha
+    /// (célula, linha, coluna, aba — a ordem de `estilo_mesclado`).
+    pub fn cor_celula(&self, row: u32, col: u32, fonte: bool) -> Option<String> {
+        let campo = if fonte { "color" } else { "bg" };
+        let camadas = [self.estilo_direto(key(row, col)), self.row_styles.get(&row),
+            self.col_styles.get(&col), self.sheet_style.as_ref()];
+        for camada in camadas.into_iter().flatten() {
+            if let Some(v) = camada.get(campo) {
+                return match v {
+                    crate::celulas::estilo_parcial::Campo::Texto(t) => Some(t.clone()),
+                    _ => None,
+                };
+            }
+        }
+        None
     }
 
     /// O estilo que vale na célula: a aba, a coluna, a linha e a célula, uma
@@ -628,11 +646,13 @@ impl Sheet {
     pub fn chaves_no_retangulo(&self, r: &Rect) -> Vec<CellKey> {
         let dentro = |row: u32, col: u32| row >= r.r0 && row <= r.r1 && col >= r.c0 && col <= r.c1;
         let mut out: HashSet<CellKey> = HashSet::new();
-        for &k in self.cells.keys().chain(self.styles.keys()) {
+        for &k in self.cells.keys() {
             if dentro(key_row(k), key_col(k)) {
                 out.insert(k);
             }
         }
+        // Estilo direto por faixa: só as colunas do retângulo são visitadas.
+        out.extend(self.styles.chaves_no_retangulo(r.r0, r.c0, r.r1, r.c1));
         self.data.for_each_in_range(r, &self.pool, &mut |_, row, col| {
             out.insert(key(row, col));
         });
@@ -670,7 +690,7 @@ impl Sheet {
                 visit(e.row, e.col, &Snap::texto(e.raw.clone()));
             }
         }
-        for &k in self.styles.keys() {
+        for k in self.styles.keys() {
             if vistas.insert(k) {
                 if let Some(s) = self.snapshot(key_row(k), key_col(k)) {
                     visit(key_row(k), key_col(k), &s);
@@ -751,9 +771,13 @@ impl Sheet {
             return;
         }
         let (mut rmax, mut cmax) = (0u32, 0u32);
-        for &k in self.cells.keys().chain(self.styles.keys()) {
+        for &k in self.cells.keys() {
             rmax = rmax.max(key_row(k));
             cmax = cmax.max(key_col(k));
+        }
+        if let Some((r, c)) = self.styles.limites() {
+            rmax = rmax.max(r);
+            cmax = cmax.max(c);
         }
         if self.data.size() > 0 {
             rmax = rmax.max(self.data.max_row());
@@ -1049,6 +1073,8 @@ impl Sheet {
             }
         }
         self.fechar_transacao();
+        // A cor mudou: SOMAR.POR.COR e CONT.SE.COR (voláteis) recalculam.
+        self.sujar_volateis();
     }
 
     /// `clear`: apaga conteúdo e estilo da área.
@@ -1729,8 +1755,9 @@ impl Sheet {
         }
         // A grade redesenha tudo: anotar milhões de chaves não serve a ninguém.
         self.rastro.borrow_mut().desconhecer();
-        let especiais = self.cells.keys().chain(self.styles.keys()).chain(self.externas.iter())
-            .filter(|k| dentro(k)).copied().collect();
+        let especiais = self.cells.keys().chain(self.externas.iter())
+            .filter(|k| dentro(k)).copied()
+            .chain(self.styles.chaves_no_retangulo(r0, c0, r1, c1)).collect();
         let mut coluna_limpa: Vec<bool> = (c0..=c1)
             .map(|c| !self.data.pode_ter_na_faixa(c, r0, r1)).collect();
         for (k, _) in self.textos.iter() {
@@ -1833,9 +1860,10 @@ impl Sheet {
             let (r, c) = (key_row(*k), key_col(*k));
             r >= r0 && r <= r1 && c >= c0 && c <= c1
         };
-        let avulsas: Vec<CellKey> = self.cells.keys().chain(self.styles.keys())
+        let avulsas: Vec<CellKey> = self.cells.keys()
             .chain(self.externas.iter()).chain(self.textos.iter().map(|(k, _)| k))
-            .filter(|k| dentro(k)).copied().collect();
+            .filter(|k| dentro(k)).copied()
+            .chain(self.styles.chaves_no_retangulo(r0, c0, r1, c1)).collect();
         for k in avulsas {
             self.soltar_para_literal(key_row(k), key_col(k));
         }
@@ -1960,7 +1988,8 @@ impl Sheet {
                 regravar.push((destino, origem, col, raw));
             }
         }
-        let estilos: Vec<(CellKey, usize)> = self.styles.iter().filter(|(&k, _)| dentro(k)).map(|(&k, &v)| (k, v)).collect();
+        let estilos: Vec<(CellKey, usize)> = self.styles.chaves_no_retangulo(first, c0, last, c1).into_iter()
+            .filter_map(|k| self.styles.get(k).map(|v| (k, v))).collect();
         for (k, _) in &estilos {
             self.styles.remove(k);
         }

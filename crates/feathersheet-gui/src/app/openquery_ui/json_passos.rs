@@ -36,8 +36,8 @@ fn valor_para_ts(valor: &Json) -> Option<Json> {
 /// Lê JSON TypeScript e também a representação tipada anterior do Rust.
 pub(super) fn ler(texto: &str) -> Result<Vec<Passo>, String> {
     let mut json: Json = serde_json::from_str(texto)
-        .map_err(|erro| format!("JSON inválido: {erro}"))?;
-    let lista = json.as_array_mut().ok_or("As etapas precisam ser um array JSON")?;
+        .map_err(|erro| trf!("JSON inválido: {erro}"))?;
+    let lista = json.as_array_mut().ok_or(tr!("As etapas precisam ser um array JSON"))?;
     for passo in lista {
         let Some(objeto) = passo.as_object_mut() else { continue };
         let tipo = objeto.get("tipo").and_then(Json::as_str)
@@ -50,7 +50,7 @@ pub(super) fn ler(texto: &str) -> Result<Vec<Passo>, String> {
         }
     }
     serde_json::from_value(json)
-        .map_err(|erro| format!("Passo de consulta inválido: {erro}"))
+        .map_err(|erro| trf!("Passo de consulta inválido: {erro}"))
 }
 
 /// Produz a estrutura de passos JSON do TypeScript, sem tags do enum Value.
@@ -89,9 +89,9 @@ pub(super) fn ler_codigo_js(texto: &str) -> Result<Vec<Passo>, String> {
     }
     let codigo = codigo.strip_prefix("const etapas")
         .or_else(|| codigo.strip_prefix("let etapas"))
-        .ok_or_else(|| "Use JavaScript declarativo: const etapas = [ ... ];".to_owned())?;
+        .ok_or_else(|| tr!("Use JavaScript declarativo: const etapas = [ ... ];").to_owned())?;
     let codigo = codigo.trim_start().strip_prefix('=')
-        .ok_or_else(|| "Falta '=' após a variável etapas".to_owned())?;
+        .ok_or_else(|| tr!("Falta '=' após a variável etapas").to_owned())?;
     let codigo = codigo.trim().strip_suffix(';').unwrap_or(codigo.trim()).trim();
     ler(codigo)
 }

@@ -56,6 +56,10 @@ pub fn fn_sumif(args: &[Node], ev: &Evaluator<'_>) -> Computed {
         None => range_rect.clone(),
     };
 
+    if let Some(grupo) = crate::funcoes::fn_helpers::grupo_agregado(ev, Some(&sum_rect), std::slice::from_ref(&range_rect), std::slice::from_ref(&crit_val)) {
+        return Computed::Scalar(Value::Number(grupo.soma));
+    }
+
     let criterio = LeitorFaixa::novo(ev, &range_rect);
     let soma = LeitorFaixa::novo(ev, &sum_rect);
     let mut sum = 0.0;
@@ -508,19 +512,16 @@ pub fn fn_sumifs(args: &[Node], ev: &Evaluator<'_>) -> Computed {
         leitor: LeitorFaixa,
     }
 
-    let mut pairs = Vec::with_capacity((args.len() - 1) / 2);
-    for i in (1..args.len()).step_by(2) {
-        let rect = match node_rect(&args[i]) {
-            Some(r) => r,
-            None => return err_value(),
-        };
-        let crit_val = ev.eval(&args[i + 1]);
-        if let Value::Error(e) = crit_val {
-            return Computed::Scalar(Value::Error(e));
-        }
-        let pred = make_predicate(&crit_val);
-        pairs.push(CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred });
+    let (rects, crits) = match crate::funcoes::fn_helpers::faixas_e_criterios(args, 1, ev) {
+        Ok(x) => x,
+        Err(e) => return Computed::Scalar(Value::Error(e)),
+    };
+    if let Some(grupo) = crate::funcoes::fn_helpers::grupo_agregado(ev, Some(&sum_rect), &rects, &crits) {
+        return Computed::Scalar(Value::Number(grupo.soma));
     }
+    let pairs: Vec<CriteriaPair> = rects.into_iter().zip(crits.iter())
+        .map(|(rect, crit)| CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred: make_predicate(crit) })
+        .collect();
 
     let soma = LeitorFaixa::novo(ev, &sum_rect);
     let mut sum = 0.0;

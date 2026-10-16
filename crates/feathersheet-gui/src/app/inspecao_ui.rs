@@ -68,7 +68,7 @@ impl App {
                     }
                 }
                 self.inspecao_selecionada = self.inspecoes.len().checked_sub(1);
-                self.status = format!("{novas} inspeção(ões) adicionada(s)");
+                self.status = trf!("{novas} inspeção(ões) adicionada(s)");
                 if !self.janelas.aberta(Auxiliar::Inspecao) {
                     return self.alternar(Auxiliar::Inspecao);
                 }
@@ -154,8 +154,8 @@ impl App {
         let titulo = |t: &'static str| -> Element<'static, Msg> {
             text(t).size(11.5).color(COR_TEXTO_MUTED()).into()
         };
-        let cabecalho = container(colunas(titulo("Planilha"), titulo("Nome"), titulo("Célula"),
-            titulo("Valor"), titulo("Fórmula"), titulo("")))
+        let cabecalho = container(colunas(titulo(tr!("Planilha")), titulo(tr!("Nome")), titulo(tr!("Célula")),
+            titulo(tr!("Valor")), titulo(tr!("Fórmula")), titulo("")))
             .padding([6, 10]).width(Length::Fill).style(estilo_cabecalho);
 
         let mut lista = column![].spacing(1);
@@ -169,12 +169,12 @@ impl App {
                     button(feather_ui::icones::icone("arrow-right", 14.)).padding(5)
                         .style(estilo_botao_pequeno(false))
                         .on_press(Msg::Inspecao(Evento::Ir(i))),
-                    "Ir até a célula"),
+                    tr!("Ir até a célula")),
                 feather_ui::formatacao::dica(
                     button(feather_ui::icones::icone("trash", 14.)).padding(5)
                         .style(estilo_botao_pequeno(false))
                         .on_press(Msg::Inspecao(Evento::Excluir(i))),
-                    "Excluir inspeção"),
+                    tr!("Excluir inspeção")),
             ].spacing(2).into();
             let linha = colunas(celula(l.planilha, 16), celula(l.nome, 14), celula(l.celula, 9),
                 celula(l.valor, 19), text(cortar(&l.formula, 60)).size(12.5).font(iced::Font::MONOSPACE).into(),
@@ -187,8 +187,8 @@ impl App {
             container(column![
                 feather_ui::icones::icone("eye", 30.).style(|_, _| iced::widget::svg::Style {
                     color: Some(COR_TEXTO_MUTED()) }),
-                text("Nenhuma célula em inspeção").size(14),
-                text("Selecione células na planilha e clique em Adicionar inspeção.")
+                text(tr!("Nenhuma célula em inspeção")).size(14),
+                text(tr!("Selecione células na planilha e clique em Adicionar inspeção."))
                     .size(12).color(COR_TEXTO_MUTED()),
             ].spacing(8).align_x(Alignment::Center))
                 .center_x(Length::Fill).center_y(Length::Fixed(220.)).into()
@@ -204,21 +204,21 @@ impl App {
         let ferramentas = row![
             button(row![feather_ui::icones::icone("plus", 15.)
                 .style(|_, _| iced::widget::svg::Style { color: Some(iced::Color::WHITE) }),
-                text("Adicionar inspeção").size(12.5)]
+                text(tr!("Adicionar inspeção")).size(12.5)]
                 .spacing(6).align_y(Alignment::Center))
                 .padding([6, 10]).style(estilo_botao_primario)
                 .on_press(Msg::Inspecao(Evento::Adicionar)),
-            text(format!("Seleção atual: {alvo}")).size(11.5).color(COR_TEXTO_MUTED()),
+            text(trf!("Seleção atual: {alvo}")).size(11.5).color(COR_TEXTO_MUTED()),
             Space::with_width(Length::Fill),
-            button(row![feather_ui::icones::icone("trash", 15.), text("Excluir inspeção").size(12.5)]
+            button(row![feather_ui::icones::icone("trash", 15.), text(tr!("Excluir inspeção")).size(12.5)]
                 .spacing(6).align_y(Alignment::Center))
                 .padding([6, 10]).style(estilo_botao_secundario)
                 .on_press_maybe(self.inspecao_selecionada.map(|i| Msg::Inspecao(Evento::Excluir(i)))),
-            button(text("Excluir todas").size(12.5))
+            button(text(tr!("Excluir todas")).size(12.5))
                 .padding([6, 10]).style(estilo_botao_secundario)
                 .on_press_maybe((!self.inspecoes.is_empty()).then_some(Msg::Inspecao(Evento::ExcluirTodas))),
         ].spacing(8).align_y(Alignment::Center);
-        let rodape = text(format!("{} inspeção(ões) · os valores se atualizam a cada mudança na pasta",
+        let rodape = text(trf!("{} inspeção(ões) · os valores se atualizam a cada mudança na pasta",
             self.inspecoes.len())).size(11.5).color(COR_TEXTO_MUTED());
         container(column![
             ferramentas,

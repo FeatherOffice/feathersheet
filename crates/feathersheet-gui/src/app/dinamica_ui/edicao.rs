@@ -34,22 +34,22 @@ fn agregacao(como: &str) -> Option<AgregacaoOp> {
 
 pub(super) fn ler_estado(app: &App, destino: usize, meta: &Json) -> Result<Estado, String> {
     let origem = retangulo_json(&meta["fonte"]["area"])
-        .ok_or("Intervalo de origem ausente ou inválido.")?;
+        .ok_or(tr!("Intervalo de origem ausente ou inválido."))?;
     if origem.r1 <= origem.r0 {
-        return Err("Origem sem dados abaixo do cabeçalho.".into());
+        return Err(tr!("Origem sem dados abaixo do cabeçalho.").into());
     }
     let fonte = meta["fonte"]["aba"].as_str()
         .or_else(|| app.workbook.aba(destino).map(|a| a.sheet.name.as_str()))
-        .ok_or("Aba de origem ausente.")?;
+        .ok_or(tr!("Aba de origem ausente."))?;
     let folha_origem = app.workbook.nomes().iter()
         .position(|nome| nome == fonte)
-        .ok_or_else(|| format!("A aba de origem '{fonte}' foi removida."))?;
-    let id = meta["id"].as_str().ok_or("ID da dinâmica ausente.")?.to_owned();
+        .ok_or_else(|| trf!("A aba de origem '{fonte}' foi removida."))?;
+    let id = meta["id"].as_str().ok_or(tr!("ID da dinâmica ausente."))?.to_owned();
     let calculados: Vec<Calculado> = match meta["calculados"].as_array() {
         Some(lista) => lista.iter().map(|v| {
             Some(Calculado { nome: v["nome"].as_str()?.to_owned(),
                 formula: v["formula"].as_str()?.to_owned() })
-        }).collect::<Option<Vec<_>>>().ok_or("Campos calculados inválidos.")?,
+        }).collect::<Option<Vec<_>>>().ok_or(tr!("Campos calculados inválidos."))?,
         None => Vec::new(),
     };
     let nomes_reais = campos::campos(origem.clone(),
@@ -58,17 +58,17 @@ pub(super) fn ler_estado(app: &App, destino: usize, meta: &Json) -> Result<Estad
     let mut nomes = nomes_reais;
     nomes.extend(calculados.iter().map(|c| c.nome.clone()));
     let linhas = lista_indices(&meta["linhas"], &origem, calculados.len())
-        .ok_or("Campos de linha inválidos.")?;
+        .ok_or(tr!("Campos de linha inválidos."))?;
     let colunas = lista_indices(&meta["colunas"], &origem, calculados.len())
-        .ok_or("Campos de coluna inválidos.")?;
-    let valores = meta["valores"].as_array().ok_or("Medidas ausentes.")?
+        .ok_or(tr!("Campos de coluna inválidos."))?;
+    let valores = meta["valores"].as_array().ok_or(tr!("Medidas ausentes."))?
         .iter().map(|v| {
             Some(MedidaDinamica {
                 coluna: indice(v.get("col").or_else(|| v.get("coluna"))?, &origem, calculados.len())?,
                 op: agregacao(v.get("como").or_else(|| v.get("op"))?.as_str()?)?,
             })
         }).collect::<Option<Vec<_>>>()
-        .ok_or("Medidas não reconhecidas pelo motor Rust.")?;
+        .ok_or(tr!("Medidas não reconhecidas pelo motor Rust."))?;
     let (layout,repetir_rotulos,subtotais,recolhidos,filtros) = avancado::opcoes_de_json(meta);
     let mut grupos: Vec<String> = meta["mapa"]["linhas"].as_array()
         .map(|itens| itens.iter().flat_map(|linha| {
@@ -80,7 +80,7 @@ pub(super) fn ler_estado(app: &App, destino: usize, meta: &Json) -> Result<Estad
     let filtros = filtros.into_iter().map(|(col, vals, excluir)| {
         let coluna = indice(&json!(col), &origem, calculados.len())?;
         Some(Filtro { coluna, valores: vals.into_iter().collect(), excluir })
-    }).collect::<Option<Vec<_>>>().ok_or("Filtros fora do intervalo de origem.")?;
+    }).collect::<Option<Vec<_>>>().ok_or(tr!("Filtros fora do intervalo de origem."))?;
     let agrupar_data = meta["datas"].as_array()
         .and_then(|lista| lista.first())
         .and_then(|v| v["parte"].as_str())
@@ -106,15 +106,15 @@ pub(super) fn ler_estado(app: &App, destino: usize, meta: &Json) -> Result<Estad
 /// Permite abrir um resultado existente mesmo depois de salvar e reabrir a pasta.
 pub(super) fn localizar_selecionada(app: &App) -> Result<(usize, usize, Json), String> {
     let destino = app.folha;
-    let aba = app.workbook.aba(destino).ok_or("Aba da dinâmica não encontrada.")?;
-    let texto = aba.sheet.dn.as_deref().ok_or("Esta aba não possui tabelas dinâmicas.")?;
+    let aba = app.workbook.aba(destino).ok_or(tr!("Aba da dinâmica não encontrada."))?;
+    let texto = aba.sheet.dn.as_deref().ok_or(tr!("Esta aba não possui tabelas dinâmicas."))?;
     let definicoes: Vec<Json> = serde_json::from_str(texto)
-        .map_err(|_| "As definições de dinâmica estão inválidas.")?;
+        .map_err(|_| tr!("As definições de dinâmica estão inválidas."))?;
     let (indice, meta) = definicoes.iter().enumerate().find(|(_, d)| {
         d.get("areaResultado").and_then(retangulo_json).is_some_and(|r|
             app.linha >= r.r0 && app.linha <= r.r1 &&
             app.coluna >= r.c0 && app.coluna <= r.c1)
-    }).ok_or("Selecione uma célula dentro de uma tabela dinâmica.")?;
+    }).ok_or(tr!("Selecione uma célula dentro de uma tabela dinâmica."))?;
     Ok((destino,indice,meta.clone()))
 }
 
@@ -131,7 +131,7 @@ impl App {
         let resultado = localizar_selecionada(self).and_then(|(destino,_,meta)| {
             let mut e = ler_estado(self,destino,&meta)?;
             if !e.grupos.contains(&caminho) {
-                return Err("O grupo não existe mais. Atualize a dinâmica.".into());
+                return Err(tr!("O grupo não existe mais. Atualize a dinâmica.").into());
             }
             if let Some(i) = e.recolhidos.iter().position(|g| g == &caminho) {
                 e.recolhidos.remove(i);
@@ -150,7 +150,7 @@ impl App {
                 self.dinamica = Some(estado);
                 self.contexto = None;
                 self.menu_aberto = false;
-                self.status = "Editando a dinâmica existente. Aplicar mudanças recalcula o resultado.".into();
+                self.status = tr!("Editando a dinâmica existente. Aplicar mudanças recalcula o resultado.").into();
             }
             Err(erro) => self.status = erro,
         }
@@ -172,7 +172,7 @@ impl App {
             .and_then(|a| a.sheet.dn.as_deref())
             .and_then(|txt| serde_json::from_str::<Vec<Json>>(txt).ok())
             .is_some_and(|d| d.iter().any(|p| p["id"] == id)));
-        let resultado = destino.ok_or("A dinâmica original não foi encontrada.".to_owned())
+        let resultado = destino.ok_or(tr!("A dinâmica original não foi encontrada.").to_owned())
             .and_then(|destino| self.aplicar_estado_na_dinamica(destino,e));
         match resultado {
             Ok(()) => self.dinamica = None,
@@ -183,27 +183,27 @@ impl App {
     pub(super) fn aplicar_estado_na_dinamica(&mut self, destino: usize, e: &Estado) -> Result<(), String> {
         avancado::conferir_nomes_calculados(e)?;
         let origem_nome = self.workbook.aba(e.folha_origem)
-            .ok_or("Aba de origem não encontrada.")?.sheet.name.clone();
-        let aba = self.workbook.aba(destino).ok_or("Aba de destino não encontrada.")?;
-        let raw = aba.sheet.dn.as_deref().ok_or("Definição da dinâmica não encontrada.")?;
+            .ok_or(tr!("Aba de origem não encontrada."))?.sheet.name.clone();
+        let aba = self.workbook.aba(destino).ok_or(tr!("Aba de destino não encontrada."))?;
+        let raw = aba.sheet.dn.as_deref().ok_or(tr!("Definição da dinâmica não encontrada."))?;
         let mut lista: Vec<Json> = serde_json::from_str(raw)
-            .map_err(|_| "Metadados das dinâmicas inválidos; nada foi alterado.")?;
+            .map_err(|_| tr!("Metadados das dinâmicas inválidos; nada foi alterado."))?;
         let id = e.editando.as_deref()
-            .ok_or("Falta o identificador da dinâmica para atualização.")?;
+            .ok_or(tr!("Falta o identificador da dinâmica para atualização."))?;
         let pos = lista.iter().position(|d| d["id"] == id)
-            .ok_or("A dinâmica selecionada foi removida.")?;
+            .ok_or(tr!("A dinâmica selecionada foi removida."))?;
         let antigo = retangulo_json(&lista[pos]["areaResultado"])
-            .ok_or("Área do resultado anterior inválida.")?;
+            .ok_or(tr!("Área do resultado anterior inválida."))?;
         let resultado = avancado::calcular(self,e)?;
         let altura = resultado.matriz.height();
         let largura = resultado.matriz.rows().iter().map(Vec::len).max().unwrap_or(0);
-        if altura == 0 || largura == 0 { return Err("Nenhum resultado para a dinâmica.".into()); }
+        if altura == 0 || largura == 0 { return Err(tr!("Nenhum resultado para a dinâmica.").into()); }
         let fim_linha = (antigo.r0 as usize).checked_add(altura)
-            .ok_or("Linhas de destino fora dos limites.")?;
+            .ok_or(tr!("Linhas de destino fora dos limites."))?;
         let fim_coluna = (antigo.c0 as usize).checked_add(largura)
-            .ok_or("Colunas de destino fora dos limites.")?;
+            .ok_or(tr!("Colunas de destino fora dos limites."))?;
         if fim_linha > MAX_ROWS as usize || fim_coluna > MAX_COLS as usize {
-            return Err("O resultado excederia os limites da planilha.".into());
+            return Err(tr!("O resultado excederia os limites da planilha.").into());
         }
         let nova = Rect::new(antigo.r0, antigo.c0, fim_linha as u32 - 1, fim_coluna as u32 - 1);
         // Não permitir que o crescimento toque em outra tabela dinâmica.
@@ -211,7 +211,7 @@ impl App {
             d.get("areaResultado").and_then(retangulo_json).is_some_and(|r|
                 r.r0 <= nova.r1 && nova.r0 <= r.r1 &&
                 r.c0 <= nova.c1 && nova.c0 <= r.c1)) {
-            return Err("O resultado cruzaria outra tabela dinâmica existente.".into());
+            return Err(tr!("O resultado cruzaria outra tabela dinâmica existente.").into());
         }
         let aba = &self.workbook.aba(destino).expect("aba validada").sheet;
         for (i, row) in resultado.matriz.rows().iter().enumerate() {
@@ -221,7 +221,7 @@ impl App {
                 let dentro_antigo = r >= antigo.r0 && r <= antigo.r1
                     && c >= antigo.c0 && c <= antigo.c1;
                 if !dentro_antigo && !aba.get_raw(r,c).is_empty() {
-                    return Err("A expansão da dinâmica atingiria dados existentes; não houve alteração.".into());
+                    return Err(tr!("A expansão da dinâmica atingiria dados existentes; não houve alteração.").into());
                 }
             }
         }
@@ -233,7 +233,7 @@ impl App {
         m["areaResultado"] = json!({"r0":nova.r0,"c0":nova.c0,"r1":nova.r1,"c1":nova.c1});
         avancado::gravar_opcoes(m,e,avancado::mapa_json(&resultado.linhas, resultado.colunas_de_rotulo));
         let gravar = serde_json::to_string(&lista)
-            .map_err(|_| "Falha ao serializar as opções da dinâmica.")?;
+            .map_err(|_| tr!("Falha ao serializar as opções da dinâmica."))?;
         self.workbook.editar(destino, |sheet| {
             sheet.abrir_transacao();
             let mut escritas = 0usize;
@@ -267,7 +267,7 @@ impl App {
         self.coluna = nova.c0;
         self.fim_selecao = (nova.r1, nova.c1);
         self.endereco = cell_name(self.linha,self.coluna);
-        self.status = format!("Tabela dinâmica atualizada: {} linhas × {} colunas.",altura,largura);
+        self.status = trf!("Tabela dinâmica atualizada: {} linhas × {} colunas.",altura,largura);
         Ok(())
     }
 }

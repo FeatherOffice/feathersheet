@@ -47,7 +47,7 @@ impl App {
             Evento::Abrir => {
                 if !self.confirmar() { return Task::none(); }
                 if self.tem_varias_areas() {
-                    self.status = "Tabela de dados não funciona com várias áreas selecionadas".into();
+                    self.status = tr!("Tabela de dados não funciona com várias áreas selecionadas").into();
                     return Task::none();
                 }
                 self.tabela_dados = Some(Estado {
@@ -68,7 +68,7 @@ impl App {
                     let t = t.trim();
                     if t.is_empty() { return Ok(None); }
                     parse_cell_ref(&t.replace('$', "").to_uppercase()).map(Some)
-                        .ok_or(format!("\"{t}\" não é o endereço de uma célula."))
+                        .ok_or(trf!("\"{t}\" não é o endereço de uma célula."))
                 };
                 let ultima = celula(&e.linha).and_then(|l| celula(&e.coluna).map(|c| Ultima {
                     aba: e.aba, area: e.area.clone(), linha: l, coluna: c }));
@@ -107,7 +107,7 @@ impl App {
             s.fechar_transacao();
         });
         self.alterado = true;
-        self.status = format!("Tabela de dados: {quantas} resultado(s) gravado(s) como valores");
+        self.status = trf!("Tabela de dados: {quantas} resultado(s) gravado(s) como valores");
         Ok(())
     }
 
@@ -122,7 +122,7 @@ impl App {
         let ev = Msg::TabelaDados;
         let campo = |rotulo: &'static str, valor: &str, ativo: bool, f: fn(String) -> Evento| row![
             text(rotulo).size(12.5).width(Length::Fixed(196.0)),
-            text_input("ex.: B3", valor).on_input(move |t| Msg::TabelaDados(f(t)))
+            text_input(tr!("ex.: B3"), valor).on_input(move |t| Msg::TabelaDados(f(t)))
                 .on_submit(Msg::TabelaDados(Evento::Confirmar))
                 .size(13).padding([5, 8]).width(Length::Fill)
                 .style(move |tema, status| {
@@ -132,12 +132,12 @@ impl App {
                 }),
         ].spacing(8).align_y(Alignment::Center);
         let mut corpo = column![
-            campo("Célula de entrada da linha:", &e.linha, e.campo == Campo::Linha, Evento::Linha),
-            campo("Célula de entrada da coluna:", &e.coluna, e.campo == Campo::Coluna, Evento::Coluna),
+            campo(tr!("Célula de entrada da linha:"), &e.linha, e.campo == Campo::Linha, Evento::Linha),
+            campo(tr!("Célula de entrada da coluna:"), &e.coluna, e.campo == Campo::Coluna, Evento::Coluna),
             row![
                 feather_ui::icones::icone("info-circle", 14.0),
-                text("Clique na planilha para preencher o campo destacado. Os resultados \
-                      entram como valores; use \"Atualizar tabela\" depois de mudar os dados.")
+                text(tr!("Clique na planilha para preencher o campo destacado. Os resultados \
+                      entram como valores; use \"Atualizar tabela\" depois de mudar os dados."))
                     .size(11.5).color(COR_TEXTO_MUTED()),
             ].spacing(6),
         ].spacing(14);
@@ -147,16 +147,16 @@ impl App {
             ].spacing(6).align_y(Alignment::Center));
         }
         // Não modal, à direita: os cliques na planilha preenchem os campos.
-        self.dialogo("Tabela de dados", corpo)
+        self.dialogo(tr!("Tabela de dados"), corpo)
             .icone("table")
-            .subtitulo(format!("Tabela {}:{}", cell_name(e.area.r0, e.area.c0), cell_name(e.area.r1, e.area.c1)))
+            .subtitulo(trf!("Tabela {}:{}", cell_name(e.area.r0, e.area.c0), cell_name(e.area.r1, e.area.c1)))
             .topo(14.0)
             .altura_maxima((self.tamanho_principal.height - self.topo_dialogo() - 28.0).max(300.0))
             .largura(470.0)
             .nao_modal()
             .a_direita()
             .ao_fechar(ev(Evento::Fechar))
-            .secundario("Cancelar", Some(ev(Evento::Fechar)))
+            .secundario(tr!("Cancelar"), Some(ev(Evento::Fechar)))
             .primario("OK", Some(ev(Evento::Confirmar)))
     }
 

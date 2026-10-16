@@ -63,33 +63,33 @@ impl App {
         };
         let invalido = !e.origem_texto.trim().is_empty() && !origem::texto_valido(&e.origem_texto);
         let erro: Element<'a, Msg> = if invalido {
-            text("Intervalo inválido. Use um formato como A1:D10.").size(11).color(COR_TEXTO_MUTED()).into()
+            text(tr!("Intervalo inválido. Use um formato como A1:D10.")).size(11).color(COR_TEXTO_MUTED()).into()
         } else { Space::with_height(0).into() };
         let painel = column![
             row![
                 icone("pivot-table", 22.0),
-                text("Criar Tabela Dinâmica").size(18),
+                text(tr!("Criar Tabela Dinâmica")).size(18),
                 Space::with_width(Length::Fill),
                 button(icone("x", 16.0)).on_press(Msg::Dinamica(Evento::Fechar))
                     .style(estilo_botao_secundario),
             ].align_y(Alignment::Center).spacing(9),
-            text("Selecione a fonte dos dados. Em seguida escolha os campos no painel lateral.")
+            text(tr!("Selecione a fonte dos dados. Em seguida escolha os campos no painel lateral."))
                 .size(12).color(COR_TEXTO_MUTED()),
-            text(format!("Intervalo de Dados (Tabela Origem) — {aba}")).size(12),
+            text(trf!("Intervalo de Dados (Tabela Origem) — {aba}")).size(12),
             text_input("A1:D100", &e.origem_texto)
                 .on_input(|v| Msg::Dinamica(Evento::OrigemTexto(v)))
                 .on_submit(Msg::Dinamica(Evento::Criar))
                 .padding(7),
             erro,
-            text("Destino").size(12),
+            text(tr!("Destino")).size(12),
             row![
-                destino("Nova Aba", e.nova_aba, true),
-                destino("Aba Atual (ao lado da seleção)", !e.nova_aba, false),
+                destino(tr!("Nova Aba"), e.nova_aba, true),
+                destino(tr!("Aba Atual (ao lado da seleção)"), !e.nova_aba, false),
             ].spacing(8),
             row![
-                text("A origem permanece intacta.").size(11).color(COR_TEXTO_MUTED()),
+                text(tr!("A origem permanece intacta.")).size(11).color(COR_TEXTO_MUTED()),
                 Space::with_width(Length::Fill),
-                button("Cancelar").on_press(Msg::Dinamica(Evento::Fechar)).style(estilo_botao_secundario),
+                button(tr!("Cancelar")).on_press(Msg::Dinamica(Evento::Fechar)).style(estilo_botao_secundario),
                 button("OK").on_press(Msg::Dinamica(Evento::Criar)).style(estilo_botao_primario),
             ].spacing(8).align_y(Alignment::Center),
         ].spacing(11);
@@ -101,7 +101,7 @@ impl App {
         let c0 = e.origem.c0 as usize;
         let real = e.nomes.len().saturating_sub(e.calculados.len());
         let rotulo = |c: usize| e.nomes.get(c.saturating_sub(c0))
-            .cloned().unwrap_or_else(|| format!("Coluna {}", c + 1));
+            .cloned().unwrap_or_else(|| trf!("Coluna {}", c + 1));
         let arrastando = e.ui.arrasto.as_ref().is_some_and(|a| a.movido);
 
         // ---- Lista de campos, com busca
@@ -134,7 +134,7 @@ impl App {
             campos = campos.push(linha);
         }
         if !algum {
-            campos = campos.push(text("Nenhum campo com esse nome").size(11).color(COR_TEXTO_MUTED()));
+            campos = campos.push(text(tr!("Nenhum campo com esse nome")).size(11).color(COR_TEXTO_MUTED()));
         }
         let lista = iced::widget::mouse_area(
             container(scrollable(campos).height(Length::Fixed(196.0)))
@@ -152,7 +152,7 @@ impl App {
             let destacada = arrastando && e.ui.sob == Some(area);
             let mut col = column![text(titulo).size(10.5).color(COR_TEXTO_MUTED())].spacing(3);
             if itens.is_empty() {
-                col = col.push(text(if arrastando { "Solte aqui" } else { "Arraste campos aqui" })
+                col = col.push(text(if arrastando { tr!("Solte aqui") } else { tr!("Arraste campos aqui") })
                     .size(11).color(COR_TEXTO_MUTED()));
             }
             let total = itens.len();
@@ -195,7 +195,7 @@ impl App {
         let colunas = e.colunas.iter().map(|&c| (c, rotulo(c))).collect();
         let linhas = e.linhas.iter().map(|&c| (c, rotulo(c))).collect();
         let valores = e.valores.iter()
-            .map(|v| (v.coluna, format!("{} de {}", nome_operacao(v.op), rotulo(v.coluna)))).collect();
+            .map(|v| (v.coluna, trf!("{} de {}", nome_operacao(v.op), rotulo(v.coluna)))).collect();
         let grade = column![
             row![area("FILTROS", AreaDinamica::Filtros, filtros),
                 area("COLUNAS", AreaDinamica::Colunas, colunas)].spacing(8),
@@ -208,15 +208,15 @@ impl App {
         let corpo = column![
             row![
                 icone("search", 15.0),
-                text_input("Buscar campo", &e.ui.busca_campo)
+                text_input(tr!("Buscar campo"), &e.ui.busca_campo)
                     .on_input(|v| Msg::Dinamica(Evento::BuscaCampo(v)))
                     .padding(5).size(12),
             ].spacing(6).align_y(Alignment::Center),
             lista,
-            text("Arraste os campos entre as áreas").size(11).color(COR_TEXTO_MUTED()),
+            text(tr!("Arraste os campos entre as áreas")).size(11).color(COR_TEXTO_MUTED()),
             grade,
             iced::widget::horizontal_rule(1),
-            button(item(if e.avancado { "chevron-down" } else { "chevron-right" }, "Opções".into(), 12.5))
+            button(item(if e.avancado { "chevron-down" } else { "chevron-right" }, tr!("Opções").into(), 12.5))
                 .style(estilo_botao_pequeno(false)).padding([4, 2])
                 .on_press(Msg::Dinamica(Evento::AlternarAvancado)),
             opcoes,
@@ -224,7 +224,7 @@ impl App {
         let painel = column![
             row![
                 icone("pivot-table", 20.0),
-                text("Campos da Tabela Dinâmica").size(15),
+                text(tr!("Campos da Tabela Dinâmica")).size(15),
                 Space::with_width(Length::Fill),
                 button(icone("x", 16.0)).on_press(Msg::Dinamica(Evento::Fechar)).style(estilo_botao_secundario),
             ].align_y(Alignment::Center).spacing(8),
@@ -245,29 +245,29 @@ impl App {
                 .style(estilo_botao_pequeno(false)).on_press_maybe(msg).into()
         };
         let mut menu = column![
-            opcao("chevron-up", "Mover para cima".into(),
+            opcao("chevron-up", tr!("Mover para cima").into(),
                 (i > 0).then_some(Msg::Dinamica(Evento::Reordenar(area, i, -1)))),
-            opcao("chevron-down", "Mover para baixo".into(),
+            opcao("chevron-down", tr!("Mover para baixo").into(),
                 (i + 1 < total).then_some(Msg::Dinamica(Evento::Reordenar(area, i, 1)))),
         ].spacing(1);
         let calculado = e.coluna_em(area, i).is_some_and(|c|
             c >= e.origem.c0 as usize + e.nomes.len().saturating_sub(e.calculados.len()));
-        for (destino, nome) in [(AreaDinamica::Filtros, "Filtros"), (AreaDinamica::Colunas, "Colunas"),
-            (AreaDinamica::Linhas, "Linhas"), (AreaDinamica::Valores, "Valores")] {
+        for (destino, nome) in [(AreaDinamica::Filtros, tr!("Filtros")), (AreaDinamica::Colunas, tr!("Colunas")),
+            (AreaDinamica::Linhas, tr!("Linhas")), (AreaDinamica::Valores, tr!("Valores"))] {
             if destino == area || (calculado && destino != AreaDinamica::Valores) { continue; }
-            menu = menu.push(opcao("arrow-right", format!("Mover para {nome}"),
+            menu = menu.push(opcao("arrow-right", trf!("Mover para {nome}"),
                 Some(Msg::Dinamica(Evento::MoverPara(area, i, destino)))));
         }
         match area {
             AreaDinamica::Valores => {
                 let atual = e.valores.get(i).map(|v| nome_operacao(v.op)).unwrap_or("");
-                menu = menu.push(opcao("sum", format!("Resumir por: {atual}"),
+                menu = menu.push(opcao("sum", trf!("Resumir por: {atual}"),
                     Some(Msg::Dinamica(Evento::OperacaoValor(i)))));
-                menu = menu.push(opcao("plus", "Duplicar com outra conta".into(),
+                menu = menu.push(opcao("plus", tr!("Duplicar com outra conta").into(),
                     Some(Msg::Dinamica(Evento::DuplicarValor(i)))));
             }
             AreaDinamica::Filtros => if let Some(col) = e.coluna_em(area, i) {
-                menu = menu.push(opcao("filter", "Escolher itens…".into(),
+                menu = menu.push(opcao("filter", tr!("Escolher itens…").into(),
                     Some(Msg::Dinamica(Evento::FiltroCampo(col - e.origem.c0 as usize)))));
             },
             _ => {}
@@ -279,7 +279,7 @@ impl App {
             AreaDinamica::Colunas => Some(Evento::Remover(EixoDinamica::Colunas, i)),
             AreaDinamica::Lista => None,
         };
-        menu = menu.push(opcao("trash", "Remover campo".into(), remover.map(Msg::Dinamica)));
+        menu = menu.push(opcao("trash", tr!("Remover campo").into(), remover.map(Msg::Dinamica)));
         container(menu).padding(4).width(Length::Fill).style(estilo_popup_menu).into()
     }
 
@@ -292,7 +292,7 @@ impl App {
         let tudo = e.valores_filtro.iter().all(|(chave, _)| visivel(chave));
         let busca = feather_ui::ajuda::normalizar(&e.ui.filtro_busca);
         let mut itens = column![
-            button(item(if tudo { "checkbox" } else { "square" }, "(Selecionar tudo)".into(), 12.0))
+            button(item(if tudo { "checkbox" } else { "square" }, tr!("(Selecionar tudo)").into(), 12.0))
                 .width(Length::Fill).style(estilo_botao_pequeno(false))
                 .on_press(Msg::Dinamica(Evento::FiltroTudo)),
         ].spacing(1);
@@ -303,22 +303,22 @@ impl App {
                 .on_press(Msg::Dinamica(Evento::FiltroValor(chave.clone()))));
         }
         let aviso: Element<'a, Msg> = if e.filtro_cortado {
-            text("Lista parcial: mostra os primeiros valores da coluna.").size(10.5)
+            text(tr!("Lista parcial: mostra os primeiros valores da coluna.")).size(10.5)
                 .color(COR_TEXTO_MUTED()).into()
         } else { Space::with_height(0).into() };
         let cartao = column![
-            row![icone("filter", 16.0), text(format!("Filtrar: {nome}")).size(13.5)]
+            row![icone("filter", 16.0), text(trf!("Filtrar: {nome}")).size(13.5)]
                 .spacing(7).align_y(Alignment::Center),
             row![
                 icone("search", 14.0),
-                text_input("Buscar", &e.ui.filtro_busca)
+                text_input(tr!("Buscar"), &e.ui.filtro_busca)
                     .on_input(|v| Msg::Dinamica(Evento::FiltroBusca(v))).padding(5).size(12),
             ].spacing(6).align_y(Alignment::Center),
             scrollable(itens).height(Length::Fixed(260.0)),
             aviso,
             row![
                 Space::with_width(Length::Fill),
-                button(text("Cancelar").size(12)).style(estilo_botao_secundario)
+                button(text(tr!("Cancelar")).size(12)).style(estilo_botao_secundario)
                     .on_press(Msg::Dinamica(Evento::FiltroCancelar)),
                 button(text("OK").size(12)).style(estilo_botao_primario)
                     .on_press(Msg::Dinamica(Evento::FiltroOk)),

@@ -47,6 +47,8 @@ pub enum Evento {
     CorSeletor(seletor_cor::Evento),
     Grau(i16),
     Mesclar(bool),
+    /// Abre ou fecha o seletor completo (as abas mostram só a paleta).
+    MaisCores,
     Confirmar,
     Cancelar,
 }
@@ -70,6 +72,7 @@ pub(super) struct Estado {
     cor_alvo: AlvoCorDialogo,
     cor_hsva: [f32;4],
     cor_hex_picker: String,
+    mais_cores: bool,
     erro: String,
 }
 impl Estado {
@@ -121,7 +124,7 @@ impl Estado {
             aba, folha, area, original, patch: EstiloParcial::new(),
             fonte, tamanho, cor_texto, cor_fundo, cor_borda, personalizado,
             decimais, recuo, angulo, mesclar, cor_alvo, cor_hsva, cor_hex_picker,
-            erro: String::new(),
+            mais_cores: false, erro: String::new(),
         }
     }
     fn campo(&self, chave: &str) -> Option<&Campo> {
@@ -253,7 +256,7 @@ impl Estado {
                 self.cor_hex_picker=valor;
             }
         } else {
-            self.erro = format!("Valor inválido em {chave}. Corrija antes de confirmar.");
+            self.erro = trf!("Valor inválido em {chave}. Corrija antes de confirmar.");
         }
     }
 }
@@ -313,13 +316,13 @@ impl App {
                 mudou = true;
             });
             self.alterado |= mudou;
-            if mudou { self.status = "Formatação das células aplicada".into(); }
+            if mudou { self.status = tr!("Formatação das células aplicada").into(); }
             return self.janelas.fechar_tipo(Auxiliar::FormatarCelulas);
         }
         let Some(e) = self.formato_celula.as_mut() else { return Task::none(); };
         match evento {
             Evento::Aba(aba) => {
-                e.aba=aba;
+                e.aba=aba; e.mais_cores=false;
                 if let Some(alvo)=match aba {
                     Aba::Preenchimento=>Some(AlvoCorDialogo::Fundo),
                     Aba::Borda=>Some(AlvoCorDialogo::Borda),
@@ -368,6 +371,8 @@ impl App {
                 }
             }
             Evento::Borda(opcao) => {
+                // O botão pode mandar o rótulo traduzido; a decisão usa o português.
+                let opcao = crate::idioma::original(opcao);
                 let mut b = e.bordas();
                 match opcao {
                     "Todas" | "Externas" | "Nenhuma" => {
@@ -395,10 +400,9 @@ impl App {
                 }
                 e.patch.insert("borders".into(), Campo::Objeto(b));
             }
-            Evento::CorPredefinida(valor) => {
-                e.selecionar_alvo(AlvoCorDialogo::Fundo);
-                e.cor_escolhida(valor.into());
-            }
+            // A paleta da aba vale para a cor dela (fundo, borda ou texto).
+            Evento::CorPredefinida(valor) => e.cor_escolhida(valor.into()),
+            Evento::MaisCores => e.mais_cores = !e.mais_cores,
             Evento::CorAlvo(alvo) => e.selecionar_alvo(alvo),
             Evento::CorSeletor(evento) => e.seletor_evento(evento),
             Evento::Grau(graus) => {

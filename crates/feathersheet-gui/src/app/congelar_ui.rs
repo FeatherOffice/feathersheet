@@ -34,16 +34,16 @@ impl App {
             _ => return Task::none(),
         };
         if linhas > 30 || colunas > 16 {
-            self.status = "Congelamento muito grande: escolha até 30 linhas e 16 colunas.".into();
+            self.status = tr!("Congelamento muito grande: escolha até 30 linhas e 16 colunas.").into();
             return Task::none();
         }
         let Some(aba) = self.workbook.aba(self.folha) else { return Task::none(); };
         if linhas == 0 && colunas == 0 {
             self.congelados.remove(&aba.id);
-            self.status = "Painéis descongelados".into();
+            self.status = tr!("Painéis descongelados").into();
         } else {
             self.congelados.insert(aba.id, (linhas, colunas));
-            self.status = format!("Congeladas {linhas} linha(s) e {colunas} coluna(s)");
+            self.status = trf!("Congeladas {linhas} linha(s) e {colunas} coluna(s)");
         }
         self.linha_inicio = linhas;
         self.coluna_inicio = colunas;
@@ -89,27 +89,27 @@ impl App {
         let (linhas, colunas) = self.congelamento_atual();
         let congelado = linhas > 0 || colunas > 0;
         let (titulo, descricao) = if congelado {
-            ("Descongelar painéis", "Libera todas as linhas e colunas para rolar com o restante da planilha.")
+            (tr!("Descongelar painéis"), tr!("Libera todas as linhas e colunas para rolar com o restante da planilha."))
         } else {
-            ("Congelar painéis",
-             "Mantém linhas e colunas visíveis enquanto rola o restante, com base na seleção atual.")
+            (tr!("Congelar painéis"),
+             tr!("Mantém linhas e colunas visíveis enquanto rola o restante, com base na seleção atual."))
         };
         let mut itens = iced::widget::column![
             self.item_congelar("table", titulo, descricao, if congelado { 3 } else { 0 }),
-            self.item_congelar("header-footer", "Congelar linha superior",
-                "Mantém a linha superior visível ao rolar o restante da planilha.", 10),
-            self.item_congelar("layout-sidebar", "Congelar primeira coluna",
-                "Mantém a primeira coluna visível ao rolar o restante da planilha.", 11),
+            self.item_congelar("header-footer", tr!("Congelar linha superior"),
+                tr!("Mantém a linha superior visível ao rolar o restante da planilha."), 10),
+            self.item_congelar("layout-sidebar", tr!("Congelar primeira coluna"),
+                tr!("Mantém a primeira coluna visível ao rolar o restante da planilha."), 11),
             container(Space::new(Length::Fill, Length::Fixed(1.)))
                 .style(|_| container::Style {
                     background: Some(COR_BORDA().into()), ..Default::default() })
                 .padding([0, 6]),
-            container(text("Mais opções").size(11.5).color(COR_TEXTO_MUTED())).padding([4, 10]),
+            container(text(tr!("Mais opções")).size(11.5).color(COR_TEXTO_MUTED())).padding([4, 10]),
         ].spacing(1);
-        itens = itens.push(self.escolhas_finas("Linhas", linhas, [
-            ("0", 4, Some(0)), ("1", 1, Some(1)), ("2", 5, Some(2)), ("Até a atual", 8, None)]));
-        itens = itens.push(self.escolhas_finas("Colunas", colunas, [
-            ("0", 6, Some(0)), ("1", 2, Some(1)), ("2", 7, Some(2)), ("Até a atual", 9, None)]));
+        itens = itens.push(self.escolhas_finas(tr!("Linhas"), linhas, [
+            ("0", 4, Some(0)), ("1", 1, Some(1)), ("2", 5, Some(2)), (tr!("Até a atual"), 8, None)]));
+        itens = itens.push(self.escolhas_finas(tr!("Colunas"), colunas, [
+            ("0", 6, Some(0)), ("1", 2, Some(1)), ("2", 7, Some(2)), (tr!("Até a atual"), 9, None)]));
         let caixa = container(itens).padding(6).width(Length::Fixed(LARGURA))
             .style(estilo_popup_menu);
         let (px, py) = self.congelar_popup;

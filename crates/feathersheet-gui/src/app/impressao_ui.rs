@@ -7,7 +7,7 @@ use super::*;
 use crate::grade::{impressao::calcular_quebras, ImpressaoVisual};
 use feathersheet_core::{
     celulas::{refs::col_name, style::{effective_align, Align}, values::Value},
-    planilha::impressao::{AreaImpressao, ConfigPagina, Escala, Orientacao, Papel},
+    planilha::impressao::{AreaImpressao, ConfigPagina, Escala, Margens, Orientacao, Papel},
 };
 use iced::widget::{canvas as cv, checkbox, pick_list, radio};
 use std::collections::{HashMap, HashSet};
@@ -31,15 +31,15 @@ impl PapelUi {
         match self { Self::A4 => Papel::A4, Self::Carta => Papel::Carta, Self::Oficio => Papel::Oficio }
     }
     fn sigla(self) -> &'static str {
-        match self { Self::A4 => "A4", Self::Carta => "CARTA", Self::Oficio => "OFÍCIO" }
+        match self { Self::A4 => "A4", Self::Carta => tr!("CARTA"), Self::Oficio => tr!("OFÍCIO") }
     }
 }
 impl std::fmt::Display for PapelUi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::A4 => "A4 (210 x 297 mm)",
-            Self::Carta => "Carta / Letter (216 x 279 mm)",
-            Self::Oficio => "Ofício / Legal (216 x 356 mm)",
+            Self::A4 => tr!("A4 (210 x 297 mm)"),
+            Self::Carta => tr!("Carta / Letter (216 x 279 mm)"),
+            Self::Oficio => tr!("Ofício / Legal (216 x 356 mm)"),
         })
     }
 }
@@ -59,10 +59,45 @@ impl EscalaUi {
 impl std::fmt::Display for EscalaUi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Cem => "100% - Tamanho real",
-            Self::Pagina => "Ajustar à 1 página",
-            Self::Largura => "Ajustar largura das colunas",
+            Self::Cem => tr!("100% - Tamanho real"),
+            Self::Pagina => tr!("Ajustar à 1 página"),
+            Self::Largura => tr!("Ajustar largura das colunas"),
         })
+    }
+}
+
+/// Margens prontas, como no Margens ▾ do Excel.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MargemUi { Normal, Estreita, Larga }
+impl MargemUi {
+    fn margens(self) -> Margens {
+        let (lados, topo) = match self {
+            Self::Normal => return Margens::default(),
+            Self::Estreita => (6.4, 19.1),
+            Self::Larga => (25.4, 25.4),
+        };
+        Margens { esquerda_mm: lados, direita_mm: lados, topo_mm: topo, base_mm: topo }
+    }
+}
+
+/// A configuração da página de uma aba: a aba Layout da Página e o diálogo
+/// de impressão leem e gravam a mesma, por id de aba (só em memória, como a
+/// área de impressão).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct Pagina {
+    pub orientacao: Orientacao,
+    pub papel: PapelUi,
+    pub escala: EscalaUi,
+    pub margem: MargemUi,
+    pub grade: bool,
+    pub cabecalhos: bool,
+}
+impl Default for Pagina {
+    fn default() -> Self {
+        Pagina {
+            orientacao: Orientacao::Retrato, papel: PapelUi::A4, escala: EscalaUi::Cem,
+            margem: MargemUi::Normal, grade: true, cabecalhos: true,
+        }
     }
 }
 
@@ -78,6 +113,7 @@ pub enum Evento {
     Escala(EscalaUi),
     Grade(bool),
     Cabecalhos(bool),
+    Margem(MargemUi),
     Anterior,
     Proxima,
     SalvarPdf,
@@ -97,6 +133,7 @@ pub(super) struct Estado {
     escala: EscalaUi,
     grade: bool,
     cabecalhos: bool,
+    margem: MargemUi,
     pagina: u32,
 }
 
@@ -107,6 +144,7 @@ type Quebras = (Rc<Vec<u32>>, Rc<Vec<u32>>);
 pub(super) struct Dados {
     areas: HashMap<u32, Rect>,
     quebras_visiveis: HashSet<u32>,
+    paginas: HashMap<u32, Pagina>,
     dialogo: Option<Estado>,
     cache: RefCell<Option<(u32, u32, Quebras)>>,
 }
@@ -137,18 +175,18 @@ fn enviar_para_impressora(caminho: &Path) -> Result<String, String> {
     {
         std::process::Command::new("cmd")
             .args(["/c", "start", ""]).arg(caminho).spawn()
-            .map_err(|e| format!("Não foi possível abrir o PDF para imprimir: {e}"))?;
-        Ok("PDF aberto no programa padrão para imprimir".into())
+            .map_err(|e| trf!("Não foi possível abrir o PDF para imprimir: {e}"))?;
+        Ok(tr!("PDF aberto no programa padrão para imprimir").into())
     }
     #[cfg(not(windows))]
     {
         match std::process::Command::new("lp").arg(caminho).output() {
-            Ok(saida) if saida.status.success() => Ok("Documento enviado para a impressora (lp)".into()),
-            Ok(saida) => Err(format!("O comando lp falhou: {}",
+            Ok(saida) if saida.status.success() => Ok(tr!("Documento enviado para a impressora (lp)").into()),
+            Ok(saida) => Err(trf!("O comando lp falhou: {}",
                 String::from_utf8_lossy(&saida.stderr).trim())),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound =>
-                Err("Comando 'lp' não encontrado. Instale o CUPS ou use \"Salvar PDF…\".".into()),
-            Err(e) => Err(format!("Falha ao executar lp: {e}")),
+                Err(tr!("Comando 'lp' não encontrado. Instale o CUPS ou use \"Salvar PDF…\".").into()),
+            Err(e) => Err(trf!("Falha ao executar lp: {e}")),
         }
     }
 }
@@ -165,7 +203,8 @@ impl Estado {
         ConfigPagina {
             papel: self.papel.papel(), orientacao: self.orientacao,
             escala: self.escala.escala(), linhas_de_grade: self.grade,
-            cabecalhos: self.cabecalhos, ..ConfigPagina::default()
+            cabecalhos: self.cabecalhos, margens: self.margem.margens(),
+            ..ConfigPagina::default()
         }
     }
     fn total_paginas(&self, faixa: &Rect) -> u32 {
@@ -200,6 +239,57 @@ impl App {
                 Rect::new(0, 0, u.r1, u.c1)
             }).unwrap_or_else(|| Rect::new(0, 0, 0, 0)),
         }
+    }
+
+    /// A configuração da página da aba ativa (aba Layout da Página).
+    pub(super) fn pagina_atual(&self) -> Pagina {
+        self.id_aba_atual().and_then(|id| self.impressao.paginas.get(&id).copied()).unwrap_or_default()
+    }
+
+    /// Muda a página da aba do diálogo aberto (ou da ativa) e leva a mudança
+    /// ao diálogo, para a faixa e a prévia nunca discordarem.
+    fn mudar_pagina(&mut self, f: impl FnOnce(&mut Pagina)) {
+        let folha = self.impressao.dialogo.as_ref().map_or(self.folha, |e| e.folha);
+        let Some(id) = self.workbook.aba(folha).map(|a| a.id) else { return };
+        let mut p = self.impressao.paginas.get(&id).copied().unwrap_or_default();
+        f(&mut p);
+        self.impressao.paginas.insert(id, p);
+        if let Some(e) = self.impressao.dialogo.as_mut() {
+            if e.orientacao != p.orientacao { e.pagina = 1; }
+            e.orientacao = p.orientacao; e.papel = p.papel; e.escala = p.escala;
+            e.margem = p.margem; e.grade = p.grade; e.cabecalhos = p.cabecalhos;
+        }
+    }
+
+    /// A aba Layout da Página da faixa, como no Excel: Configurar Página,
+    /// Dimensionar para Ajustar, Opções de Planilha e Imprimir.
+    pub(super) fn grupos_layout_pagina(&self) -> Vec<Element<'_, Msg>> {
+        let p = self.pagina_atual();
+        let menu = |rotulo: &str, icone: &str, tipo: &'static str| self.faixa_grande_seta(
+            rotulo, icone, Some(Msg::AlternarMenuEdicao(tipo)), self.edicao_menu == Some(tipo));
+        vec![
+            self.faixa_grupo(tr!("Configurar Página"), self.faixa_linha(vec![
+                menu(tr!("Margens"), "borda_externa_espessa", "pg_margens"),
+                menu(tr!("Orientação"), "orientacao_pagina", "pg_orientacao"),
+                menu(tr!("Tamanho"), "arrows-maximize", "pg_tamanho"),
+                menu(tr!("Área de impressão"), "area_impressao", "pg_area"),
+                self.faixa_grande(tr!("Quebras"), "quebra_pagina",
+                    Some(Msg::Impressao(Evento::AlternarQuebras)), self.quebras_mostradas()),
+            ])),
+            self.faixa_grupo(tr!("Dimensionar"), self.faixa_linha(vec![
+                menu(tr!("Escala"), "zoom-out", "pg_escala"),
+            ])),
+            self.faixa_grupo(tr!("Opções de Planilha"), self.faixa_pilha(vec![
+                self.faixa_pequeno(tr!("Imprimir linhas de grade"), "linhas_grade",
+                    Some(Msg::Impressao(Evento::Grade(!p.grade))), p.grade),
+                self.faixa_pequeno(tr!("Imprimir títulos (A, B, 1, 2)"), "faixas_colunas",
+                    Some(Msg::Impressao(Evento::Cabecalhos(!p.cabecalhos))), p.cabecalhos),
+            ])),
+            self.faixa_grupo(tr!("Imprimir"), self.faixa_linha(vec![
+                self.faixa_grande(tr!("Visualizar"), "imprimir", Some(Msg::Impressao(Evento::Abrir)),
+                    self.janelas.aberta(Auxiliar::Imprimir)),
+            ])),
+        ]
     }
 
     pub(super) fn quebras_mostradas(&self) -> bool {
@@ -240,11 +330,12 @@ impl App {
         if self.janelas.aberta(Auxiliar::Imprimir) { return Task::none(); }
         if self.workbook.aba(self.folha).is_none() { return Task::none(); }
         let tem_area = self.area_impressao().is_some();
+        let p = self.pagina_atual();
         self.impressao.dialogo = Some(Estado {
             folha: self.folha, selecao: self.area_selecionada().normalized(),
             escopo: if tem_area { Escopo::Area } else { Escopo::Planilha },
-            orientacao: Orientacao::Retrato, papel: PapelUi::A4, escala: EscalaUi::Cem,
-            grade: true, cabecalhos: true, pagina: 1,
+            orientacao: p.orientacao, papel: p.papel, escala: p.escala,
+            grade: p.grade, cabecalhos: p.cabecalhos, margem: p.margem, pagina: 1,
         });
         self.alternar(Auxiliar::Imprimir)
     }
@@ -255,12 +346,12 @@ impl App {
         self.impressao.areas.insert(id, area);
         // O TS (setPrintAreaFromSelection) também mostra as quebras ao definir.
         self.impressao.quebras_visiveis.insert(id);
-        self.status = "Área de impressão definida.".into();
+        self.status = tr!("Área de impressão definida.").into();
     }
 
     fn limpar_area(&mut self) {
         if let Some(id) = self.id_aba_atual() { self.impressao.areas.remove(&id); }
-        self.status = "Área de impressão removida.".into();
+        self.status = tr!("Área de impressão removida.").into();
     }
 
     pub(super) fn evento_impressao(&mut self, ev: Evento) -> Task<Msg> {
@@ -294,13 +385,12 @@ impl App {
                     e.escopo = escopo; e.pagina = 1;
                 }
             }
-            Evento::Orientacao(o) => if let Some(e) = self.impressao.dialogo.as_mut() {
-                e.orientacao = o; e.pagina = 1;
-            },
-            Evento::Papel(p) => if let Some(e) = self.impressao.dialogo.as_mut() { e.papel = p; },
-            Evento::Escala(s) => if let Some(e) = self.impressao.dialogo.as_mut() { e.escala = s; },
-            Evento::Grade(b) => if let Some(e) = self.impressao.dialogo.as_mut() { e.grade = b; },
-            Evento::Cabecalhos(b) => if let Some(e) = self.impressao.dialogo.as_mut() { e.cabecalhos = b; },
+            Evento::Orientacao(o) => self.mudar_pagina(|p| p.orientacao = o),
+            Evento::Papel(v) => self.mudar_pagina(|p| p.papel = v),
+            Evento::Escala(s) => self.mudar_pagina(|p| p.escala = s),
+            Evento::Grade(b) => self.mudar_pagina(|p| p.grade = b),
+            Evento::Cabecalhos(b) => self.mudar_pagina(|p| p.cabecalhos = b),
+            Evento::Margem(m) => self.mudar_pagina(|p| p.margem = m),
             Evento::Anterior => if let Some(e) = self.impressao.dialogo.as_mut() {
                 e.pagina = e.pagina.saturating_sub(1).max(1);
             },
@@ -314,7 +404,7 @@ impl App {
             Evento::SalvarPdf => {
                 if self.impressao.dialogo.is_none() { return Task::none(); }
                 let nome = self.workbook.aba(self.folha)
-                    .map(|a| a.sheet.name.clone()).unwrap_or_else(|| "Planilha".into());
+                    .map(|a| a.sheet.name.clone()).unwrap_or_else(|| tr!("Planilha").into());
                 let nome: String = nome.chars().map(|c|
                     if "/\\:*?\"<>|".contains(c) { '_' } else { c }).collect();
                 return Task::perform(async move {
@@ -327,28 +417,28 @@ impl App {
             Evento::DestinoPdf(Some(destino)) => {
                 let bytes = match self.pdf_do_dialogo() {
                     Ok(b) => b,
-                    Err(e) => { self.status = format!("Não foi possível gerar o PDF: {e}"); return Task::none(); }
+                    Err(e) => { self.status = trf!("Não foi possível gerar o PDF: {e}"); return Task::none(); }
                 };
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || std::fs::write(&destino, bytes)
-                        .map(|_| format!("PDF salvo em {}", destino.display()))
-                        .map_err(|e| format!("Erro ao gravar o PDF: {e}")))
-                        .await.map_err(|e| format!("Erro ao gravar o PDF: {e}"))?
+                        .map(|_| trf!("PDF salvo em {}", destino.display()))
+                        .map_err(|e| trf!("Erro ao gravar o PDF: {e}")))
+                        .await.map_err(|e| trf!("Erro ao gravar o PDF: {e}"))?
                 }, |r| Msg::Impressao(Evento::Concluido(r)));
             }
             Evento::Imprimir => {
                 let bytes = match self.pdf_do_dialogo() {
                     Ok(b) => b,
-                    Err(e) => { self.status = format!("Não foi possível gerar o PDF: {e}"); return Task::none(); }
+                    Err(e) => { self.status = trf!("Não foi possível gerar o PDF: {e}"); return Task::none(); }
                 };
                 let temporario = std::env::temp_dir()
                     .join(format!("feathersheet-impressao-{}.pdf", std::process::id()));
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || {
                         std::fs::write(&temporario, bytes)
-                            .map_err(|e| format!("Erro ao gravar o PDF temporário: {e}"))?;
+                            .map_err(|e| trf!("Erro ao gravar o PDF temporário: {e}"))?;
                         enviar_para_impressora(&temporario)
-                    }).await.map_err(|e| format!("Erro ao imprimir: {e}"))?
+                    }).await.map_err(|e| trf!("Erro ao imprimir: {e}"))?
                 }, |r| Msg::Impressao(Evento::Concluido(r)));
             }
             Evento::Concluido(r) => {
@@ -359,7 +449,7 @@ impl App {
     }
 
     fn pdf_do_dialogo(&self) -> Result<Vec<u8>, String> {
-        let e = self.impressao.dialogo.as_ref().ok_or("diálogo fechado")?;
+        let e = self.impressao.dialogo.as_ref().ok_or(tr!("diálogo fechado"))?;
         let f = self.faixa_impressao(e);
         let area = AreaImpressao { linha0: f.r0, coluna0: f.c0, linha1: f.r1, coluna1: f.c1 };
         gerar_pdf(&self.workbook, e.folha, area, &e.config())
@@ -367,7 +457,7 @@ impl App {
 
     pub(super) fn view_impressao(&self) -> Element<'_, Msg> {
         let Some(e) = self.impressao.dialogo.as_ref() else {
-            return container(text("Janela fechada")).into();
+            return container(text(tr!("Janela fechada"))).into();
         };
         let faixa = self.faixa_impressao(e);
         let area = self.area_impressao();
@@ -376,14 +466,14 @@ impl App {
         let secao = |t: &str| text(t.to_owned()).size(12).color(COR_TEXTO_MUTED());
         let ev = |x: Evento| Msg::Impressao(x);
 
-        let r_sel = format!("Seleção atual ({})", rect_texto(&e.selecao));
+        let r_sel = trf!("Seleção atual ({})", rect_texto(&e.selecao));
         let r_area = match &area {
-            Some(a) => format!("Área de Impressão definida ({})", rect_texto(a)),
-            None => "Área de Impressão definida (Nenhuma)".into(),
+            Some(a) => trf!("Área de Impressão definida ({})", rect_texto(a)),
+            None => tr!("Área de Impressão definida (Nenhuma)").into(),
         };
         let escopo = iced::widget::column![
-            secao("O que imprimir"),
-            radio("Planilha ativa", Escopo::Planilha, Some(e.escopo),
+            secao(tr!("O que imprimir")),
+            radio(tr!("Planilha ativa"), Escopo::Planilha, Some(e.escopo),
                 |v| Msg::Impressao(Evento::Escopo(v))).size(15).text_size(13),
             radio(r_sel, Escopo::Selecao, Some(e.escopo),
                 |v| Msg::Impressao(Evento::Escopo(v))).size(15).text_size(13),
@@ -391,11 +481,11 @@ impl App {
                 |v| Msg::Impressao(Evento::Escopo(v))).size(15).text_size(13),
         ].spacing(5);
         let area_botoes = iced::widget::column![
-            secao("Área de Impressão"),
+            secao(tr!("Área de Impressão")),
             row![
-                button(text("Definir Seleção").size(12)).padding([6, 10])
+                button(text(tr!("Definir Seleção")).size(12)).padding([6, 10])
                     .style(estilo_botao_secundario).on_press(ev(Evento::DefinirArea)),
-                button(text("Limpar Área").size(12)).padding([6, 10])
+                button(text(tr!("Limpar Área")).size(12)).padding([6, 10])
                     .style(estilo_botao_secundario)
                     .on_press_maybe(area.is_some().then(|| ev(Evento::LimparArea))),
             ].spacing(8),
@@ -405,38 +495,38 @@ impl App {
             .style(estilo_botao_pequeno(e.orientacao == o))
             .on_press(ev(Evento::Orientacao(o)));
         let orientacao = iced::widget::column![
-            secao("Orientação"),
-            row![orient("Retrato", Orientacao::Retrato),
-                orient("Paisagem", Orientacao::Paisagem)].spacing(6),
+            secao(tr!("Orientação")),
+            row![orient(tr!("Retrato"), Orientacao::Retrato),
+                orient(tr!("Paisagem"), Orientacao::Paisagem)].spacing(6),
         ].spacing(5);
         let papel = iced::widget::column![
-            secao("Tamanho do Papel"),
+            secao(tr!("Tamanho do Papel")),
             pick_list(PapelUi::TODOS, Some(e.papel), |p| Msg::Impressao(Evento::Papel(p)))
                 .text_size(13).width(Length::Fill),
         ].spacing(5);
         let escala = iced::widget::column![
-            secao("Escala e Dimensionamento"),
+            secao(tr!("Escala e Dimensionamento")),
             pick_list(EscalaUi::TODAS, Some(e.escala), |s| Msg::Impressao(Evento::Escala(s)))
                 .text_size(13).width(Length::Fill),
         ].spacing(5);
         let exibicao = iced::widget::column![
-            secao("Opções de Exibição"),
-            checkbox("Imprimir linhas de grade", e.grade)
+            secao(tr!("Opções de Exibição")),
+            checkbox(tr!("Imprimir linhas de grade"), e.grade)
                 .on_toggle(|b| Msg::Impressao(Evento::Grade(b))).size(15).text_size(13),
-            checkbox("Imprimir títulos (A,B,C e 1,2,3)", e.cabecalhos)
+            checkbox(tr!("Imprimir títulos (A,B,C e 1,2,3)"), e.cabecalhos)
                 .on_toggle(|b| Msg::Impressao(Evento::Cabecalhos(b))).size(15).text_size(13),
         ].spacing(5);
         let rotulo_botao = |icone: &str, t: &str| row![
             feather_ui::icones::icone(icone, 14.0), text(t.to_owned()).size(13),
         ].spacing(6).align_y(Alignment::Center);
         let acoes = iced::widget::column![
-            button(rotulo_botao("file-export", "Salvar PDF…")).padding([8, 12])
+            button(rotulo_botao("file-export", tr!("Salvar PDF…"))).padding([8, 12])
                 .width(Length::Fill).style(estilo_botao_primario)
                 .on_press(ev(Evento::SalvarPdf)),
-            button(rotulo_botao("printer", "Imprimir")).padding([8, 12])
+            button(rotulo_botao("printer", tr!("Imprimir"))).padding([8, 12])
                 .width(Length::Fill).style(estilo_botao_primario)
                 .on_press(ev(Evento::Imprimir)),
-            button(text("Cancelar").size(13)).padding([8, 12]).width(Length::Fill)
+            button(text(tr!("Cancelar")).size(13)).padding([8, 12]).width(Length::Fill)
                 .style(estilo_botao_secundario).on_press(ev(Evento::Fechar)),
         ].spacing(6);
         let lateral = container(iced::widget::column![
@@ -450,13 +540,13 @@ impl App {
             button(feather_ui::icones::icone("chevron-left", 14.0)).padding([5, 8])
                 .style(estilo_botao_pequeno(false))
                 .on_press_maybe((pagina > 1).then(|| ev(Evento::Anterior))),
-            text(format!("Página {pagina} de {total}")).size(13),
+            text(trf!("Página {pagina} de {total}")).size(13),
             button(feather_ui::icones::icone("chevron-right", 14.0)).padding([5, 8])
                 .style(estilo_botao_pequeno(false))
                 .on_press_maybe((pagina < total).then(|| ev(Evento::Proxima))),
             Space::with_width(Length::Fill),
             text(format!("{} · {}", e.papel.sigla(),
-                if e.orientacao == Orientacao::Retrato { "Retrato" } else { "Paisagem" }))
+                if e.orientacao == Orientacao::Retrato { tr!("Retrato") } else { tr!("Paisagem") }))
                 .size(12).color(COR_TEXTO_MUTED()),
         ].spacing(8).align_y(Alignment::Center);
         let previa = cv::Canvas::new(self.previa(e, &faixa, pagina, total))
@@ -501,8 +591,8 @@ impl App {
         Previa {
             retrato: e.orientacao == Orientacao::Retrato,
             proporcao: { let (l, a) = e.papel.papel().tamanho_pt(); l / a },
-            titulo: format!("Planilha: {}", self.workbook.aba(e.folha)
-                .map(|a| a.sheet.name.as_str()).filter(|n| !n.is_empty()).unwrap_or("Sem título")),
+            titulo: trf!("Planilha: {}", self.workbook.aba(e.folha)
+                .map(|a| a.sheet.name.as_str()).filter(|n| !n.is_empty()).unwrap_or(tr!("Sem título"))),
             data: data_hoje(), pagina, total,
             colunas: (faixa.c0..=faixa.c1).map(col_name).collect(),
             cabecalhos: e.cabecalhos, grade: e.grade, linhas,
@@ -557,7 +647,7 @@ impl cv::Program<Msg> for Previa {
             alignment::Horizontal::Right, false);
         texto(&mut f, "FeatherSheet".into(), px + pad, py + pa - pad * 0.55, tam_cab, cinza,
             alignment::Horizontal::Left, false);
-        texto(&mut f, format!("Página {} de {}", self.pagina, self.total), px + pl - pad,
+        texto(&mut f, trf!("Página {} de {}", self.pagina, self.total), px + pl - pad,
             py + pa - pad * 0.55, tam_cab, cinza, alignment::Horizontal::Right, false);
 
         let area_x = px + pad;
@@ -671,6 +761,30 @@ mod testes {
         // Área inexistente não pode ser escolhida como escopo.
         let _ = app.update(Msg::Impressao(Evento::Escopo(Escopo::Area)));
         assert_ne!(app.impressao.dialogo.as_ref().unwrap().escopo, Escopo::Area);
+    }
+
+    #[test]
+    fn aba_layout_da_pagina_grava_por_aba_e_o_dialogo_abre_com_ela() {
+        let mut app = app_com_dados();
+        app.faixa_ativa = AbaFaixa::Layout;
+        let _: Vec<Element<'_, Msg>> = app.grupos_layout_pagina();
+        let _ = app.update(Msg::Impressao(Evento::Orientacao(Orientacao::Paisagem)));
+        let _ = app.update(Msg::Impressao(Evento::Papel(PapelUi::Oficio)));
+        let _ = app.update(Msg::Impressao(Evento::Margem(MargemUi::Larga)));
+        let _ = app.update(Msg::Impressao(Evento::Grade(false)));
+        let p = app.pagina_atual();
+        assert_eq!((p.orientacao, p.papel, p.margem, p.grade), (Orientacao::Paisagem, PapelUi::Oficio, MargemUi::Larga, false));
+        // O diálogo abre com o que a faixa escolheu, e o PDF leva as margens.
+        let _ = app.update(Msg::Impressao(Evento::Abrir));
+        let e = app.impressao.dialogo.as_ref().unwrap();
+        assert_eq!((e.orientacao, e.papel, e.grade), (Orientacao::Paisagem, PapelUi::Oficio, false));
+        assert_eq!(e.config().margens.esquerda_mm, 25.4);
+        // Mudar no diálogo volta para a faixa.
+        let _ = app.update(Msg::Impressao(Evento::Escala(EscalaUi::Pagina)));
+        assert_eq!(app.pagina_atual().escala, EscalaUi::Pagina);
+        // Outra aba começa no padrão.
+        app.update(Msg::AdicionarAba);
+        assert_eq!(app.pagina_atual(), Pagina::default());
     }
 
     #[test]

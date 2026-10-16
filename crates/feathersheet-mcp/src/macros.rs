@@ -1,11 +1,10 @@
 //! Macros JavaScript (API `sheet`, a mesma do Alt+F11): listar, ler,
-//! escrever, excluir e executar. O catálogo é o arquivo comum da suíte
-//! (`featheroffice/macros.json`), o mesmo que o editor do aplicativo usa.
+//! escrever, excluir e executar. O catálogo é o da própria pasta
+//! (`Workbook::macros`, gravado no .fshz), o mesmo que o editor do aplicativo
+//! mostra: cada arquivo leva as suas macros.
 //!
 //! Executar roda o código na pasta do hospedeiro; um erro reverte as escritas
 //! da execução (o motor de macros já faz isso).
-use std::path::PathBuf;
-
 use feather_macros::{Catalogo, Macro};
 use serde_json::Value as Json;
 
@@ -13,31 +12,23 @@ use crate::ferramentas::Saida;
 use crate::hospede::Hospede;
 use crate::texto::*;
 
-/// `FEATHERSHEET_MCP_MACROS` troca o arquivo (testes); senão, o da suíte.
-fn caminho() -> Result<PathBuf, String> {
-    std::env::var_os("FEATHERSHEET_MCP_MACROS").map(PathBuf::from)
-        .or_else(feather_macros::caminho_padrao)
-        .ok_or_else(|| "Pasta de configuração indisponível".into())
-}
-
-fn carregar() -> Result<Catalogo, String> {
-    let caminho = caminho()?;
-    if !caminho.exists() { return Ok(Catalogo::default()); }
-    Catalogo::carregar_de(&caminho)
-}
-
-fn gravar(catalogo: &Catalogo) -> Result<(), String> {
-    let caminho = caminho()?;
-    if let Some(pasta) = caminho.parent() {
-        std::fs::create_dir_all(pasta).map_err(|e| e.to_string())?;
+fn carregar(h: &dyn Hospede) -> Result<Catalogo, String> {
+    match h.pasta().macros.as_deref() {
+        Some(texto) => Catalogo::importar_json(texto),
+        None => Ok(Catalogo::default()),
     }
-    catalogo.salvar_em(&caminho)
+}
+
+fn gravar(h: &mut dyn Hospede, catalogo: &Catalogo) -> Result<(), String> {
+    let json = catalogo.exportar_json()?;
+    h.pasta_mut().macros = (!catalogo.macros.is_empty()).then_some(json);
+    Ok(())
 }
 
 pub fn macro_(h: &mut dyn Hospede, args: &Json) -> Saida {
     let acao = arg_texto(args, "acao").unwrap_or("listar");
     let nome = arg_texto(args, "nome");
-    let mut catalogo = carregar()?;
+    let mut catalogo = carregar(h)?;
     let texto = match acao {
         "listar" => {
             if catalogo.macros.is_empty() { "Nenhuma macro guardada.".into() } else {
@@ -58,7 +49,7 @@ pub fn macro_(h: &mut dyn Hospede, args: &Json) -> Saida {
             }
             // Passa pela mesma validação do editor (nome, tamanho, duplicata).
             let validado = Catalogo::importar_json(&catalogo.exportar_json()?)?;
-            gravar(&validado)?;
+            gravar(h, &validado)?;
             h.macros_mudaram();
             format!("Macro \"{nome}\" guardada. Ela não roda sozinha: use acao \"executar\".")
         }
@@ -67,7 +58,7 @@ pub fn macro_(h: &mut dyn Hospede, args: &Json) -> Saida {
             let antes = catalogo.macros.len();
             catalogo.macros.retain(|m| m.name != nome);
             if catalogo.macros.len() == antes { return Err(format!("Não existe a macro \"{nome}\".")); }
-            gravar(&catalogo)?;
+            gravar(h, &catalogo)?;
             h.macros_mudaram();
             format!("Macro \"{nome}\" excluída.")
         }
@@ -101,16 +92,16 @@ mod testes {
 
     #[test]
     fn escrever_ler_executar_e_excluir() {
-        let arquivo = std::env::temp_dir().join(format!("fsheet_macros_{}.json", std::process::id()));
-        std::env::set_var("FEATHERSHEET_MCP_MACROS", &arquivo);
         let mut h = Avulso::default();
         let texto = |r: Saida| r.unwrap()[0]["text"].as_str().unwrap().to_string();
         texto(macro_(&mut h, &json!({ "acao": "escrever", "nome": "Dobro", "codigo": "sheet.range(\"B1\").value = 42; log(\"ok\");" })));
+        // A macro fica na própria pasta (vai junto no .fshz).
+        assert!(h.pasta.macros.as_deref().is_some_and(|t| t.contains("Dobro")));
         assert!(texto(macro_(&mut h, &json!({ "acao": "listar" }))).contains("Dobro"));
         let r = texto(macro_(&mut h, &json!({ "acao": "executar", "nome": "Dobro" })));
         assert!(r.contains("ok") && r.contains("concluída"), "{r}");
         assert_eq!(crate::texto::valor_texto(&h.pasta.valor(0, 0, 1)), "42");
         texto(macro_(&mut h, &json!({ "acao": "excluir", "nome": "Dobro" })));
-        let _ = std::fs::remove_file(&arquivo);
+        assert!(h.pasta.macros.is_none());
     }
 }

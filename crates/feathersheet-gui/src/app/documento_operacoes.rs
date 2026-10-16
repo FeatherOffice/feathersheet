@@ -175,7 +175,7 @@ impl App {
     pub(super) fn copiar_selecao(&mut self) -> Option<String> {
         self.confirmar();
         if self.tem_varias_areas() {
-            self.status = "Copiar e recortar não funcionam com várias áreas selecionadas".into();
+            self.status = tr!("Copiar e recortar não funcionam com várias áreas selecionadas").into();
             return None;
         }
         let area = self.area_selecionada();
@@ -231,7 +231,7 @@ impl App {
     /// Captura somente estilos resolvidos. Pressionar o botão novamente desativa.
     pub(super) fn capturar_pincel(&mut self) {
         if self.pincel_formatacao.take().is_some() {
-            self.status = "Pincel de formatação cancelado".into();
+            self.status = tr!("Pincel de formatação cancelado").into();
             return;
         }
         self.confirmar();
@@ -243,7 +243,7 @@ impl App {
                 .collect::<Vec<Option<EstiloParcial>>>()
         }).collect();
         self.pincel_formatacao = Some(PincelFormatacao { estilos });
-        self.status = "Pincel ativo: clique ou arraste nas células de destino. Esc cancela.".into();
+        self.status = tr!("Pincel ativo: clique ou arraste nas células de destino. Esc cancela.").into();
     }
 
     /// Pinta um intervalo em uma única transação. A operação nunca transfere
@@ -255,7 +255,7 @@ impl App {
         let plano = match PlanoColagem::calcular(&self.area_selecionada(), altura, largura) {
             Ok(p) => p,
             Err(erro) => {
-                self.status = format!("Pincel: {erro}. Esc cancela.");
+                self.status = trf!("Pincel: {erro}. Esc cancela.");
                 self.pincel_formatacao = Some(pincel);
                 return;
             }
@@ -289,7 +289,7 @@ impl App {
                 "{}:{}", cell_name(area.r0, area.c0), cell_name(area.r1, area.c1)
             );
         }
-        self.status = format!(
+        self.status = trf!(
             "Pincel aplicado em {} células, sem modificar valores/fórmulas",
             plano.altura * plano.largura
         );
@@ -351,7 +351,7 @@ impl App {
                 }
             }
             self.alterado = true;
-            self.status = format!("{} atualizado", cell_name(linha, coluna));
+            self.status = trf!("{} atualizado", cell_name(linha, coluna));
             self.atualizar_circulos();
         }
         if folha != self.folha {
@@ -395,7 +395,7 @@ impl App {
             return feathersheet_io::xlsx_read::ler_xlsx_arquivo(path);
         }
         let bytes = std::fs::read(path)
-            .map_err(|e| format!("Não consegui ler {}: {e}", path.display()))?;
+            .map_err(|e| trf!("Não consegui ler {}: {e}", path.display()))?;
         Self::decodificar_com_separador(path, bytes, separador)
     }
 
@@ -421,7 +421,7 @@ impl App {
             // XLSX e FSHZ acima continuam nos codecs nativos existentes.
             (feathersheet_io::csv_workbook::importar_csv_tsv_com_separador(bytes, ext == "tsv", separador)?, 0)
         } else {
-            return Err("Formato não suportado. Abra .fshz, .xlsx, .xlsm, .csv, .tsv ou .parquet.".into());
+            return Err(tr!("Formato não suportado. Abra .fshz, .xlsx, .xlsm, .csv, .tsv ou .parquet.").into());
         };
         Ok((workbook, folha))
     }
@@ -435,6 +435,7 @@ impl App {
         self.tabela_area = None;
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
         self.workbook = workbook;
+        self.recarregar_macros();
         self.inspecoes.clear();
         self.eixos_grade.borrow_mut().limpar();
         self.congelados.clear();
@@ -463,9 +464,9 @@ impl App {
         self.editando_nome_aba = false;
         self.nome_aba = self.workbook.nomes().get(self.folha).cloned().unwrap_or_default();
         if recuperacao {
-            self.status = "Cópia temporária recuperada. Use Salvar para criar o arquivo definitivo.".into();
+            self.status = tr!("Cópia temporária recuperada. Use Salvar para criar o arquivo definitivo.").into();
         } else {
-            self.status = format!("Aberto: {}", path.display());
+            self.status = trf!("Aberto: {}", path.display());
             self.registrar_arquivo_recente(&path);
         }
         if ext == "xlsm" { self.ler_vba_do_xlsm(&path); } else { self.vba_pendente = None; }
@@ -504,7 +505,7 @@ impl App {
         self.confirmar();
         self.carimbar_propriedades();
         if self.salvando {
-            self.status = "Aguarde: o salvamento anterior ainda está em andamento.".into();
+            self.status = tr!("Aguarde: o salvamento anterior ainda está em andamento.").into();
             return Task::none();
         }
         let pasta = feathersheet_io::da_workbook::da_workbook(&self.workbook, self.folha as u32);
@@ -515,7 +516,7 @@ impl App {
             // Editar durante a gravação volta a marcar como alterado.
             self.alterado = false;
         }
-        self.status = "Salvando…".into();
+        self.status = tr!("Salvando…").into();
         let destino = path.clone();
         Task::perform(async move {
             let inicio = Instant::now();
@@ -524,7 +525,7 @@ impl App {
                     feathersheet_io::fshz_write::gravar_fshz_para(arquivo, &pasta)
                         .map_err(std::io::Error::other)
                 }).map_err(|e| e.to_string())
-            }).await.unwrap_or_else(|e| Err(format!("Falha na tarefa de gravação: {e}")));
+            }).await.unwrap_or_else(|e| Err(trf!("Falha na tarefa de gravação: {e}")));
             resultado.map(|()| inicio.elapsed().as_millis().min(u128::from(u64::MAX)) as u64)
         }, move |resultado| Msg::Gravado(path.clone(), copia, resultado))
     }
@@ -548,7 +549,7 @@ impl App {
         match resultado {
             Ok(ms) if copia => {
                 self.registrar_arquivo_recente(&path);
-                self.status = format!("Cópia salva em: {}", path.display());
+                self.status = trf!("Cópia salva em: {}", path.display());
                 let _ = ms;
             }
             Ok(ms) => {
@@ -556,13 +557,13 @@ impl App {
                 self.caminho = Some(path.clone());
                 self.registrar_arquivo_recente(&path);
                 let tamanho = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-                self.status = format!("Salvo: {:.1} MB em {:.1} s", tamanho as f64 / 1_048_576.0, ms as f64 / 1000.0);
+                self.status = trf!("Salvo: {:.1} MB em {:.1} s", tamanho as f64 / 1_048_576.0, ms as f64 / 1000.0);
                 if let Some(p) = self.apos_gravar.take() { return self.executar_pendente(p); }
             }
             Err(e) => {
                 if !copia { self.alterado = true; }
                 self.apos_gravar = None;
-                self.status = format!("Erro ao salvar: {e}");
+                self.status = trf!("Erro ao salvar: {e}");
             }
         }
         Task::none()
@@ -588,12 +589,12 @@ impl App {
     pub(super) fn guardar_temporariamente(&mut self) -> Task<Msg> {
         let Some(destino) = self.pendente else { return Task::none(); };
         if !self.confirmar() {
-            self.status = "Conclua a edição antes de guardar temporariamente.".into();
+            self.status = tr!("Conclua a edição antes de guardar temporariamente.").into();
             return Task::none();
         }
         let pasta = Self::pasta_temporarios();
         if let Err(e) = std::fs::create_dir_all(&pasta) {
-            self.status = format!("Não foi possível criar a pasta de recuperação: {e}");
+            self.status = trf!("Não foi possível criar a pasta de recuperação: {e}");
             return Task::none();
         }
         let nome = self.caminho.as_ref()
@@ -619,7 +620,7 @@ impl App {
                 self.executar_pendente(destino)
             }
             Err(erro) => {
-                self.status = format!("Não foi possível guardar a cópia temporária: {erro}");
+                self.status = trf!("Não foi possível guardar a cópia temporária: {erro}");
                 Task::none()
             }
         }
@@ -631,25 +632,25 @@ impl App {
         if self.carregando || self.pendente.is_some() ||
             self.assistente_divisao.as_ref().is_some_and(|e| e.conversao_em_andamento())
         {
-            self.status = "Aguarde a operação atual antes de criar um backup.".into();
+            self.status = tr!("Aguarde a operação atual antes de criar um backup.").into();
             return Task::none();
         }
         let Some(origem) = self.caminho.clone() else {
-            self.status = "Salve a planilha como .fshz antes de criar um backup.".into();
+            self.status = tr!("Salve a planilha como .fshz antes de criar um backup.").into();
             return Task::none();
         };
         if self.alterado || self.editor_formula.ativo {
-            self.status = "Salve as alterações antes do backup para não copiar uma versão antiga.".into();
+            self.status = tr!("Salve as alterações antes do backup para não copiar uma versão antiga.").into();
             return Task::none();
         }
         let pasta = Self::pasta_temporarios();
-        self.status = "Criando cópia de segurança do último arquivo salvo…".into();
+        self.status = tr!("Criando cópia de segurança do último arquivo salvo…").into();
         Task::perform(async move {
             match tokio::task::spawn_blocking(move ||
                 feathersheet_io::backup_snapshot::criar_backup(&origem, &pasta)
             ).await {
                 Ok(resultado) => resultado,
-                Err(e) => Err(format!("Falha na tarefa de cópia: {e}")),
+                Err(e) => Err(trf!("Falha na tarefa de cópia: {e}")),
             }
         }, Msg::BackupCriado)
     }
@@ -658,7 +659,7 @@ impl App {
         let pasta = Self::pasta_temporarios();
         Task::perform(async move {
             rfd::AsyncFileDialog::new().set_directory(pasta)
-                .add_filter("Cópias de segurança FeatherSheet", &["fshz"])
+                .add_filter(tr!("Cópias de segurança FeatherSheet"), &["fshz"])
                 .pick_file().await.map(|file| file.path().to_path_buf())
         }, Msg::DestinoTemporario)
     }
@@ -674,6 +675,7 @@ impl App {
                 self.estatisticas_geracao = self.estatisticas_geracao.wrapping_add(1);
                 self.estatisticas = None;
                 self.workbook = Workbook::new();
+                self.recarregar_macros();
                 self.inspecoes.clear();
                 self.eixos_grade.borrow_mut().limpar();
                 // O cache das regras é por id + versão da aba; uma pasta nova
@@ -694,31 +696,31 @@ impl App {
                 self.trocar_selecao(0, 0);
                 self.editando_nome_aba = false;
                 self.nome_aba = "Planilha1".into();
-                self.status = "Nova pasta criada".into();
+                self.status = tr!("Nova pasta criada").into();
                 Task::none()
             }
             Pendente::Abrir => {
                 self.carregando = true;
-                self.status = "Aguardando seleção ou carregando planilha…".into();
+                self.status = tr!("Aguardando seleção ou carregando planilha…").into();
                 self.dialogo_abrir()
             },
             Pendente::Recente => {
                 if self.carregando {
-                    self.status = "Aguarde a planilha em carregamento.".into();
+                    self.status = tr!("Aguarde a planilha em carregamento.").into();
                     return Task::none();
                 }
                 let Some(path) = self.recente_destino.take() else {
-                    self.status = "Nenhum arquivo recente selecionado.".into();
+                    self.status = tr!("Nenhum arquivo recente selecionado.").into();
                     return Task::none();
                 };
                 if !path.is_file() {
-                    self.status = format!("Arquivo recente não encontrado: {}", path.display());
+                    self.status = trf!("Arquivo recente não encontrado: {}", path.display());
                     return Task::none();
                 }
                 self.em_tela_inicio = false;
                 self.menu_aberto = false;
                 self.carregando = true;
-                self.status = format!("Abrindo recente: {}", path.display());
+                self.status = trf!("Abrindo recente: {}", path.display());
                 Self::tarefa_abrir_recente(path, self.config.separador_csv())
             }
             Pendente::Modelo(id) => match super::menu_principal::modelos::criar(id) {
@@ -726,16 +728,17 @@ impl App {
                     // Mesmo fluxo de Novo (zera estado da pasta); depois entra o conteúdo do modelo.
                     let _ = self.executar_pendente(Pendente::Novo);
                     self.workbook = modelo;
+                    self.recarregar_macros();
                     for &(aba, linhas, colunas) in super::menu_principal::modelos::congelamento(id) {
                         if let Some(a) = self.workbook.aba(aba) { self.congelados.insert(a.id, (linhas, colunas)); }
                     }
                     self.eixos_grade.borrow_mut().limpar();
                     self.condicional.borrow_mut().limpar();
-                    self.status = "Nova planilha criada a partir de modelo".into();
+                    self.status = tr!("Nova planilha criada a partir de modelo").into();
                     Task::none()
                 }
                 None => {
-                    self.status = format!("Modelo indisponível: {id}");
+                    self.status = trf!("Modelo indisponível: {id}");
                     Task::none()
                 }
             },
@@ -748,7 +751,7 @@ impl App {
         if self.salvando {
             // Fechar ou trocar de arquivo no meio da gravação perderia o salvamento.
             self.apos_gravar = Some(alvo);
-            self.status = "Terminando de salvar…".into();
+            self.status = tr!("Terminando de salvar…").into();
             return Task::none();
         }
         if self.alterado {
@@ -761,7 +764,7 @@ impl App {
         let limite_gb = self.config.limite_memoria_gb;
         Task::perform(async move {
             let file = rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao())
-                .add_filter("Planilhas", &["fshz", "xlsx", "xlsm", "csv", "tsv", "parquet"])
+                .add_filter(tr!("Planilhas"), &["fshz", "xlsx", "xlsm", "csv", "tsv", "parquet"])
                 .pick_file().await;
             let Some(file) = file else { return Ok(None); };
             let path = file.path().to_path_buf();
@@ -780,7 +783,7 @@ impl App {
                 })
             }).await {
                 Ok(resultado) => resultado.map(Some),
-                Err(e) => Err(format!("Falha ao carregar arquivo: {e}")),
+                Err(e) => Err(trf!("Falha ao carregar arquivo: {e}")),
             }
         }, Msg::Aberto)
     }
@@ -801,15 +804,15 @@ impl App {
                 })
             }).await {
                 Ok(resultado) => resultado.map(Some),
-                Err(e) => Err(format!("Falha ao carregar recente: {e}")),
+                Err(e) => Err(trf!("Falha ao carregar recente: {e}")),
             }
         }, Msg::Aberto)
     }
     pub(super) fn dialogo_salvar_copia(&self) -> Task<Msg> {
         let base = self.caminho.as_ref()
             .and_then(|p| p.file_stem()).and_then(|s| s.to_str())
-            .unwrap_or("Sem título");
-        let nome = format!("Cópia de {base}.fshz");
+            .unwrap_or(tr!("Sem título"));
+        let nome = trf!("Cópia de {base}.fshz");
         Task::perform(async move {
             rfd::AsyncFileDialog::new()
                 .set_directory(dialogos::pasta_padrao())
@@ -840,7 +843,7 @@ impl App {
         let Some(atual) = self.caminho.clone() else { return self.dialogo_salvar() };
         let pasta = atual.parent().map(PathBuf::from).unwrap_or_else(dialogos::pasta_padrao);
         let nome = atual.file_name().map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "Sem título.fshz".into());
+            .unwrap_or_else(|| tr!("Sem título.fshz").into());
         Task::perform(async move {
             rfd::AsyncFileDialog::new().set_directory(pasta).add_filter("FeatherSheet", &["fshz"])
                 .set_file_name(&nome)
@@ -853,7 +856,7 @@ impl App {
     pub(super) fn renomear_arquivo_atual(&mut self, mut novo: PathBuf) {
         self.confirmar();
         let Some(antigo) = self.caminho.clone() else {
-            self.status = "Salve a planilha antes de renomear".into();
+            self.status = tr!("Salve a planilha antes de renomear").into();
             return;
         };
         if novo.extension().and_then(|s| s.to_str()) != Some("fshz") {
@@ -861,14 +864,14 @@ impl App {
         }
         if novo == antigo { return; }
         if novo.exists() {
-            self.status = format!("Já existe um arquivo com o nome {}", novo.display());
+            self.status = trf!("Já existe um arquivo com o nome {}", novo.display());
             return;
         }
         if self.alterado {
             if let Err(e) = feathersheet_io::da_workbook::pasta_gravar_arquivo(
                 &self.workbook, self.folha as u32, &antigo
             ) {
-                self.status = format!("Erro ao salvar antes de renomear: {e}");
+                self.status = trf!("Erro ao salvar antes de renomear: {e}");
                 return;
             }
             self.alterado = false;
@@ -882,9 +885,9 @@ impl App {
                 self.caminho = Some(novo.clone());
                 self.registrar_arquivo_recente(&novo);
                 let nome = novo.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                self.status = format!("Arquivo renomeado para {nome}");
+                self.status = trf!("Arquivo renomeado para {nome}");
             }
-            Err(e) => self.status = format!("Erro ao renomear: {e}"),
+            Err(e) => self.status = trf!("Erro ao renomear: {e}"),
         }
     }
 
@@ -892,7 +895,7 @@ impl App {
         let nome = format!("{}.xlsx", self.nome_base_documento());
         Task::perform(async move {
             rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao())
-                .add_filter("Pasta do Excel", &["xlsx"])
+                .add_filter(tr!("Pasta do Excel"), &["xlsx"])
                 .set_file_name(&nome)
                 .save_file().await.map(|f| f.path().to_path_buf())
         }, Msg::DestinoXlsx)
@@ -903,7 +906,7 @@ impl App {
     /// true = TSV e false = CSV; exporta apenas a aba atual.
     pub(super) fn dialogo_exportar_delimitado(&self, tsv: bool) -> Task<Msg> {
         let nome = self.workbook.aba(self.folha)
-            .map(|aba| aba.sheet.name.as_str()).unwrap_or("Planilha");
+            .map(|aba| aba.sheet.name.as_str()).unwrap_or(tr!("Planilha"));
         // Um nome de aba pode conter barras; não usá-las como diretórios.
         let nome: String = nome.chars().map(|c|
             if "/\\:*?\"<>|".contains(c) { '_' } else { c }
@@ -914,7 +917,7 @@ impl App {
                 .set_directory(dialogos::pasta_padrao())
                 .set_file_name(&format!("{nome}.{ext}"));
             let dialogo = if tsv {
-                dialogo.add_filter("Tabulação", &["tsv"])
+                dialogo.add_filter(tr!("Tabulação"), &["tsv"])
             } else {
                 dialogo.add_filter("CSV", &["csv"])
             };
@@ -927,8 +930,8 @@ impl App {
         self.status = match feathersheet_io::csv_workbook::gravar_csv_tsv(
             &self.workbook, self.folha, &path, tsv
         ) {
-            Ok(()) => format!("{} exportado: {}", if tsv {"TSV"}else{"CSV"},path.display()),
-            Err(e) => format!("Erro ao exportar {}: {e}",if tsv{"TSV"}else{"CSV"}),
+            Ok(()) => trf!("{} exportado: {}", if tsv {"TSV"}else{"CSV"},path.display()),
+            Err(e) => trf!("Erro ao exportar {}: {e}",if tsv{"TSV"}else{"CSV"}),
         };
         // Exportação é uma cópia, sem mudar .fshz, undo ou marcador de alteração.
     }
@@ -937,7 +940,7 @@ impl App {
     pub(super) fn dialogo_exportar_json(&self) -> Task<Msg> {
         let nome = self.caminho.as_deref()
             .and_then(|p| p.file_stem()).and_then(|s| s.to_str())
-            .unwrap_or("Planilha").to_owned();
+            .unwrap_or(tr!("Planilha")).to_owned();
         Task::perform(async move {
             rfd::AsyncFileDialog::new()
                 .set_directory(dialogos::pasta_padrao())
@@ -954,8 +957,8 @@ impl App {
         self.status = match feathersheet_io::json_workbook::gravar_json(
             &self.workbook, self.folha, &path,
         ) {
-            Ok(()) => format!("JSON exportado: {}", path.display()),
-            Err(e) => format!("Erro ao exportar JSON: {e}"),
+            Ok(()) => trf!("JSON exportado: {}", path.display()),
+            Err(e) => trf!("Erro ao exportar JSON: {e}"),
         };
     }
 
@@ -965,12 +968,12 @@ impl App {
         match feathersheet_io::xlsx_write::gerar_xlsx_com_funcoes(&self.workbook) {
             Ok((bytes, usadas)) => match feathersheet_io::arquivo::gravar_atomico(&path, &bytes) {
                 Ok(()) => {
-                    self.status = format!("Excel exportado: {}",path.display());
+                    self.status = trf!("Excel exportado: {}",path.display());
                     self.avisar_funcoes_fora_do_excel(&usadas);
                 }
-                Err(e) => self.status = format!("Erro ao gravar Excel: {e}"),
+                Err(e) => self.status = trf!("Erro ao gravar Excel: {e}"),
             },
-            Err(e) => self.status = format!("Erro ao gerar Excel: {e}"),
+            Err(e) => self.status = trf!("Erro ao gerar Excel: {e}"),
         }
         // Exportar para Excel não altera o arquivo .fshz de trabalho.
     }

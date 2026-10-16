@@ -26,10 +26,10 @@ const MAX_ITERACOES: u32 = 2_000_000;
 
 fn validar_parametros(algoritmo: &str, iteracoes: u32) -> Result<(), String> {
     if algoritmo != "PBKDF2-SHA256" {
-        return Err("Algoritmo de proteção não suportado.".into());
+        return Err(tr!("Algoritmo de proteção não suportado.").into());
     }
     if !(1..=MAX_ITERACOES).contains(&iteracoes) {
-        return Err("Número de iterações de proteção inválido.".into());
+        return Err(tr!("Número de iterações de proteção inválido.").into());
     }
     Ok(())
 }
@@ -50,7 +50,7 @@ fn criar_com_sal(senha: &str, sal: [u8; SAL_BYTES], iteracoes: u32)
 {
     validar_parametros("PBKDF2-SHA256", iteracoes)?;
     if senha.is_empty() {
-        return Err("Informe uma senha para proteger o intervalo.".into());
+        return Err(tr!("Informe uma senha para proteger o intervalo.").into());
     }
     let hash = derivar(senha, &sal, iteracoes);
     Ok(SenhaGuardada {
@@ -65,11 +65,11 @@ fn criar_com_sal(senha: &str, sal: [u8; SAL_BYTES], iteracoes: u32)
 /// longo prazo é a senha do usuário, nunca persistida; o sal é de CSPRNG.
 pub fn criar_senha(senha: &str) -> Result<SenhaGuardada, String> {
     if senha.is_empty() {
-        return Err("Informe uma senha para proteger o intervalo.".into());
+        return Err(tr!("Informe uma senha para proteger o intervalo.").into());
     }
     let mut sal = [0_u8; SAL_BYTES];
     getrandom::getrandom(&mut sal)
-        .map_err(|_| "O gerador criptográfico de números aleatórios não está disponível.")?;
+        .map_err(|_| tr!("O gerador criptográfico de números aleatórios não está disponível."))?;
     let hash = derivar(senha, &sal, ITERACOES_PADRAO);
     Ok(SenhaGuardada {
         alg: "PBKDF2-SHA256".into(),
@@ -84,11 +84,11 @@ pub fn criar_senha(senha: &str) -> Result<SenhaGuardada, String> {
 pub fn conferir_senha(senha: &str, guardada: &SenhaGuardada) -> Result<bool, String> {
     validar_parametros(&guardada.alg, guardada.iteracoes)?;
     let sal = STANDARD.decode(&guardada.sal)
-        .map_err(|_| "Sal de proteção não é Base64 válido.")?;
+        .map_err(|_| tr!("Sal de proteção não é Base64 válido."))?;
     let hash = STANDARD.decode(&guardada.hash)
-        .map_err(|_| "Hash de proteção não é Base64 válido.")?;
+        .map_err(|_| tr!("Hash de proteção não é Base64 válido."))?;
     if sal.len() != SAL_BYTES || hash.len() != HASH_BYTES {
-        return Err("Tamanho de sal ou hash da proteção é inválido.".into());
+        return Err(tr!("Tamanho de sal ou hash da proteção é inválido.").into());
     }
     let obtido = derivar(senha, &sal, guardada.iteracoes);
     let mut diferenca: u8 = 0;
@@ -141,20 +141,20 @@ pub struct ProtecaoDeIntervalo {
 pub fn importar_intervalos(json: Option<&str>) -> Result<Vec<ProtecaoDeIntervalo>, String> {
     let Some(json) = json else { return Ok(Vec::new()); };
     if json.len() > 1024 * 1024 {
-        return Err("Os metadados de proteção excedem 1 MiB.".into());
+        return Err(tr!("Os metadados de proteção excedem 1 MiB.").into());
     }
     let protecoes: Vec<ProtecaoDeIntervalo> = serde_json::from_str(json)
-        .map_err(|_| "O JSON de proteções da aba está inválido.")?;
+        .map_err(|_| tr!("O JSON de proteções da aba está inválido."))?;
     if protecoes.len() > 4096 {
-        return Err("Limite de 4096 intervalos protegidos ultrapassado.".into());
+        return Err(tr!("Limite de 4096 intervalos protegidos ultrapassado.").into());
     }
     for (i, item) in protecoes.iter().enumerate() {
         if item.id.is_empty() || !item.area.valida() {
-            return Err("Uma proteção contém ID ou coordenadas inválidas.".into());
+            return Err(tr!("Uma proteção contém ID ou coordenadas inválidas.").into());
         }
         validar_parametros(&item.senha.alg, item.senha.iteracoes)?;
         if protecoes[..i].iter().any(|previa| previa.id == item.id) {
-            return Err("IDs duplicados nas proteções do arquivo.".into());
+            return Err(tr!("IDs duplicados nas proteções do arquivo.").into());
         }
     }
     Ok(protecoes)
@@ -164,7 +164,7 @@ pub fn importar_intervalos(json: Option<&str>) -> Result<Vec<ProtecaoDeIntervalo
 pub fn exportar_intervalos(protecoes: &[ProtecaoDeIntervalo]) -> Result<Option<String>, String> {
     if protecoes.is_empty() { return Ok(None); }
     let json = serde_json::to_string(protecoes)
-        .map_err(|_| "Não foi possível serializar as proteções.")?;
+        .map_err(|_| tr!("Não foi possível serializar as proteções."))?;
     importar_intervalos(Some(&json))?;
     Ok(Some(json))
 }

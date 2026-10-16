@@ -27,7 +27,7 @@ fn indice(tabelas: &[Json], id: &str) -> Option<usize> {
 
 fn salvar(w: &mut Workbook, aba: usize, tabelas: &[Json]) -> Result<(), String> {
     let raw = serde_json::to_string(tabelas).map_err(|e| e.to_string())?;
-    let viva = w.aba_mut(aba).ok_or("Aba ausente.")?;
+    let viva = w.aba_mut(aba).ok_or(tr!("Aba ausente."))?;
     viva.sheet.tb = Some(raw);
     viva.versao = viva.versao.wrapping_add(1).max(1);
     Ok(())
@@ -37,7 +37,7 @@ fn salvar(w: &mut Workbook, aba: usize, tabelas: &[Json]) -> Result<(), String> 
 /// Só utilizar quando não houver alturas de filtro a restaurar.
 fn salvar_com_historico(w: &mut Workbook, aba: usize, tabelas: &[Json], area: &Rect) -> Result<(), String> {
     let bruto = serde_json::to_string(tabelas).map_err(|e|e.to_string())?;
-    let viva = w.aba_mut(aba).ok_or("Aba ausente.")?;
+    let viva = w.aba_mut(aba).ok_or(tr!("Aba ausente."))?;
     if viva.sheet.alterar_tabelas(Some(bruto),area) {
         viva.versao = viva.versao.wrapping_add(1).max(1);
     }
@@ -47,8 +47,8 @@ fn salvar_com_historico(w: &mut Workbook, aba: usize, tabelas: &[Json], area: &R
 fn mudar(w: &mut Workbook, aba: usize, id: &str,
     f: impl FnOnce(&mut Json) -> Result<(), String>) -> Result<Json, String>
 {
-    let mut tabelas = listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
-    let i = indice(&tabelas, id).ok_or("Tabela não encontrada.")?;
+    let mut tabelas = listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
+    let i = indice(&tabelas, id).ok_or(tr!("Tabela não encontrada."))?;
     f(&mut tabelas[i])?;
     let retorno = tabelas[i].clone();
     salvar(w, aba, &tabelas)?;
@@ -63,12 +63,12 @@ fn mudar_estilo_com_historico(
     w: &mut Workbook, aba: usize, id: &str,
     f: impl FnOnce(&mut Json) -> Result<(), String>,
 ) -> Result<(), String> {
-    let mut tabelas = listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
-    let i = indice(&tabelas,id).ok_or("Tabela não encontrada.")?;
-    let area = area_de(&tabelas[i]).ok_or("Área de tabela inválida.")?;
+    let mut tabelas = listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
+    let i = indice(&tabelas,id).ok_or(tr!("Tabela não encontrada."))?;
+    let area = area_de(&tabelas[i]).ok_or(tr!("Área de tabela inválida."))?;
     f(&mut tabelas[i])?;
     let novo = serde_json::to_string(&tabelas).map_err(|e|e.to_string())?;
-    let viva = w.aba_mut(aba).ok_or("Aba ausente.")?;
+    let viva = w.aba_mut(aba).ok_or(tr!("Aba ausente."))?;
     if viva.sheet.alterar_tabelas(Some(novo), &area) {
         viva.versao = viva.versao.wrapping_add(1).max(1);
     }
@@ -83,26 +83,26 @@ fn grafia(nome: &str) -> bool {
 
 pub(in crate::app) fn renomear(w: &mut Workbook, aba: usize, id: &str, novo: &str) -> Result<(), String> {
     let nome = novo.trim();
-    if !grafia(nome) { return Err("Nome inválido (letra, número, _ ou ponto).".into()); }
+    if !grafia(nome) { return Err(tr!("Nome inválido (letra, número, _ ou ponto).").into()); }
     let atual = sob_id(w, aba, id)?;
-    let antigo = atual["nome"].as_str().ok_or("Tabela sem nome.")?.to_string();
+    let antigo = atual["nome"].as_str().ok_or(tr!("Tabela sem nome."))?.to_string();
     if antigo.eq_ignore_ascii_case(nome) { return Ok(()); }
     if nomes_usados(w)?.iter().any(|n| n.eq_ignore_ascii_case(nome))
         || w.nomeados().iter().any(|n| n.nome.eq_ignore_ascii_case(nome)) {
-        return Err("O nome já está em uso na pasta.".into());
+        return Err(tr!("O nome já está em uso na pasta.").into());
     }
-    let area = area_de(&atual).ok_or("Intervalo inválido.")?;
+    let area = area_de(&atual).ok_or(tr!("Intervalo inválido."))?;
     mudar_estilo_com_historico(w, aba, id, |t| { t["nome"] = json!(nome); Ok(()) })?;
     w.remover_nome(&antigo);
-    let nome_aba = w.aba(aba).ok_or("Aba ausente.")?.sheet.name.clone();
+    let nome_aba = w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet.name.clone();
     w.definir_nome(nome, Rect::na_aba(area.r0, area.c0, area.r1, area.c1, nome_aba));
     Ok(())
 }
 
 pub(in crate::app) fn sob_id(w: &Workbook, aba: usize, id: &str) -> Result<Json, String> {
-    listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?
+    listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?
         .into_iter().find(|v| v["id"].as_str() == Some(id))
-        .ok_or_else(|| "Tabela não encontrada.".into())
+        .ok_or_else(|| tr!("Tabela não encontrada.").into())
 }
 
 pub(in crate::app) enum Estilo {
@@ -117,17 +117,17 @@ pub(in crate::app) fn estilo(w: &mut Workbook, aba: usize, id: &str, acao: Estil
             Estilo::Borda(v) => t["estilo"]["borda"] = json!(v),
             Estilo::Tema(ref s) => {
                 if !["padrao","azul","verde","laranja","vermelho","roxo","cinza"].contains(&s.as_str()) {
-                    return Err("Paleta desconhecida.".into());
+                    return Err(tr!("Paleta desconhecida.").into());
                 }
                 t["estilo"]["tema"] = json!(s);
             },
             Estilo::Totais(v) => t["mostrarTotais"] = json!(v),
             Estilo::TotalColuna { col, ref funcao } => {
-                let area = area_de(t).ok_or("Área de tabela inválida.")?;
-                if col > area.c1 - area.c0 { return Err("Coluna fora da tabela.".into()); }
+                let area = area_de(t).ok_or(tr!("Área de tabela inválida."))?;
+                if col > area.c1 - area.c0 { return Err(tr!("Coluna fora da tabela.").into()); }
                 if !["nenhum","soma","media","contagem","contagem-numeros",
                       "maximo","minimo","desvio","variancia"].contains(&funcao.as_str()) {
-                    return Err("Função de total desconhecida.".into());
+                    return Err(tr!("Função de total desconhecida.").into());
                 }
                 let mut lista = t["totais"].as_array().cloned().unwrap_or_default();
                 lista.retain(|v| v["col"].as_u64() != Some(u64::from(col)));
@@ -146,26 +146,26 @@ pub(in crate::app) fn redimensionar(
     w: &mut Workbook, aba: usize, id: &str, novo: Rect,
 ) -> Result<(), String> {
     let novo = super::area_valida(novo)?;
-    let mut tabelas = listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
-    let i = indice(&tabelas, id).ok_or("Tabela não encontrada.")?;
+    let mut tabelas = listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
+    let i = indice(&tabelas, id).ok_or(tr!("Tabela não encontrada."))?;
     let antigo = tabelas[i].clone();
     if antigo["soFiltro"] == true {
-        return Err("AutoFiltro não pode ser redimensionado como tabela.".into());
+        return Err(tr!("AutoFiltro não pode ser redimensionado como tabela.").into());
     }
-    let anterior = area_de(&antigo).ok_or("Intervalo inválido.")?;
+    let anterior = area_de(&antigo).ok_or(tr!("Intervalo inválido."))?;
     if novo.r0 != anterior.r0 || novo.c0 != anterior.c0 {
-        return Err("Mantenha a primeira célula da tabela ao redimensionar.".into());
+        return Err(tr!("Mantenha a primeira célula da tabela ao redimensionar.").into());
     }
     if antigo["temCabecalho"] == true && novo.r1 == novo.r0 {
-        return Err("A tabela precisa de pelo menos uma linha de dados.".into());
+        return Err(tr!("A tabela precisa de pelo menos uma linha de dados.").into());
     }
     if antigo["mostrarTotais"] == true
         && novo.r1 >= feathersheet_core::celulas::refs::MAX_ROWS - 1
     {
-        return Err("Reserve uma linha para os totais abaixo da tabela.".into());
+        return Err(tr!("Reserve uma linha para os totais abaixo da tabela.").into());
     }
     if antigo["mostrarTotais"] == true {
-        return Err("Desligue a linha de totais antes de redimensionar a tabela.".into());
+        return Err(tr!("Desligue a linha de totais antes de redimensionar a tabela.").into());
     }
     let mut destino = novo.clone();
     if antigo["mostrarTotais"] == true { destino.r1 += 1; }
@@ -177,7 +177,7 @@ pub(in crate::app) fn redimensionar(
             super::intersecta(&destino, &outra)
         })
     }) {
-        return Err("O intervalo cruza outra tabela ou uma linha de totais.".into());
+        return Err(tr!("O intervalo cruza outra tabela ou uma linha de totais.").into());
     }
     if novo.r1 == anterior.r1 && novo.c1 == anterior.c1 {return Ok(());}
     let mut atual = antigo.clone();
@@ -205,7 +205,7 @@ pub(in crate::app) fn redimensionar(
         salvar(w,aba,&tabelas)?;
     }
     if !nome.is_empty() {
-        let nome_aba = w.aba(aba).ok_or("Aba ausente.")?.sheet.name.clone();
+        let nome_aba = w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet.name.clone();
         w.definir_nome(&nome,Rect::na_aba(novo.r0,novo.c0,novo.r1,novo.c1,nome_aba));
     }
     // filtrar avalia todos os criterios da tabela, nao somente o primeiro.
@@ -220,15 +220,15 @@ pub(in crate::app) fn converter(w: &mut Workbook, aba: usize, id: &str) -> Resul
     let antigo = sob_id(w, aba, id)?;
     // Não deixa alturas aplicadas pelo filtro após remover o objeto.
     limpar_visibilidade(w, aba, &antigo)?;
-    let mut lista = listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
-    let i = indice(&lista, id).ok_or("Tabela não encontrada.")?;
+    let mut lista = listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
+    let i = indice(&lista, id).ok_or(tr!("Tabela não encontrada."))?;
     lista.remove(i);
     if antigo["filtros"].as_array().is_some_and(|fs|!fs.is_empty()) {
         // A conversão de tabela filtrada altera visibilidade de linhas.
         // Ainda não gerar um Ctrl+Z parcial que reabriria apenas o JSON.
         salvar(w,aba,&lista)?;
     } else {
-        let area=area_de(&antigo).ok_or("Área de tabela inválida.")?;
+        let area=area_de(&antigo).ok_or(tr!("Área de tabela inválida."))?;
         salvar_com_historico(w,aba,&lista,&area)?;
     }
     if let Some(nome) = antigo["nome"].as_str() { w.remover_nome(nome); }
@@ -236,14 +236,14 @@ pub(in crate::app) fn converter(w: &mut Workbook, aba: usize, id: &str) -> Resul
 }
 
 fn faixas(t: &Json, w: &mut Workbook, aba: usize) -> Result<Vec<(u32,u32)>, String> {
-    let area = area_de(t).ok_or("Área de tabela inválida.")?;
+    let area = area_de(t).ok_or(tr!("Área de tabela inválida."))?;
     let primeira = area.r0 + u32::from(t["temCabecalho"] == true);
-    let ultima = area.r1.min(w.aba(aba).ok_or("Aba ausente.")?.sheet.max_row);
+    let ultima = area.r1.min(w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet.max_row);
     if primeira > ultima { return Ok(Vec::new()); }
     let mut filtros = Vec::new();
     if let Some(fs) = t["filtros"].as_array() {
         for f in fs {
-            let rel = f["col"].as_u64().ok_or("Filtro sem coluna.")?;
+            let rel = f["col"].as_u64().ok_or(tr!("Filtro sem coluna."))?;
             if rel > u64::from(area.c1 - area.c0) { continue; }
             filtros.push((area.c0 + rel as u32, filtro_json::criterio_de_json(&f["criterio"])));
         }
@@ -251,7 +251,7 @@ fn faixas(t: &Json, w: &mut Workbook, aba: usize) -> Result<Vec<(u32,u32)>, Stri
     if filtros.is_empty() { return Ok(Vec::new()); }
     // Mesmo contexto de `filtro::linhas_escondidas_da_aba` (valor, cores e
     // "hoje"), mas o valor vem da pasta: fórmula que lê outra aba também vale.
-    let sheet = &w.aba(aba).ok_or("Aba ausente.")?.sheet;
+    let sheet = &w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet;
     let valor = |r, c| w.valor(aba, r, c);
     let cores = |r, c| filtro::cores_da_celula(sheet, r, c);
     Ok(filtro::linhas_escondidas_com(primeira, ultima, &filtros, &filtro::Contexto {
@@ -275,7 +275,7 @@ fn limpar_visibilidade(w: &mut Workbook, aba: usize, t: &Json) -> Result<(), Str
         Some((u32::try_from(i.first()?.as_u64()?).ok()?,
               u32::try_from(i.get(1)?.as_u64()?).ok()?))
     }).collect()).unwrap_or_default();
-    let viva = w.aba_mut(aba).ok_or("Aba ausente.")?;
+    let viva = w.aba_mut(aba).ok_or(tr!("Aba ausente."))?;
     for (a,b) in anteriores {
         for r in a..=b { viva.sheet.row_heights.remove(&r); }
     }
@@ -301,17 +301,17 @@ pub(in crate::app) fn limpar_todos_filtros(
         })?;
         return Ok(quantidade);
     }
-    let area = area_de(&antigo).ok_or("Área de tabela inválida.")?;
-    w.aba_mut(aba).ok_or("Aba ausente.")?.sheet.abrir_transacao();
+    let area = area_de(&antigo).ok_or(tr!("Área de tabela inválida."))?;
+    w.aba_mut(aba).ok_or(tr!("Aba ausente."))?.sheet.abrir_transacao();
     let feito = restaurar_visibilidade_registrada(w,aba,&antigo).and_then(|_| {
-        let mut tabelas = listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
-        let i = indice(&tabelas,id).ok_or("Tabela não encontrada.")?;
+        let mut tabelas = listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
+        let i = indice(&tabelas,id).ok_or(tr!("Tabela não encontrada."))?;
         tabelas[i]["filtros"] = json!([]);
         tabelas[i]["_featherOcultas"] = json!([]);
         tabelas[i]["_featherAlturas"] = json!([]);
         salvar_com_historico(w,aba,&tabelas,&area)
     });
-    let viva = w.aba_mut(aba).ok_or("Aba ausente.")?;
+    let viva = w.aba_mut(aba).ok_or(tr!("Aba ausente."))?;
     viva.sheet.fechar_transacao();
     viva.versao = viva.versao.wrapping_add(1).max(1);
     feito?;
@@ -321,8 +321,8 @@ pub(in crate::app) fn limpar_todos_filtros(
 /// Atualiza critérios e alturas sem cálculo por célula através da ponte TS.
 pub(in crate::app) fn filtrar(w: &mut Workbook, aba: usize, id: &str, col_rel: u32, novo: Option<Json>) -> Result<usize, String> {
     let antigo = sob_id(w, aba, id)?;
-    let area = area_de(&antigo).ok_or("Área inválida.")?;
-    if col_rel > area.c1 - area.c0 { return Err("Coluna fora da tabela.".into()); }
+    let area = area_de(&antigo).ok_or(tr!("Área inválida."))?;
+    if col_rel > area.c1 - area.c0 { return Err(tr!("Coluna fora da tabela.").into()); }
     let mut atualizado = antigo.clone();
     let mut filtros = atualizado["filtros"].as_array().cloned().unwrap_or_default();
     filtros.retain(|f| f["col"].as_u64() != Some(u64::from(col_rel)));
@@ -337,14 +337,14 @@ pub(in crate::app) fn filtrar(w: &mut Workbook, aba: usize, id: &str, col_rel: u
     let anteriores: usize = intervalos_lidos(&antigo).iter().map(|(a,b)| (b-a+1) as usize).sum();
     let registrar = contagem + anteriores <= LIMITE_HISTORICO_FILTRO;
     if registrar {
-        w.aba_mut(aba).ok_or("Aba ausente.")?.sheet.abrir_transacao();
+        w.aba_mut(aba).ok_or(tr!("Aba ausente."))?.sheet.abrir_transacao();
         restaurar_visibilidade_registrada(w, aba, &antigo)?;
     } else {
         limpar_visibilidade(w, aba, &antigo)?;
     }
     let mut alturas = Vec::new();
     {
-        let viva = w.aba_mut(aba).ok_or("Aba ausente.")?;
+        let viva = w.aba_mut(aba).ok_or(tr!("Aba ausente."))?;
         for (a,b) in &ocultas {
             for r in *a..=*b {
                 let antes = viva.sheet.row_heights.get(&r).copied();
@@ -367,11 +367,11 @@ pub(in crate::app) fn filtrar(w: &mut Workbook, aba: usize, id: &str, col_rel: u
     atualizado["_featherOcultas"] = json!(ocultas);
     atualizado["_featherAlturas"] = json!(alturas);
     if registrar {
-        let mut tabelas = listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
-        let i = indice(&tabelas, id).ok_or("Tabela não encontrada.")?;
+        let mut tabelas = listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
+        let i = indice(&tabelas, id).ok_or(tr!("Tabela não encontrada."))?;
         tabelas[i] = atualizado;
         let gravou = salvar_com_historico(w, aba, &tabelas, &area);
-        let viva = w.aba_mut(aba).ok_or("Aba ausente.")?;
+        let viva = w.aba_mut(aba).ok_or(tr!("Aba ausente."))?;
         viva.sheet.fechar_transacao();
         viva.versao = viva.versao.wrapping_add(1).max(1);
         gravou?;
@@ -397,7 +397,7 @@ fn restaurar_visibilidade_registrada(w: &mut Workbook, aba: usize, t: &Json) -> 
         Some((u32::try_from(i.first()?.as_u64()?).ok()?,
               u32::try_from(i.get(1)?.as_u64()?).ok()?))
     }).collect()).unwrap_or_default();
-    let viva = w.aba_mut(aba).ok_or("Aba ausente.")?;
+    let viva = w.aba_mut(aba).ok_or(tr!("Aba ausente."))?;
     for (a,b) in anteriores {
         for r in a..=b { viva.sheet.registrar_dimensao(false, r, backups.get(&r).copied()); }
     }
@@ -407,14 +407,14 @@ fn restaurar_visibilidade_registrada(w: &mut Workbook, aba: usize, t: &Json) -> 
 
 pub(in crate::app) fn ordenar(w: &mut Workbook, aba: usize, id: &str, col_rel: u32, asc: bool) -> Result<(), String> {
     let t = sob_id(w, aba, id)?;
-    let area = area_de(&t).ok_or("Área de tabela inválida.")?;
-    if col_rel > area.c1 - area.c0 { return Err("Coluna fora da tabela.".into()); }
+    let area = area_de(&t).ok_or(tr!("Área de tabela inválida."))?;
+    if col_rel > area.c1 - area.c0 { return Err(tr!("Coluna fora da tabela.").into()); }
     let chave = SortKey { col: area.c0 + col_rel, ascending: asc };
-    let max = w.aba(aba).ok_or("Aba ausente.")?.sheet.max_row;
+    let max = w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet.max_row;
     let plano = ops::planejar_ordenacao(area.clone(), &[chave], t["temCabecalho"] == true,
         max, |r,c| w.valor(aba,r,c));
     // Ordenar e refiltrar desfazem juntos.
-    w.aba_mut(aba).ok_or("Aba ausente.")?.sheet.abrir_transacao();
+    w.aba_mut(aba).ok_or(tr!("Aba ausente."))?.sheet.abrir_transacao();
     if let Some(plano) = plano {
         w.editar(aba, |sheet| ops::aplicar_ordenacao(sheet, area.c0, area.c1, &plano));
     }
@@ -458,11 +458,11 @@ pub(in crate::app) fn ordenar_por(
     w: &mut Workbook, aba: usize, id: &str, col_rel: u32, criterio: CriterioOrdem, asc: bool,
 ) -> Result<bool, String> {
     let t = sob_id(w, aba, id)?;
-    let area = area_de(&t).ok_or("Área de tabela inválida.")?;
-    if col_rel > area.c1 - area.c0 { return Err("Coluna fora da tabela.".into()); }
+    let area = area_de(&t).ok_or(tr!("Área de tabela inválida."))?;
+    if col_rel > area.c1 - area.c0 { return Err(tr!("Coluna fora da tabela.").into()); }
     let nivel = ChaveOrdem { indice: area.c0 + col_rel, ascendente: asc, criterio };
     let cabecalho = t["temCabecalho"] == true;
-    w.aba_mut(aba).ok_or("Aba ausente.")?.sheet.abrir_transacao();
+    w.aba_mut(aba).ok_or(tr!("Aba ausente."))?.sheet.abrir_transacao();
     let mut mudou = false;
     w.editar(aba, |sheet| {
         mudou = ordenacao_ext::ordenar_por_linhas(sheet, area.clone(), std::slice::from_ref(&nivel), cabecalho, false);
@@ -478,7 +478,7 @@ pub(in crate::app) fn ordenar_por(
 /// Ctrl+Z desfaz tudo. Devolve (ordenou, linhas escondidas, há filtro).
 pub(in crate::app) fn reaplicar(w: &mut Workbook, aba: usize, id: &str) -> Result<(bool, usize, bool), String> {
     let t = sob_id(w, aba, id)?;
-    let area = area_de(&t).ok_or("Área de tabela inválida.")?;
+    let area = area_de(&t).ok_or(tr!("Área de tabela inválida."))?;
     let cabecalho = t["temCabecalho"] == true;
     let (mut niveis, por_colunas) = if t["ordenacao"].is_object() {
         filtro_json::ordenacao_de_json(&t["ordenacao"], area.c0, area.r0)
@@ -493,9 +493,9 @@ pub(in crate::app) fn reaplicar(w: &mut Workbook, aba: usize, id: &str) -> Resul
     }
     let filtros = t["filtros"].as_array().cloned().unwrap_or_default();
     if niveis.is_empty() && filtros.is_empty() {
-        return Err("Não há filtro nem classificação para reaplicar.".into());
+        return Err(tr!("Não há filtro nem classificação para reaplicar.").into());
     }
-    w.aba_mut(aba).ok_or("Aba ausente.")?.sheet.abrir_transacao();
+    w.aba_mut(aba).ok_or(tr!("Aba ausente."))?.sheet.abrir_transacao();
     let mut ordenou = false;
     if !niveis.is_empty() {
         let limite = if por_colunas { area.r1 } else { area.c1 };
@@ -537,7 +537,7 @@ fn total(w: &Workbook, aba: usize, t: &Json, col: u32) -> Option<f64> {
 }
 
 pub(in crate::app) fn crescer(w: &mut Workbook, aba: usize, r: u32, c: u32) -> Result<bool,String> {
-    let mut lista = listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
+    let mut lista = listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
     let areas: Vec<AreaDaTabela> = lista.iter().map(|t| AreaDaTabela {
         area: area_de(t).unwrap_or(Rect::cell(r,c)),
         mostrar_totais: t["mostrarTotais"]==true,
@@ -552,7 +552,7 @@ pub(in crate::app) fn crescer(w: &mut Workbook, aba: usize, r: u32, c: u32) -> R
     let nome = lista[i]["nome"].as_str().unwrap_or("").to_string();
     salvar(w,aba,&lista)?;
     if !nome.is_empty() {
-        let sheet = w.aba(aba).ok_or("Aba ausente.")?.sheet.name.clone();
+        let sheet = w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet.name.clone();
         w.definir_nome(&nome,Rect::na_aba(nova.r0,nova.c0,nova.r1,nova.c1,sheet));
     }
     Ok(true)
@@ -567,7 +567,7 @@ pub(in crate::app) fn crescer_colagem(
     w: &mut Workbook, aba: usize, colado: Rect,
 ) -> Result<usize,String> {
     let area=colado.normalized();
-    let sheet=&w.aba(aba).ok_or("Aba ausente.")?.sheet;
+    let sheet=&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet;
     if sheet.tb.is_none() { return Ok(0); }
     let mut lista=listar(sheet)?;
     let mut mudadas=0;
@@ -609,7 +609,7 @@ pub(in crate::app) fn crescer_colagem(
     }
     if mudadas==0 {return Ok(0);}
     salvar(w,aba,&lista)?;
-    let nome_aba=w.aba(aba).ok_or("Aba ausente.")?.sheet.name.clone();
+    let nome_aba=w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet.name.clone();
     for (nome,rect) in atualizacoes {
         w.definir_nome(&nome,Rect::na_aba(rect.r0,rect.c0,rect.r1,rect.c1,nome_aba.clone()));
     }
@@ -624,11 +624,11 @@ pub(in crate::app) fn distintos_lote(
     w: &Workbook, aba: usize, t: &Json, col: u32,
     cursor: u32, linhas: u32, vistos: &mut HashSet<String>,
 ) -> Result<(Vec<String>, u32, u32), String> {
-    let area = area_de(t).ok_or("Área inválida.")?;
+    let area = area_de(t).ok_or(tr!("Área inválida."))?;
     if col < area.c0 || col > area.c1 {
-        return Err("Coluna fora da tabela.".into());
+        return Err(tr!("Coluna fora da tabela.").into());
     }
-    let sheet = &w.aba(aba).ok_or("Aba ausente.")?.sheet;
+    let sheet = &w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet;
     let inicio = area.r0.saturating_add(u32::from(t["temCabecalho"] == true));
     let ultimo = area.r1.min(sheet.max_row);
     let proxima = cursor.max(inicio);
@@ -657,7 +657,7 @@ pub(in crate::app) fn refluir(
 ) -> Result<(), String> {
     use feathersheet_core::operacoes::reflow::ajustar_intervalo_tabela;
     if count == 0 {return Ok(());}
-    let lista_antiga = listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
+    let lista_antiga = listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
     let mut lista_nova = Vec::with_capacity(lista_antiga.len());
     let mut apagadas = Vec::new();
     let delta = if removendo { -(count as i64) } else { count as i64 };
@@ -730,7 +730,7 @@ pub(in crate::app) fn refluir(
     }
     salvar(w,aba,&lista_nova)?;
     for nome in apagadas { w.remover_nome(&nome); }
-    let nome_aba=w.aba(aba).ok_or("Aba ausente.")?.sheet.name.clone();
+    let nome_aba=w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet.name.clone();
     for t in &lista_nova {
         if t["soFiltro"]==true {continue;}
         if let (Some(nome),Some(area))=(t["nome"].as_str(),area_de(t)) {
@@ -753,11 +753,11 @@ pub(in crate::app) fn refluir(
 /// sem critérios, desativa-o; com critérios, remove critérios e alturas.
 /// Uma tabela verdadeira mantém seu objeto e usa o painel de filtros.
 pub(in crate::app) fn alternar_auto_filtro(w: &mut Workbook, aba: usize, selecao: Rect, r:u32, c:u32) -> Result<String,String> {
-    let mut lista=listar(&w.aba(aba).ok_or("Aba ausente.")?.sheet)?;
+    let mut lista=listar(&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet)?;
     let encontrado=lista.iter().position(|t|area_de(t).is_some_and(|a|a.contains(r,c)));
     if let Some(i)=encontrado {
         if lista[i]["soFiltro"]!=true {
-            return Ok("Use o botão do cabeçalho ou Design da tabela para filtrar.".into());
+            return Ok(tr!("Use o botão do cabeçalho ou Design da tabela para filtrar.").into());
         }
         let id=lista[i]["id"].as_str().unwrap_or("").to_string();
         let atual=lista[i]["filtros"].as_array().map(|a|!a.is_empty()).unwrap_or(false);
@@ -765,32 +765,32 @@ pub(in crate::app) fn alternar_auto_filtro(w: &mut Workbook, aba: usize, selecao
             // Um único restauro: evitar reavaliar toda a tabela uma vez
             // por coluna filtrada (custoso com milhões de registros).
             limpar_todos_filtros(w,aba,&id)?;
-            return Ok("Critérios de AutoFiltro removidos.".into());
+            return Ok(tr!("Critérios de AutoFiltro removidos.").into());
         }
         let antiga=lista.remove(i);
         limpar_visibilidade(w,aba,&antiga)?;
-        let area=area_de(&antiga).ok_or("Área de AutoFiltro inválida.")?;
+        let area=area_de(&antiga).ok_or(tr!("Área de AutoFiltro inválida."))?;
         salvar_com_historico(w,aba,&lista,&area)?;
-        return Ok("AutoFiltro desativado.".into());
+        return Ok(tr!("AutoFiltro desativado.").into());
     }
-    let sheet=&w.aba(aba).ok_or("Aba ausente.")?.sheet;
+    let sheet=&w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet;
     let inicio=selecao.normalized();
     let area=if inicio.r0==inicio.r1 && inicio.c0==inicio.c1 {
         ops::regiao_atual(sheet,inicio)
     } else {inicio};
     let area=area_valida(area)?;
     if sheet.get_raw(area.r0,area.c0).is_empty() && area.r0==area.r1 && area.c0==area.c1 {
-        return Err("Não há dados para AutoFiltro.".into());
+        return Err(tr!("Não há dados para AutoFiltro.").into());
     }
     if lista.iter().filter_map(area_de).any(|a|a.r0<=area.r1 && area.r0<=a.r1
         && a.c0<=area.c1 && area.c0<=a.c1) {
-        return Err("O AutoFiltro não pode sobrepor outra tabela.".into());
+        return Err(tr!("O AutoFiltro não pode sobrepor outra tabela.").into());
     }
     let id=format!("flt_{}_{}_{}",aba,area.r0,area.c0);
     lista.push(json!({"id":id,"nome":"Filtro","area":area,"temCabecalho":true,
         "faixas":false,"soFiltro":true,"filtros":[]}));
     salvar_com_historico(w,aba,&lista,&area)?;
-    Ok("AutoFiltro ativado. Use as setas do cabeçalho.".into())
+    Ok(tr!("AutoFiltro ativado. Use as setas do cabeçalho.").into())
 }
 
 #[cfg(test)]

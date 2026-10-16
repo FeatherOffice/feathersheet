@@ -49,6 +49,15 @@ pub trait EvalContext {
         None
     }
 
+    /// O agregado por critério das faixas (soma, contagem, máximo e mínimo
+    /// por tupla de valores de critério), montado uma vez por conjunto de
+    /// faixas. `None`: varrer célula por célula. Ver
+    /// [`crate::planilha::agregado`].
+    fn agregado(&self, _soma: Option<&Rect>, _criterios: &[Rect])
+        -> Option<std::sync::Arc<crate::planilha::agregado::Agregado>> {
+        None
+    }
+
     /// Intervalo nomeado, ou `None` se o nome não existir.
     fn resolve_name(&self, name: &str) -> Option<Rect>;
 
@@ -87,6 +96,12 @@ pub trait EvalContext {
             ErrorCode::Value,
             "este valor só pode ser pedido de dentro de uma célula",
         )))
+    }
+
+    /// A cor de fundo (ou da fonte, com `fonte`) gravada na célula, como
+    /// `#RRGGBB`; `None` = sem cor. É o que `SOMAR.POR.COR` compara.
+    fn cor_celula(&self, _row: u32, _col: u32, _sheet: Option<&str>, _fonte: bool) -> Option<String> {
+        None
     }
 }
 

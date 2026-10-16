@@ -86,6 +86,8 @@ pub struct Rastreio {
 
 /// Nome em português da função, quando existe apelido (SUM → SOMA).
 fn nome_exibido(canonico: &str) -> &str {
+    // Em inglês, as fórmulas usam o nome canônico (SUM).
+    if crate::idioma::em_ingles() { return canonico; }
     functions::aliases().iter()
         .find(|(_, real)| *real == canonico)
         .map(|(apelido, _)| *apelido)
@@ -94,7 +96,8 @@ fn nome_exibido(canonico: &str) -> &str {
 
 /// Primeira frase da ajuda, cortada para caber na linha do menu.
 fn resumo(canonico: &str) -> String {
-    let doc = function_help::help_for(canonico).map(|h| h.doc).unwrap_or("");
+    let doc = crate::idioma::ajuda_funcao(canonico).map(|(_, d)| d).unwrap_or_default();
+    let doc = doc.as_str();
     let frase = doc.split(". ").next().unwrap_or(doc).trim_end_matches('.');
     if frase.chars().count() > 48 {
         format!("{}…", frase.chars().take(47).collect::<String>())
@@ -138,7 +141,7 @@ impl App {
             Evento::RastrearDependentes => self.rastrear(false),
             Evento::RemoverSetas => {
                 self.rastreio = Rastreio::default();
-                self.status = "Setas de rastreio removidas".into();
+                self.status = tr!("Setas de rastreio removidas").into();
             }
             Evento::Manual(manual) => {
                 self.formulas_menu = None;
@@ -146,18 +149,18 @@ impl App {
                 self.config.gravar();
                 self.aplicar_modo_calculo();
                 self.status = if manual {
-                    "Cálculo manual: F9 calcula a pasta, Shift+F9 só a planilha".into()
-                } else { "Cálculo automático".into() };
+                    tr!("Cálculo manual: F9 calcula a pasta, Shift+F9 só a planilha").into()
+                } else { tr!("Cálculo automático").into() };
             }
             Evento::CalcularAgora => {
                 let inicio = Instant::now();
                 self.workbook.calcular_agora();
-                self.status = format!("Pasta calculada em {} ms", inicio.elapsed().as_millis());
+                self.status = trf!("Pasta calculada em {} ms", inicio.elapsed().as_millis());
             }
             Evento::CalcularPlanilha => {
                 let inicio = Instant::now();
                 self.workbook.calcular_aba(self.folha);
-                self.status = format!("Planilha calculada em {} ms", inicio.elapsed().as_millis());
+                self.status = trf!("Planilha calculada em {} ms", inicio.elapsed().as_millis());
             }
             Evento::SelecionarDerramada => {
                 let area = self.workbook.aba(self.folha)
@@ -168,14 +171,14 @@ impl App {
                         self.fim_selecao = (area.r1, area.c1);
                         self.atualizar_endereco_da_area(area);
                     }
-                    None => self.status = "A célula não faz parte de uma matriz derramada".into(),
+                    None => self.status = tr!("A célula não faz parte de uma matriz derramada").into(),
                 }
             }
             Evento::CriarAbrir => {
                 self.formulas_menu = None;
                 let area = self.area_selecionada();
                 if (area.r0, area.c0) == (area.r1, area.c1) {
-                    self.status = "Selecione a tabela com os títulos, não uma célula só".into();
+                    self.status = tr!("Selecione a tabela com os títulos, não uma célula só").into();
                 } else {
                     self.criar_nomes = self.workbook.aba(self.folha)
                         .map(|a| a.sheet.sugerir_bordas(&area));
@@ -206,7 +209,7 @@ impl App {
     fn criar_nomes_da_selecao(&mut self) {
         let nomes = self.nomes_previstos();
         if nomes.is_empty() {
-            self.status = "Nenhum título encontrado nas bordas marcadas".into();
+            self.status = tr!("Nenhum título encontrado nas bordas marcadas").into();
             return;
         }
         // Como no Excel: um nome que já existe passa a apontar para a área nova.
@@ -217,7 +220,7 @@ impl App {
         }
         self.alterado = true;
         self.criar_nomes = None;
-        self.status = format!("{quantos} nome(s) criado(s) a partir da seleção");
+        self.status = trf!("{quantos} nome(s) criado(s) a partir da seleção");
     }
 
     fn view_criar_nomes(&self) -> Element<'_, Msg> {
@@ -232,38 +235,38 @@ impl App {
         let substitui = previstos.iter().filter(|(n, _)| existentes.contains(&n.to_uppercase())).count();
         let lista: Vec<&str> = previstos.iter().map(|(n, _)| n.as_str()).collect();
         let resumo = match lista.len() {
-            0 => "Nenhum nome: as bordas marcadas não têm títulos".to_string(),
-            n if n <= 6 => format!("Serão criados: {}", lista.join(", ")),
-            n => format!("Serão criados: {} e mais {}", lista[..6].join(", "), n - 6),
+            0 => tr!("Nenhum nome: as bordas marcadas não têm títulos").to_string(),
+            n if n <= 6 => trf!("Serão criados: {}", lista.join(", ")),
+            n => trf!("Serão criados: {} e mais {}", lista[..6].join(", "), n - 6),
         };
         let mut corpo = column![
             row![
-                text("Criar nomes a partir da seleção").size(17).font(iced::Font {
+                text(tr!("Criar nomes a partir da seleção")).size(17).font(iced::Font {
                     weight: iced::font::Weight::Semibold, ..Default::default() }),
                 Space::with_width(Length::Fill),
                 feather_ui::formatacao::dica(
                     button(feather_ui::icones::icone("x", 15.)).padding(4)
                         .style(estilo_botao_pequeno(false))
                         .on_press(Msg::Formulas(Evento::CriarFechar)),
-                    "Fechar (Esc)"),
+                    tr!("Fechar (Esc)")),
             ].align_y(Alignment::Center),
-            text("Usar os títulos que estão em:").size(12).color(COR_TEXTO_MUTED()),
-            row![caixa("Linha superior", b.topo, 0), caixa("Coluna esquerda", b.esquerda, 1)].spacing(10),
-            row![caixa("Linha inferior", b.base, 2), caixa("Coluna direita", b.direita, 3)].spacing(10),
+            text(tr!("Usar os títulos que estão em:")).size(12).color(COR_TEXTO_MUTED()),
+            row![caixa(tr!("Linha superior"), b.topo, 0), caixa(tr!("Coluna esquerda"), b.esquerda, 1)].spacing(10),
+            row![caixa(tr!("Linha inferior"), b.base, 2), caixa(tr!("Coluna direita"), b.direita, 3)].spacing(10),
             text(resumo).size(12),
         ].spacing(10);
         if substitui > 0 {
             corpo = corpo.push(row![
                 feather_ui::icones::icone("info-circle", 15.),
-                text(format!("{substitui} já existe(m) e passa(m) a apontar para a área nova"))
+                text(trf!("{substitui} já existe(m) e passa(m) a apontar para a área nova"))
                     .size(11.5).color(COR_TEXTO_MUTED()),
             ].spacing(6).align_y(Alignment::Center));
         }
         corpo = corpo.push(row![
             Space::with_width(Length::Fill),
-            button(text("Cancelar").size(13)).padding([7, 14]).style(estilo_botao_secundario)
+            button(text(tr!("Cancelar")).size(13)).padding([7, 14]).style(estilo_botao_secundario)
                 .on_press(Msg::Formulas(Evento::CriarFechar)),
-            button(text("Criar").size(13)).padding([7, 14]).style(estilo_botao_primario)
+            button(text(tr!("Criar")).size(13)).padding([7, 14]).style(estilo_botao_primario)
                 .on_press_maybe((!previstos.is_empty()).then_some(Msg::Formulas(Evento::CriarConfirmar))),
         ].spacing(8));
         container(corpo).width(Length::Fixed(460.)).padding(20).style(estilo_painel_faixa).into()
@@ -384,10 +387,10 @@ impl App {
         let estado = Some((ativa, proxima));
         if precedentes { self.rastreio.precedentes = estado } else { self.rastreio.dependentes = estado }
         self.status = match (quantas, precedentes) {
-            (0, true) => "Nenhum precedente a mais para mostrar".into(),
-            (0, false) => "Nenhum dependente a mais para mostrar".into(),
-            (n, true) => format!("{n} seta(s) de precedentes; clique de novo para o próximo nível"),
-            (n, false) => format!("{n} seta(s) de dependentes; clique de novo para o próximo nível"),
+            (0, true) => tr!("Nenhum precedente a mais para mostrar").into(),
+            (0, false) => tr!("Nenhum dependente a mais para mostrar").into(),
+            (n, true) => trf!("{n} seta(s) de precedentes; clique de novo para o próximo nível"),
+            (n, false) => trf!("{n} seta(s) de dependentes; clique de novo para o próximo nível"),
         };
     }
 
@@ -413,58 +416,58 @@ impl App {
         let aberto = |m| self.formulas_menu == Some(m);
         let categoria = |i: usize| {
             let (nome, rotulo, icone) = CATEGORIAS_FAIXA[i];
-            self.formulas_pequeno_menu(rotulo, icone, MenuFormulas::Categoria(indice_categoria(nome)))
+            self.formulas_pequeno_menu(tr!(rotulo), icone, MenuFormulas::Categoria(indice_categoria(nome)))
         };
         let biblioteca = self.faixa_linha(vec![
             self.faixa_grande("AutoSoma", "sum", Some(Msg::AutoSoma), false),
-            self.faixa_grande_seta("Recentes", "recentes", menu(MenuFormulas::Recentes),
+            self.faixa_grande_seta(tr!("Recentes"), "recentes", menu(MenuFormulas::Recentes),
                 aberto(MenuFormulas::Recentes)),
             self.faixa_pilha(vec![categoria(0), categoria(1), categoria(2)]),
             self.faixa_pilha(vec![categoria(3), categoria(4), categoria(5)]),
-            self.faixa_grande_seta("Mais", "math-function", menu(MenuFormulas::Mais),
+            self.faixa_grande_seta(tr!("Mais"), "math-function", menu(MenuFormulas::Mais),
                 aberto(MenuFormulas::Mais)),
         ]);
         let tem_nomes = !self.workbook.nomeados().is_empty();
         let tem_setas = !self.setas_visiveis().is_empty();
         vec![
-            self.faixa_grupo("Biblioteca de funções", biblioteca),
-            self.faixa_grupo("Nomes definidos", self.faixa_linha(vec![
-                self.faixa_grande("Gerenciador", "tag", Some(Msg::NomesAbrir(false)),
+            self.faixa_grupo(tr!("Biblioteca de funções"), biblioteca),
+            self.faixa_grupo(tr!("Nomes definidos"), self.faixa_linha(vec![
+                self.faixa_grande(tr!("Gerenciador"), "tag", Some(Msg::NomesAbrir(false)),
                     self.nomes_modal.is_some()),
                 self.faixa_pilha(vec![
-                    self.faixa_pequeno("Definir nome", "edit", Some(Msg::NomesAbrir(true)), false),
-                    self.formulas_pequeno_menu_se("Usar em fórmula", "list-select",
+                    self.faixa_pequeno(tr!("Definir nome"), "edit", Some(Msg::NomesAbrir(true)), false),
+                    self.formulas_pequeno_menu_se(tr!("Usar em fórmula"), "list-select",
                         MenuFormulas::Nomes, tem_nomes),
-                    self.faixa_pequeno("Criar da seleção", "table",
+                    self.faixa_pequeno(tr!("Criar da seleção"), "table",
                         Some(Msg::Formulas(Evento::CriarAbrir)), self.criar_nomes.is_some()),
                 ]),
             ])),
-            self.faixa_grupo("Auditoria de fórmulas", self.faixa_linha(vec![
+            self.faixa_grupo(tr!("Auditoria de fórmulas"), self.faixa_linha(vec![
                 self.faixa_pilha(vec![
-                    feather_ui::formatacao::dica(self.faixa_pequeno("Precedentes", "arrow-right",
-                        Some(Msg::Formulas(Evento::RastrearPrecedentes)), false), "Rastrear precedentes"),
-                    feather_ui::formatacao::dica(self.faixa_pequeno("Dependentes", "sitemap",
-                        Some(Msg::Formulas(Evento::RastrearDependentes)), false), "Rastrear dependentes"),
-                    self.faixa_pequeno("Remover setas", "eraser",
+                    feather_ui::formatacao::dica(self.faixa_pequeno(tr!("Precedentes"), "arrow-right",
+                        Some(Msg::Formulas(Evento::RastrearPrecedentes)), false), tr!("Rastrear precedentes")),
+                    feather_ui::formatacao::dica(self.faixa_pequeno(tr!("Dependentes"), "sitemap",
+                        Some(Msg::Formulas(Evento::RastrearDependentes)), false), tr!("Rastrear dependentes")),
+                    self.faixa_pequeno(tr!("Remover setas"), "eraser",
                         tem_setas.then_some(Msg::Formulas(Evento::RemoverSetas)), false),
                 ]),
                 self.faixa_pilha(vec![
-                    self.faixa_pequeno("Mostrar fórmulas", "code",
+                    self.faixa_pequeno(tr!("Mostrar fórmulas"), "code",
                         Some(Msg::AlternarMostrarFormulas), self.mostrar_formulas),
-                    self.faixa_pequeno("Avaliar fórmula", "math-function",
+                    self.faixa_pequeno(tr!("Avaliar fórmula"), "math-function",
                         Some(Msg::Avaliar(avaliar_ui::Evento::Abrir)), self.avaliar.is_some()),
-                    self.faixa_pequeno("Explicar erro", "info-circle",
+                    self.faixa_pequeno(tr!("Explicar erro"), "info-circle",
                         Some(Msg::ExplicacaoErroAbrir), false),
                 ]),
-                feather_ui::formatacao::dica(self.faixa_grande("Inspeção", "eye",
+                feather_ui::formatacao::dica(self.faixa_grande(tr!("Inspeção"), "eye",
                     Some(Msg::Inspecao(inspecao_ui::Evento::Abrir)),
-                    self.janelas.aberta(Auxiliar::Inspecao)), "Janela de inspeção"),
+                    self.janelas.aberta(Auxiliar::Inspecao)), tr!("Janela de inspeção")),
             ])),
-            self.faixa_grupo("Cálculo", self.faixa_pilha(vec![
-                self.formulas_pequeno_menu("Opções de cálculo", "settings", MenuFormulas::Calculo),
-                self.faixa_pequeno("Calcular agora", "refresh",
+            self.faixa_grupo(tr!("Cálculo"), self.faixa_pilha(vec![
+                self.formulas_pequeno_menu(tr!("Opções de cálculo"), "settings", MenuFormulas::Calculo),
+                self.faixa_pequeno(tr!("Calcular agora"), "refresh",
                     Some(Msg::Formulas(Evento::CalcularAgora)), false),
-                self.faixa_pequeno("Calcular planilha", "table",
+                self.faixa_pequeno(tr!("Calcular planilha"), "table",
                     Some(Msg::Formulas(Evento::CalcularPlanilha)), false),
             ])),
         ]
@@ -493,14 +496,14 @@ impl App {
                     lista = lista.push(Self::item_menu(nome.clone(), resumo(canonico),
                         Msg::InserirFuncao(nome), false));
                 }
-                categoria.to_owned()
+                crate::idioma::categoria_funcao(categoria).to_owned()
             }
             MenuFormulas::Mais => {
                 let na_faixa: Vec<&str> = CATEGORIAS_FAIXA.iter().map(|c| c.0).collect();
                 for (i, (categoria, nomes)) in function_help::CATEGORIES.iter().enumerate() {
                     if na_faixa.contains(categoria) { continue; }
                     lista = lista.push(button(row![
-                        text(*categoria).size(12.5),
+                        text(crate::idioma::categoria_funcao(categoria)).size(12.5),
                         Space::with_width(Length::Fill),
                         text(format!("{}", nomes.len())).size(11).color(COR_TEXTO_MUTED()),
                         feather_ui::icones::icone("chevron-right", 14.),
@@ -511,15 +514,15 @@ impl App {
                 }
                 lista = lista.push(Space::with_height(6)).push(button(row![
                     feather_ui::icones::icone("search", 15.),
-                    text("Todas as funções na Ajuda").size(12.5),
+                    text(tr!("Todas as funções na Ajuda")).size(12.5),
                 ].spacing(8).align_y(Alignment::Center))
                     .width(Length::Fill).padding([7, 10])
                     .style(estilo_botao_pequeno(false)).on_press(Msg::Ajuda));
-                "Mais funções".to_owned()
+                tr!("Mais funções").to_owned()
             }
             MenuFormulas::Recentes => {
                 if self.config.funcoes_recentes.is_empty() {
-                    lista = lista.push(text("Nenhuma função usada ainda. As funções inseridas pela faixa aparecem aqui.")
+                    lista = lista.push(text(tr!("Nenhuma função usada ainda. As funções inseridas pela faixa aparecem aqui."))
                         .size(12).color(COR_TEXTO_MUTED()));
                 }
                 for nome in &self.config.funcoes_recentes {
@@ -527,25 +530,25 @@ impl App {
                     lista = lista.push(Self::item_menu(nome.clone(), resumo(canonico),
                         Msg::InserirFuncao(nome.clone()), false));
                 }
-                "Usadas recentemente".to_owned()
+                tr!("Usadas recentemente").to_owned()
             }
             MenuFormulas::Nomes => {
                 for n in self.workbook.nomeados() {
                     lista = lista.push(Self::item_menu(n.nome.clone(), format!("{}:{}", cell_name(n.area.r0, n.area.c0), cell_name(n.area.r1, n.area.c1)),
                         Msg::Formulas(Evento::UsarNome(n.nome.clone())), false));
                 }
-                "Usar em fórmula".to_owned()
+                tr!("Usar em fórmula").to_owned()
             }
             MenuFormulas::Calculo => {
                 let manual = self.config.calculo_manual;
                 lista = lista
-                    .push(Self::item_menu("Automático".into(),
-                        "Recalcula as fórmulas a cada mudança".into(),
+                    .push(Self::item_menu(tr!("Automático").into(),
+                        tr!("Recalcula as fórmulas a cada mudança").into(),
                         Msg::Formulas(Evento::Manual(false)), !manual))
-                    .push(Self::item_menu("Manual".into(),
-                        "Só calcula com F9 (pasta) ou Shift+F9 (planilha)".into(),
+                    .push(Self::item_menu(tr!("Manual").into(),
+                        tr!("Só calcula com F9 (pasta) ou Shift+F9 (planilha)").into(),
                         Msg::Formulas(Evento::Manual(true)), manual));
-                "Opções de cálculo".to_owned()
+                tr!("Opções de cálculo").to_owned()
             }
         };
         (titulo, lista.into())
@@ -566,7 +569,7 @@ impl App {
                     button(feather_ui::icones::icone("x", 14.))
                         .padding(4).style(estilo_botao_pequeno(false))
                         .on_press(Msg::Formulas(Evento::FecharMenu)),
-                    "Fechar (Esc)"),
+                    tr!("Fechar (Esc)")),
             ].align_y(Alignment::Center),
             container(feather_ui::tema::rolagem(lista)).max_height(altura_max),
         ].spacing(8))
@@ -591,10 +594,10 @@ impl App {
             return Space::with_width(0).into();
         }
         feather_ui::formatacao::dica(
-            button(text("Calcular").size(11))
+            button(text(tr!("Calcular")).size(11))
                 .padding([4, 9]).style(estilo_botao_pequeno(true))
                 .on_press(Msg::Formulas(Evento::CalcularAgora)),
-            "Há fórmulas por calcular (F9)",
+            tr!("Há fórmulas por calcular (F9)"),
         )
     }
 }

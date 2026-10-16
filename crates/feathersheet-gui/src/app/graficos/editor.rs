@@ -24,7 +24,7 @@ fn previa_indisponivel() -> String {
          <rect x=\"0.5\" y=\"0.5\" width=\"479\" height=\"199\" fill=\"#ffffff\" stroke=\"#dadce0\"/>\
          <text x=\"240\" y=\"104\" text-anchor=\"middle\" font-size=\"14\" fill=\"#5f6368\" \
          font-family=\"Noto Sans, DejaVu Sans, sans-serif\">{}</text></svg>",
-        "Prévia indisponível para esses dados ou tipo."
+        tr!("Prévia indisponível para esses dados ou tipo.")
     )
 }
 
@@ -222,7 +222,7 @@ impl App {
     fn json_do_editor(&self, id: &str) -> Result<serde_json::Value, String> {
         let g = &self.graficos;
         let r = parse_range_ref(&g.intervalo).map(|r| r.normalized())
-            .ok_or("Intervalo inválido. Use A1:C10.")?;
+            .ok_or(tr!("Intervalo inválido. Use A1:C10."))?;
         let tipo = if g.tipo == TipoUi::Pizza {
             "pie".to_owned()
         } else {
@@ -314,7 +314,7 @@ impl App {
             }
         };
         let Some(indice) = self.indice_aba_grafico() else {
-            self.graficos.mensagem = "A aba de origem foi removida.".into();
+            self.graficos.mensagem = tr!("A aba de origem foi removida.").into();
             return Task::none();
         };
         let aba = self.workbook.aba_mut(indice).unwrap();
@@ -327,7 +327,7 @@ impl App {
         }
         self.graficos.ultimo_campo = None;
         self.alterado = true;
-        self.status = "Gráfico salvo na planilha.".into();
+        self.status = tr!("Gráfico salvo na planilha.").into();
         self.graficos.id = Some(id);
         self.graficos.aberto = true;
         self.atualizar_grafico();
@@ -393,7 +393,7 @@ impl App {
             ChartType::Candlestick => TipoUi::Candlestick,
             ChartType::Gantt => TipoUi::Gantt,
             ChartType::Outro => {
-                self.status = "Tipo de gráfico não reconhecido.".into();
+                self.status = tr!("Tipo de gráfico não reconhecido.").into();
                 return Task::none();
             }
         };
@@ -451,14 +451,28 @@ impl App {
         let mut saida = Vec::new();
         for v in lista {
             let Some(quadro) = Quadro::da_posicao(&v["position"]) else { continue };
-            let dados = v["sourceSheet"].as_str()
+            let indice = v["sourceSheet"].as_str()
                 .and_then(|n| self.workbook.indice_por_nome(n))
-                .and_then(|i| self.workbook.aba(i))
-                .map_or(&aba.sheet, |a| &a.sheet);
+                .filter(|i| self.workbook.aba(*i).is_some())
+                .unwrap_or(self.folha);
+            let dados = self.workbook.aba(indice).map_or(&aba.sheet, |a| &a.sheet);
             // O editor grava ao vivo: o gráfico aberto se desenha do mesmo
             // jeito que fechado (antes, a prévia do editor lia a aba errada no
             // gráfico do `.xlsx` e ele sumia ao abrir "Editar gráfico…").
-            let svg = svg_do_grafico_salvo(dados, &v).unwrap_or_else(previa_indisponivel);
+            // Desenhar é caro (dados, escalas, SVG): só quando algo mudou, não
+            // a cada quadro da rolagem.
+            let chave = format!("{indice}|{}|{}|{}", self.workbook.versao(indice), feather_ui::tema::escuro(), v);
+            let guardado = self.graficos.svgs.borrow().get(&chave).cloned();
+            let svg = match guardado {
+                Some(svg) => svg,
+                None => {
+                    let svg = svg_do_grafico_salvo(dados, &v).unwrap_or_else(previa_indisponivel);
+                    let mut cache = self.graficos.svgs.borrow_mut();
+                    if cache.len() > 64 { cache.clear(); }
+                    cache.insert(chave, svg.clone());
+                    svg
+                }
+            };
             // Liga/desliga pela legenda: o desenho novo aparece por cima do
             // antigo (esmaecimento cruzado), sem o eixo balançar no meio.
             let svg = match v["id"].as_str().and_then(|id| self.transicao_do_grafico(id)) {

@@ -46,7 +46,7 @@ pub fn montar(json:&Value)->Vec<Topico>{
     vec![
         Topico {
             id:"fixos".into(),
-            titulo:json["ajuda"]["rotulos"]["fixos"].as_str().unwrap_or("Fixos").into(),
+            titulo:json["ajuda"]["rotulos"]["fixos"].as_str().unwrap_or(tr!("Fixos")).into(),
             linhas:FIXOS.iter().map(|(id,tecla)|Linha::Atalho {
                 descricao:json["ajuda"]["atalhosFixos"][*id].as_str().unwrap_or(id).into(),
                 tecla:(*tecla).into(),
@@ -55,7 +55,7 @@ pub fn montar(json:&Value)->Vec<Topico>{
         Topico {
             id:"configuraveis".into(),
             titulo:json["ajuda"]["rotulos"]["configuraveis"].as_str()
-                .unwrap_or("Configuráveis (padrões originais)").into(),
+                .unwrap_or(tr!("Configuráveis (padrões originais)")).into(),
             linhas:CONFIGURAVEIS.iter().map(|(id,tecla)|Linha::Atalho {
                 descricao:json["atalhos"][*id].as_str().unwrap_or(id).into(),
                 tecla:(*tecla).into(),

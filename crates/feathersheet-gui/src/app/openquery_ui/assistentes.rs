@@ -61,22 +61,22 @@ fn alternar_chave(lista: &mut Vec<usize>, indice: usize) {
 fn passo(editor: &super::Estado, e: &Estado) -> Result<Passo, String> {
     match e.tipo {
         Tipo::Acrescentar => {
-            let fonte = e.fonte.clone().ok_or("Selecione a segunda tabela para acrescentar")?;
+            let fonte = e.fonte.clone().ok_or(tr!("Selecione a segunda tabela para acrescentar"))?;
             if !editor.fontes.contains_key(&fonte) {
-                return Err("A fonte escolhida não está carregada".into());
+                return Err(tr!("A fonte escolhida não está carregada").into());
             }
             Ok(Passo::Acrescentar { fonte })
         }
         Tipo::Juntar => {
-            let fonte = e.fonte.clone().ok_or("Selecione a segunda tabela para mesclar")?;
-            let secundaria = editor.fontes.get(&fonte).ok_or("Fonte secundária indisponível")?;
+            let fonte = e.fonte.clone().ok_or(tr!("Selecione a segunda tabela para mesclar"))?;
+            let secundaria = editor.fontes.get(&fonte).ok_or(tr!("Fonte secundária indisponível"))?;
             if e.esquerda.is_empty() || e.direita.is_empty() ||
                 e.esquerda.len() != e.direita.len() {
-                return Err("Selecione a mesma quantidade de colunas-chave nas duas tabelas".into());
+                return Err(tr!("Selecione a mesma quantidade de colunas-chave nas duas tabelas").into());
             }
             if e.esquerda.iter().any(|c| *c >= editor.resultado.cabecalho.len()) ||
                 e.direita.iter().any(|c| *c >= secundaria.cabecalho.len()) {
-                return Err("Uma coluna-chave não existe mais; refaça a seleção".into());
+                return Err(tr!("Uma coluna-chave não existe mais; refaça a seleção").into());
             }
             let esquerda = if e.esquerda.len() == 1 {
                 IndiceColuna::Single(e.esquerda[0])
@@ -95,11 +95,11 @@ fn passo(editor: &super::Estado, e: &Estado) -> Result<Passo, String> {
         Tipo::Pivotar => {
             let total = editor.resultado.cabecalho.len();
             if total < 3 {
-                return Err("Pivotar exige ao menos três colunas: linha, categoria e valor".into());
+                return Err(tr!("Pivotar exige ao menos três colunas: linha, categoria e valor").into());
             }
             if [e.linha, e.coluna, e.valor].iter().any(|c| *c >= total) ||
                 e.linha == e.coluna || e.linha == e.valor || e.coluna == e.valor {
-                return Err("Linha, categoria e valor precisam ser colunas diferentes".into());
+                return Err(tr!("Linha, categoria e valor precisam ser colunas diferentes").into());
             }
             Ok(Passo::Pivotar {
                 linhas: vec![e.linha], colunas: vec![e.coluna],
@@ -186,13 +186,13 @@ impl App {
     {
         let Some(w) = &editor.assistente else { return Space::new(Length::Fixed(0.0), Length::Fixed(0.0)).into() };
         let titulo = match w.tipo {
-            Tipo::Juntar => "Mesclar consultas",
-            Tipo::Acrescentar => "Acrescentar consultas",
-            Tipo::Pivotar => "Pivotar dados",
+            Tipo::Juntar => tr!("Mesclar consultas"),
+            Tipo::Acrescentar => tr!("Acrescentar consultas"),
+            Tipo::Pivotar => tr!("Pivotar dados"),
         };
         let mut corpo = iced::widget::column![
             titulo_oq(titulo),
-            legenda_oq("As escolhas viram uma etapa editável no motor Rust."),
+            legenda_oq(tr!("As escolhas viram uma etapa editável no motor Rust.")),
         ].spacing(ESPACO_MEDIO);
         if w.tipo != Tipo::Pivotar {
             let mut fontes = iced::widget::row![].spacing(ESPACO_PEQUENO);
@@ -205,18 +205,18 @@ impl App {
                     .style(estilo_botao_pequeno(marcada))
                     .padding([4.0, 8.0]));
             }
-            corpo = corpo.push(secao_oq("Fonte secundária")).push(fontes);
+            corpo = corpo.push(secao_oq(tr!("Fonte secundária"))).push(fontes);
             if editor.fontes.is_empty() {
                 corpo = corpo.push(legenda_oq(
-                    "Primeiro adicione outra aba em Fontes adicionais, na lateral esquerda."
+                    tr!("Primeiro adicione outra aba em Fontes adicionais, na lateral esquerda.")
                 ));
             }
         }
         if w.tipo == Tipo::Juntar {
             let mut modos = iced::widget::column![].spacing(ESPACO_PEQUENO);
             for grupo in [
-                [("Esquerda", "esquerda"), ("Interna", "interna"), ("Direita", "direita")],
-                [("Total", "total"), ("Anti esquerda", "anti_esquerda"), ("Anti direita", "anti_direita")],
+                [(tr!("Esquerda"), "esquerda"), (tr!("Interna"), "interna"), (tr!("Direita"), "direita")],
+                [(tr!("Total"), "total"), (tr!("Anti esquerda"), "anti_esquerda"), (tr!("Anti direita"), "anti_direita")],
             ] {
                 let mut linha = iced::widget::row![].spacing(ESPACO_GRANDE);
                 for (rotulo, codigo) in grupo {
@@ -226,19 +226,19 @@ impl App {
                 }
                 modos = modos.push(linha);
             }
-            corpo = corpo.push(secao_oq("Tipo de junção")).push(modos);
+            corpo = corpo.push(secao_oq(tr!("Tipo de junção"))).push(modos);
             let secundarias = w.fonte.as_ref()
                 .and_then(|nome| editor.fontes.get(nome));
             let nomes_direita = secundarias.map(|t| t.cabecalho.as_slice()).unwrap_or(&[]);
             let colunas = iced::widget::row![
                 iced::widget::column![
-                    legenda_oq("Chaves da primeira tabela (ordem da seleção)"),
+                    legenda_oq(tr!("Chaves da primeira tabela (ordem da seleção)")),
                     Self::coluna_opcoes(
                         &editor.resultado.cabecalho, &w.esquerda, Evento::ChaveEsquerda,
                     ),
                 ].width(Length::FillPortion(1)).spacing(ESPACO_PEQUENO),
                 iced::widget::column![
-                    legenda_oq("Chaves da segunda tabela (mesma ordem)"),
+                    legenda_oq(tr!("Chaves da segunda tabela (mesma ordem)")),
                     Self::coluna_opcoes(
                         nomes_direita, &w.direita, Evento::ChaveDireita,
                     ),
@@ -248,9 +248,9 @@ impl App {
         }
         if w.tipo == Tipo::Pivotar {
             for (rotulo, escolha, evento) in [
-                ("Linhas", w.linha, Evento::PivotLinha as fn(usize) -> Evento),
-                ("Categorias (viram colunas)", w.coluna, Evento::PivotColuna),
-                ("Valores", w.valor, Evento::PivotValor),
+                (tr!("Linhas"), w.linha, Evento::PivotLinha as fn(usize) -> Evento),
+                (tr!("Categorias (viram colunas)"), w.coluna, Evento::PivotColuna),
+                (tr!("Valores"), w.valor, Evento::PivotValor),
             ] {
                 let opcoes: Vec<OpcaoColuna> = editor.resultado.cabecalho.iter()
                     .enumerate().map(|(i,nome)| OpcaoColuna {
@@ -267,21 +267,21 @@ impl App {
             }
             let mut opcoes = iced::widget::row![].spacing(ESPACO_GRANDE);
             for (rotulo, code) in [
-                ("Soma", "soma"), ("Contagem", "contagem"), ("Média", "media"),
-                ("Máximo", "maximo"), ("Mínimo", "minimo"),
+                (tr!("Soma"), "soma"), (tr!("Contagem"), "contagem"), (tr!("Média"), "media"),
+                (tr!("Máximo"), "maximo"), (tr!("Mínimo"), "minimo"),
             ] {
                 opcoes = opcoes.push(iced::widget::radio(rotulo, code, Some(w.agregacao), |v| {
                     Msg::OpenQuery(super::Evento::Assistente(Evento::Agregacao(v)))
                 }).size(14.0).text_size(TAM_TEXTO));
             }
-            corpo = corpo.push(secao_oq("Agregação")).push(opcoes);
+            corpo = corpo.push(secao_oq(tr!("Agregação"))).push(opcoes);
         }
         corpo = corpo.push(iced::widget::row![
             Space::with_width(Length::Fill),
-            button(text("Cancelar").size(TAM_TEXTO))
+            button(text(tr!("Cancelar")).size(TAM_TEXTO))
                 .on_press(Msg::OpenQuery(super::Evento::Assistente(Evento::Fechar)))
                 .style(estilo_botao_secundario).padding([4.0, 8.0]),
-            button(text("Aplicar etapa").size(TAM_TEXTO))
+            button(text(tr!("Aplicar etapa")).size(TAM_TEXTO))
                 .on_press(Msg::OpenQuery(super::Evento::Assistente(Evento::Confirmar)))
                 .style(estilo_botao_primario).padding([4.0, 8.0]),
         ].spacing(ESPACO_MEDIO));

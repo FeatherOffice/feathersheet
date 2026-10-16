@@ -29,10 +29,10 @@ fn cruza(a: &Rect, b: &Rect) -> bool {
 
 fn tabelas(w: &Workbook, destino: Option<usize>) -> Result<Vec<Json>, String> {
     let Some(indice) = destino else { return Ok(vec![]) };
-    let aba = w.aba(indice).ok_or("Destino da consulta indisponível")?;
+    let aba = w.aba(indice).ok_or(tr!("Destino da consulta indisponível"))?;
     match aba.sheet.tb.as_deref() {
         Some(raw) => serde_json::from_str::<Vec<Json>>(raw)
-            .map_err(|e| format!("Não alterei tabelas: metadados inválidos ({e})")),
+            .map_err(|e| trf!("Não alterei tabelas: metadados inválidos ({e})")),
         None => Ok(vec![]),
     }
 }
@@ -44,7 +44,7 @@ pub(super) fn preparar(
     area: Rect,
 ) -> Result<Plano, String> {
     if area.r0 > area.r1 || area.c0 > area.c1 || area.r1 >= MAX_ROWS || area.c1 >= MAX_COLS {
-        return Err("Área inválida para vínculo OpenQuery".into());
+        return Err(tr!("Área inválida para vínculo OpenQuery").into());
     }
     let mut lista = tabelas(w, destino)?;
     let vinculada = lista.iter().position(|t|
@@ -53,12 +53,12 @@ pub(super) fn preparar(
         if Some(i) == vinculada { continue; }
         if let Some(outra) = area_de(tabela) {
             if cruza(&area, &outra) {
-                return Err("A área da consulta atravessa outra tabela; não sobrescrevi o destino".into());
+                return Err(tr!("A área da consulta atravessa outra tabela; não sobrescrevi o destino").into());
             }
         }
     }
     let nome = if let Some(i) = vinculada {
-        lista[i]["nome"].as_str().ok_or("Tabela vinculada não tem nome")?.to_owned()
+        lista[i]["nome"].as_str().ok_or(tr!("Tabela vinculada não tem nome"))?.to_owned()
     } else {
         let nomes = crate::app::tabelas::nomes_usados(w)?;
         let nomes: Vec<String> = nomes.into_iter().chain(w.nomeados().into_iter().map(|n|n.nome))
@@ -69,7 +69,7 @@ pub(super) fn preparar(
             if !nomes.iter().any(|t|t.eq_ignore_ascii_case(&nome)) { break nome; }
             seq = seq.saturating_add(1);
             if seq > 1_000_000 {
-                return Err("Não foi possível gerar um nome de tabela livre".into());
+                return Err(tr!("Não foi possível gerar um nome de tabela livre").into());
             }
         }
     };
@@ -108,7 +108,7 @@ pub(super) fn preparar_desvinculacao(
             continue;
         };
         let mut itens: Vec<Json> = serde_json::from_str(raw)
-            .map_err(|e| format!("Metadados de tabela inválidos na aba {}: {e}", indice + 1))?;
+            .map_err(|e| trf!("Metadados de tabela inválidos na aba {}: {e}", indice + 1))?;
         let mut alterado = false;
         for item in &mut itens {
             if item["openQueryId"].as_str() == Some(id) {

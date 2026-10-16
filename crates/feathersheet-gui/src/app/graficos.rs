@@ -108,31 +108,31 @@ impl TipoUi {
 impl std::fmt::Display for TipoUi {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::Colunas => "Colunas",
-            Self::ColunasEmpilhadas => "Colunas empilhadas",
-            Self::Colunas100 => "Colunas 100%",
-            Self::Barras => "Barras",
-            Self::BarrasEmpilhadas => "Barras empilhadas",
-            Self::Barras100 => "Barras 100%",
-            Self::Linhas => "Linhas",
-            Self::Linha3d => "Linha 3D",
-            Self::Degraus => "Degraus",
-            Self::DegrausEmpilhados => "Degraus empilhados",
-            Self::Degraus100 => "Degraus 100%",
-            Self::Area => "Áreas",
-            Self::AreaDegraus => "Área degraus",
-            Self::AreaDegrausEmpilhada => "Área empilhada",
-            Self::AreaDegraus100 => "Área 100%",
-            Self::Pizza => "Pizza",
-            Self::Dispersao => "Dispersão",
-            Self::Bolhas => "Bolhas",
-            Self::Combinado => "Combinado",
-            Self::MapaCalor => "Mapa de calor",
-            Self::Cascata => "Cascata",
-            Self::Histograma => "Histograma",
-            Self::Radar => "Radar",
-            Self::Candlestick => "Candlestick",
-            Self::Gantt => "Gantt",
+            Self::Colunas => tr!("Colunas"),
+            Self::ColunasEmpilhadas => tr!("Colunas empilhadas"),
+            Self::Colunas100 => tr!("Colunas 100%"),
+            Self::Barras => tr!("Barras"),
+            Self::BarrasEmpilhadas => tr!("Barras empilhadas"),
+            Self::Barras100 => tr!("Barras 100%"),
+            Self::Linhas => tr!("Linhas"),
+            Self::Linha3d => tr!("Linha 3D"),
+            Self::Degraus => tr!("Degraus"),
+            Self::DegrausEmpilhados => tr!("Degraus empilhados"),
+            Self::Degraus100 => tr!("Degraus 100%"),
+            Self::Area => tr!("Áreas"),
+            Self::AreaDegraus => tr!("Área degraus"),
+            Self::AreaDegrausEmpilhada => tr!("Área empilhada"),
+            Self::AreaDegraus100 => tr!("Área 100%"),
+            Self::Pizza => tr!("Pizza"),
+            Self::Dispersao => tr!("Dispersão"),
+            Self::Bolhas => tr!("Bolhas"),
+            Self::Combinado => tr!("Combinado"),
+            Self::MapaCalor => tr!("Mapa de calor"),
+            Self::Cascata => tr!("Cascata"),
+            Self::Histograma => tr!("Histograma"),
+            Self::Radar => tr!("Radar"),
+            Self::Candlestick => tr!("Candlestick"),
+            Self::Gantt => tr!("Gantt"),
         })
     }
 }
@@ -317,6 +317,9 @@ pub(super) struct Estado {
     /// inteiro vira um passo de Ctrl+Z.
     antes_do_gesto: Option<(u32, Option<String>)>,
     selecionado: Option<String>,
+    /// O SVG de cada gráfico da camada, pela aba dos dados, a versão dela,
+    /// o tema e o JSON do gráfico: rolar a planilha não redesenha nada.
+    pub(super) svgs: std::cell::RefCell<std::collections::HashMap<String, String>>,
     id: Option<String>,
     aparencia: Aparencia,
     /// Um único seletor de cor aberto por vez, dentro do painel lateral.
@@ -361,7 +364,7 @@ pub(super) struct Estado {
 /// cor e rótulo, sem recontar valores ou alterar os arquivos .fshz.
 fn aplicar_aparencia_grafico(g: &mut Grafico, a: &Aparencia) -> Result<(), String> {
     let primaria = cor_rgb(&a.cor)
-        .ok_or("Use uma cor hexadecimal, como #4285f4.")?;
+        .ok_or(tr!("Use uma cor hexadecimal, como #4285f4."))?;
     // Para pizza, o editor já reduziu para uma série; os índices de
     // aparência referem-se à série VISÍVEL, tal como na prévia legada.
     for (i, serie) in g.series.iter_mut().enumerate() {
@@ -370,7 +373,7 @@ fn aplicar_aparencia_grafico(g: &mut Grafico, a: &Aparencia) -> Result<(), Strin
         }
         if let Some(cor) = a.cores.get(&i) {
             serie.cor = cor_rgb(cor)
-                .ok_or("Use cores hexadecimais, como #4285f4.")?;
+                .ok_or(tr!("Use cores hexadecimais, como #4285f4."))?;
         }
         if let Some(nome) = a.nomes.get(&i) {
             serie.nome = nome.clone();
@@ -451,7 +454,7 @@ pub(super) fn desenhar_especial(
     largura: f32,
     altura: f32,
 ) -> Result<(String, feather_charts::formatado::MapaGrafico, Grafico, feather_charts::estilo::EstiloGrafico), String> {
-    let rota = rota_especial(config.tipo).ok_or("Tipo de gráfico não reconhecido.")?;
+    let rota = rota_especial(config.tipo).ok_or(tr!("Tipo de gráfico não reconhecido."))?;
     let series = dados.series.iter().enumerate().map(|(i, s)| feather_charts::Serie {
         nome: s.name.clone(),
         valores: s.values.iter().map(|v| if v.is_finite() { *v } else { 0.0 }).collect(),
@@ -463,7 +466,7 @@ pub(super) fn desenhar_especial(
         aplicar_aparencia_grafico(&mut g, aparencia)?;
     }
     let mut e = aparencia.estilo.clone().unwrap_or_else(|| painel::migrar(aparencia, excel));
-    let falha = |_| "Não foi possível desenhar o gráfico com esses dados. Confira se a tabela tem as colunas que este tipo pede.".to_string();
+    let falha = |_| tr!("Não foi possível desenhar o gráfico com esses dados. Confira se a tabela tem as colunas que este tipo pede.").to_string();
     let (svg, mapa) = match rota {
         Rota::Basico(tipo, emp, degraus) => {
             g.tipo = tipo;
@@ -509,12 +512,12 @@ fn formato_numero(f: &str) -> Option<feather_charts::FormatoNumero> {
 fn preparar_svg_em(g: &Grafico, a: &Aparencia, largura: f32, altura: f32) -> Result<String, String> {
     if a.estilo.is_none() {
         a.fonte.parse::<f32>().ok().filter(|v| (4.0..=32.0).contains(v))
-            .ok_or("O tamanho da fonte deve estar entre 4 e 32.")?;
-        cor_rgb(&a.fundo).ok_or("Use uma cor de fundo hexadecimal, como #ffffff.")?;
+            .ok_or(tr!("O tamanho da fonte deve estar entre 4 e 32."))?;
+        cor_rgb(&a.fundo).ok_or(tr!("Use uma cor de fundo hexadecimal, como #ffffff."))?;
     }
     let e = a.estilo.clone().unwrap_or_else(|| painel::migrar(a, None));
     g.exportar_svg_formatado(largura, altura, &e)
-        .map_err(|_| "Não foi possível desenhar o gráfico com essas opções.".to_string())
+        .map_err(|_| tr!("Não foi possível desenhar o gráfico com essas opções.").to_string())
 }
 /// Aceita a mesma codificação #RRGGBB/#RRGGBBAA do seletor compartilhado.
 /// Alfa segue até a Cena vetorial, sem converter RGB em outra paleta.
@@ -637,19 +640,19 @@ impl App {
         self.graficos.svg = None;
         let resultado = (|| {
             let r = parse_range_ref(self.graficos.intervalo.trim())
-                .ok_or("Intervalo inválido. Use A1:C10.")?
+                .ok_or(tr!("Intervalo inválido. Use A1:C10."))?
                 .normalized();
             if r.sheet.is_some() {
-                return Err("Informe apenas o intervalo da aba de origem.".into());
+                return Err(tr!("Informe apenas o intervalo da aba de origem.").into());
             }
             let celulas = u64::from(r.r1 - r.r0 + 1) * u64::from(r.c1 - r.c0 + 1);
             if celulas > 200_000 {
-                return Err("Selecione até 200.000 células para este painel de gráficos.".into());
+                return Err(tr!("Selecione até 200.000 células para este painel de gráficos.").into());
             }
             let aba = (0..self.workbook.len())
                 .filter_map(|i| self.workbook.aba(i))
                 .find(|a| Some(a.id) == self.graficos.aba_id)
-                .ok_or("A aba de origem foi removida. Abra um novo gráfico.")?;
+                .ok_or(tr!("A aba de origem foi removida. Abra um novo gráfico."))?;
             let pilha = empilhamento(self.graficos.tipo.motor());
             let config = ChartConfig {
                 tipo: pilha.map_or(self.graficos.tipo.motor(), |p| p.0),
@@ -689,7 +692,7 @@ impl App {
                 let (w, h) = (medida(&self.graficos.aparencia.largura, 480.), medida(&self.graficos.aparencia.altura, 300.));
                 let (svg, _, g, _) = desenhar_especial(&config, &dados, &self.graficos.aparencia, None, w, h)?;
                 self.graficos.painel.cores_base = g.series.iter().map(|s| s.cor).collect();
-                self.graficos.mensagem = dados.aviso.unwrap_or_else(|| format!(
+                self.graficos.mensagem = dados.aviso.unwrap_or_else(|| trf!(
                     "{} categorias, {} séries. Tipo {} em Rust.",
                     dados.categories.len(),dados.series.len(),self.graficos.tipo
                 ));
@@ -697,7 +700,7 @@ impl App {
             }
             let mut contrato =
                 feathersheet_io::grafico_compartilhado::extrair_grafico(&aba.sheet, &config)
-                    .map_err(|_| "Selecione uma tabela com categorias e valores numéricos. Se a tabela não tem cabeçalhos, desative essa opção.".to_string())?;
+                    .map_err(|_| tr!("Selecione uma tabela com categorias e valores numéricos. Se a tabela não tem cabeçalhos, desative essa opção.").to_string())?;
             aplicar_nomes_origem(&mut contrato, &self.graficos.aparencia);
             self.graficos.series = contrato
                 .grafico
@@ -724,13 +727,13 @@ impl App {
             self.graficos.painel.categorias = contrato.grafico.categorias.clone();
             let mut avisos = contrato.avisos;
             if let Some(a) = contrato.amostra {
-                avisos.push(format!(
+                avisos.push(trf!(
                     "Visualização amostrada: {} de {} pontos.",
                     a.usados, a.disponiveis
                 ));
             }
             self.graficos.mensagem = if avisos.is_empty() {
-                format!(
+                trf!(
                     "{} categorias, {} séries.",
                     contrato.grafico.categorias.len(),
                     contrato.grafico.series.len()
@@ -779,6 +782,11 @@ impl App {
         self.graficos.contexto = None;
     }
 
+    /// O id do gráfico selecionado na grade (para o foco do teclado).
+    pub(in crate::app) fn grafico_selecionado_id(&self) -> Option<&str> {
+        self.graficos.selecionado.as_deref()
+    }
+
     /// Delete com um gráfico selecionado (e o editor fechado): exclui.
     pub(in crate::app) fn apagar_grafico_selecionado(&mut self) -> bool {
         match self.graficos.selecionado.clone().filter(|_| !self.graficos.aberto) {
@@ -799,7 +807,7 @@ impl App {
             v["sourceSheet"] = serde_json::json!(aba.sheet.name);
         }
         self.graficos.copiado = Some(v);
-        self.status = "Gráfico copiado. Ctrl+V cola.".into();
+        self.status = tr!("Gráfico copiado. Ctrl+V cola.").into();
         true
     }
 
@@ -829,7 +837,7 @@ impl App {
                 self.alterado = true;
                 self.graficos.selecionado = Some(id);
                 self.invalidar_cache_objetos();
-                self.status = "Gráfico colado (Ctrl+Z desfaz).".into();
+                self.status = tr!("Gráfico colado (Ctrl+Z desfaz).").into();
                 true
             }
             Err(e) => {
@@ -891,7 +899,7 @@ impl App {
                     ancora_seletor_x: cursor_abertura.x,
                     seletor_aberto: true,
                     intervalo: format_ref(&area),
-                    titulo: "Gráfico".into(),
+                    titulo: tr!("Gráfico").into(),
                     cabecalho: self.workbook.aba(self.folha).is_some_and(|a| {
                         // Se a primeira linha já contém números, não é um
                         // cabeçalho. Ex.: "a 1" / "b 2" são duas categorias.
@@ -1042,7 +1050,7 @@ impl App {
                             self.graficos.aberto = false;
                             self.graficos.id = None;
                             self.graficos.selecionado = None;
-                            self.status = "Gráfico excluído.".into();
+                            self.status = tr!("Gráfico excluído.").into();
                         }
                         Ok(false) => {}
                         Err(e) => self.graficos.mensagem = e,
@@ -1212,7 +1220,7 @@ impl App {
                     g.ocultas.push(n);
                     g.ocultas.sort_unstable();
                 } else {
-                    g.mensagem = "O gráfico precisa de pelo menos uma série.".into();
+                    g.mensagem = tr!("O gráfico precisa de pelo menos uma série.").into();
                     return Task::none();
                 }
                 self.editar_ao_vivo(None);
@@ -1292,9 +1300,9 @@ impl App {
             }
             Evento::Exportado(r) => {
                 self.graficos.mensagem = match r {
-                    Ok(true) => "Gráfico exportado em SVG".into(),
-                    Ok(false) => "Exportação cancelada".into(),
-                    Err(e) => format!("Erro ao exportar: {e}"),
+                    Ok(true) => tr!("Gráfico exportado em SVG").into(),
+                    Ok(false) => tr!("Exportação cancelada").into(),
+                    Err(e) => trf!("Erro ao exportar: {e}"),
                 }
             }
         }

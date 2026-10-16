@@ -66,7 +66,7 @@ fn conteudo_da_celula(
     match CONTAS.iter().find(|(k, _, _)| *k == conta) {
         Some((_, _, f)) if !f.is_empty() =>
             format!("=SUBTOTAL({f};{})", referencia(w, aba, t, area, area.c0 + rel)),
-        _ if rel == 0 => "Total".to_owned(),
+        _ if rel == 0 => tr!("Total").to_owned(),
         _ => String::new(),
     }
 }
@@ -80,7 +80,7 @@ fn em_transacao(
     w: &mut Workbook, aba: usize,
     f: impl FnOnce(&mut Workbook) -> Result<(), String>,
 ) -> Result<(), String> {
-    w.aba_mut(aba).ok_or("Aba ausente.")?.sheet.abrir_transacao();
+    w.aba_mut(aba).ok_or(tr!("Aba ausente."))?.sheet.abrir_transacao();
     let r = f(w);
     if let Some(a) = w.aba_mut(aba) {
         if r.is_ok() { a.sheet.fechar_transacao(); } else { a.sheet.reverter_transacao(); }
@@ -93,12 +93,12 @@ pub(in crate::app) fn definir_total(
     w: &mut Workbook, aba: usize, id: &str, rel: u32, conta: &str,
 ) -> Result<(), String> {
     if !CONTAS.iter().any(|(k, _, _)| *k == conta) {
-        return Err("Função de total desconhecida.".into());
+        return Err(tr!("Função de total desconhecida.").into());
     }
     let t = sob_id(w, aba, id)?;
-    let area = area_de(&t).ok_or("Área de tabela inválida.")?;
-    if t["mostrarTotais"] != true { return Err("A linha de totais está desligada.".into()); }
-    if rel > area.c1 - area.c0 { return Err("Coluna fora da tabela.".into()); }
+    let area = area_de(&t).ok_or(tr!("Área de tabela inválida."))?;
+    if t["mostrarTotais"] != true { return Err(tr!("A linha de totais está desligada.").into()); }
+    if rel > area.c1 - area.c0 { return Err(tr!("Coluna fora da tabela.").into()); }
     em_transacao(w, aba, |w| {
         estilo(w, aba, id, Estilo::TotalColuna { col: rel, funcao: conta.to_owned() })?;
         let texto = conteudo_da_celula(w, aba, &t, &area, rel, conta);
@@ -112,14 +112,14 @@ pub(in crate::app) fn alternar_totais(
     w: &mut Workbook, aba: usize, id: &str, ligar: bool,
 ) -> Result<(), String> {
     let t = sob_id(w, aba, id)?;
-    let area = area_de(&t).ok_or("Área de tabela inválida.")?;
+    let area = area_de(&t).ok_or(tr!("Área de tabela inválida."))?;
     if (t["mostrarTotais"] == true) == ligar { return Ok(()); }
     let linha = area.r1 + 1;
     if ligar {
-        if linha >= MAX_ROWS { return Err("Não há linha livre abaixo da tabela.".into()); }
-        let sheet = &w.aba(aba).ok_or("Aba ausente.")?.sheet;
+        if linha >= MAX_ROWS { return Err(tr!("Não há linha livre abaixo da tabela.").into()); }
+        let sheet = &w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet;
         if (area.c0..=area.c1).any(|c| !sheet.get_raw(linha, c).is_empty()) {
-            return Err("Há dados logo abaixo da tabela; libere a linha antes de ligar os totais.".into());
+            return Err(tr!("Há dados logo abaixo da tabela; libere a linha antes de ligar os totais.").into());
         }
         let faixa = Rect::new(area.r0, area.c0, linha, area.c1);
         let colide = listar(sheet)?.iter().filter(|o| o["id"] != t["id"]).any(|o| {
@@ -128,7 +128,7 @@ pub(in crate::app) fn alternar_totais(
                 intersecta(&faixa, &a)
             })
         });
-        if colide { return Err("A linha de totais cruzaria outra tabela.".into()); }
+        if colide { return Err(tr!("A linha de totais cruzaria outra tabela.").into()); }
     }
     em_transacao(w, aba, |w| {
         estilo(w, aba, id, Estilo::Totais(ligar))?;
@@ -139,7 +139,7 @@ pub(in crate::app) fn alternar_totais(
             if sem_escolha && ultima > 0 {
                 let dados0 = area.r0 + u32::from(t["temCabecalho"] == true);
                 let tem_numero = {
-                    let sheet = &w.aba(aba).ok_or("Aba ausente.")?.sheet;
+                    let sheet = &w.aba(aba).ok_or(tr!("Aba ausente."))?.sheet;
                     (dados0..=area.r1).any(|r| sheet.get_raw(r, area.c1).trim()
                         .replace(',', ".").parse::<f64>().is_ok())
                 };

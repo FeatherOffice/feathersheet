@@ -68,11 +68,11 @@ fn ler_celulas(texto: &str) -> Result<Vec<(u32, u32)>, String> {
                 }
             }
         } else {
-            return Err(format!("\"{parte}\" não é uma célula nem um intervalo."));
+            return Err(trf!("\"{parte}\" não é uma célula nem um intervalo."));
         }
     }
     if saida.len() > MAX_CELULAS {
-        return Err(format!("Um cenário aceita até {MAX_CELULAS} células variáveis."));
+        return Err(trf!("Um cenário aceita até {MAX_CELULAS} células variáveis."));
     }
     Ok(saida)
 }
@@ -111,9 +111,9 @@ impl App {
                 let Some(e) = self.cenarios.as_mut() else { return Task::none() };
                 let sheet = &self.workbook.aba(e.aba).expect("aba do cenário").sheet;
                 let mut n = e.lista.len() + 1;
-                while e.lista.iter().any(|c| c.nome == format!("Cenário {n}")) { n += 1; }
+                while e.lista.iter().any(|c| c.nome == trf!("Cenário {n}")) { n += 1; }
                 e.lista.push(CenarioSalvo {
-                    nome: format!("Cenário {n}"),
+                    nome: trf!("Cenário {n}"),
                     celulas: celulas.iter().map(|&(r, c)| cell_name(r, c)).collect(),
                     valores: celulas.iter().map(|&(r, c)| sheet.get_raw(r, c)).collect(),
                     comentario: String::new(),
@@ -131,7 +131,7 @@ impl App {
             },
             Evento::Nome(t) => if let Some(i) = e.selecionado {
                 if e.lista.iter().enumerate().any(|(j, c)| j != i && c.nome == t.trim()) {
-                    e.erro = Some("Já existe um cenário com esse nome.".into());
+                    e.erro = Some(tr!("Já existe um cenário com esse nome.").into());
                 }
                 e.lista[i].nome = t;
                 gravar = true;
@@ -156,7 +156,7 @@ impl App {
                     Ok(c) => {
                         aplicar(&mut self.workbook, aba, &c);
                         self.alterado = true;
-                        self.status = format!("Cenário \"{}\" aplicado (Ctrl+Z desfaz)", cen.nome);
+                        self.status = trf!("Cenário \"{}\" aplicado (Ctrl+Z desfaz)", cen.nome);
                     }
                     Err(m) => if let Some(e) = &mut self.cenarios { e.erro = Some(m); },
                 }
@@ -225,9 +225,9 @@ impl App {
     /// cenário, nas células variáveis e nas de resultado.
     fn resumo_cenarios(&mut self) -> Result<(), String> {
         let e = self.cenarios.clone().expect("janela aberta");
-        if e.lista.is_empty() { return Err("Adicione ao menos um cenário.".into()); }
+        if e.lista.is_empty() { return Err(tr!("Adicione ao menos um cenário.").into()); }
         let resultados = ler_celulas(&e.resultados)?;
-        if resultados.is_empty() { return Err("Informe as células de resultado (ex.: B10).".into()); }
+        if resultados.is_empty() { return Err(tr!("Informe as células de resultado (ex.: B10).").into()); }
         let cenarios: Vec<Cenario> = e.lista.iter().map(converter).collect::<Result<_, _>>()?;
         let mut variaveis: Vec<(u32, u32)> = Vec::new();
         for c in &cenarios {
@@ -236,10 +236,10 @@ impl App {
         let tabela = resumo(&mut self.workbook, e.aba, &cenarios, &resultados);
         let atual = |p: (u32, u32)| to_text(&self.workbook.valor(e.aba, p.0, p.1));
         // Linhas: título, cabeçalho, células variáveis, células de resultado.
-        let mut linhas: Vec<Vec<String>> = vec![vec!["Resumo do cenário".into()],
-            std::iter::once(String::new()).chain(std::iter::once("Valores atuais".into()))
+        let mut linhas: Vec<Vec<String>> = vec![vec![tr!("Resumo do cenário").into()],
+            std::iter::once(String::new()).chain(std::iter::once(tr!("Valores atuais").into()))
                 .chain(e.lista.iter().map(|c| c.nome.clone())).collect(),
-            vec!["Células variáveis:".into()]];
+            vec![tr!("Células variáveis:").into()]];
         for &p in &variaveis {
             let mut l = vec![cell_name(p.0, p.1), atual(p)];
             for c in &cenarios {
@@ -247,15 +247,15 @@ impl App {
             }
             linhas.push(l);
         }
-        linhas.push(vec!["Células de resultado:".into()]);
+        linhas.push(vec![tr!("Células de resultado:").into()]);
         for (k, &p) in resultados.iter().enumerate() {
             linhas.push(std::iter::once(cell_name(p.0, p.1))
                 .chain(tabela[k].iter().map(|v: &Value| to_text(v))).collect());
         }
         let existentes = self.workbook.nomes();
-        let mut nome = "Resumo do cenário".to_string();
+        let mut nome = tr!("Resumo do cenário").to_string();
         let mut n = 2;
-        while existentes.contains(&nome) { nome = format!("Resumo do cenário {n}"); n += 1; }
+        while existentes.contains(&nome) { nome = trf!("Resumo do cenário {n}"); n += 1; }
         let nova = self.workbook.criar_aba(nome);
         self.workbook.editar(nova, |s| {
             for (r, l) in linhas.iter().enumerate() {
@@ -265,7 +265,7 @@ impl App {
         self.alterado = true;
         self.cenarios = None;
         let _ = self.update(Msg::Aba(nova));
-        self.status = format!("Resumo de {} cenário(s) criado", e.lista.len());
+        self.status = trf!("Resumo de {} cenário(s) criado", e.lista.len());
         Ok(())
     }
 
@@ -280,9 +280,9 @@ impl App {
         let rotulo = |t: &'static str| text(t).size(12.5).width(Length::Fixed(132.0));
 
         // Lista à esquerda.
-        let mut lista = column![text("CENÁRIOS").size(10.5).color(COR_TEXTO_MUTED())].spacing(2);
+        let mut lista = column![text(tr!("CENÁRIOS")).size(10.5).color(COR_TEXTO_MUTED())].spacing(2);
         if e.lista.is_empty() {
-            lista = lista.push(text("Nenhum cenário nesta aba.").size(12).color(COR_TEXTO_MUTED()));
+            lista = lista.push(text(tr!("Nenhum cenário nesta aba.")).size(12).color(COR_TEXTO_MUTED()));
         }
         for (i, c) in e.lista.iter().enumerate() {
             let nome: String = if c.nome.chars().count() > 22 {
@@ -295,10 +295,10 @@ impl App {
         let esquerda = column![
             container(rolagem(lista)).height(Length::Fixed(220.0)),
             row![
-                button(row![feather_ui::icones::icone("plus", 14.0), text("Adicionar").size(12)]
+                button(row![feather_ui::icones::icone("plus", 14.0), text(tr!("Adicionar")).size(12)]
                         .spacing(5).align_y(Alignment::Center))
                     .padding([5, 9]).style(estilo_botao_secundario).on_press(ev(Evento::Adicionar)),
-                button(row![feather_ui::icones::icone("trash", 14.0), text("Excluir").size(12)]
+                button(row![feather_ui::icones::icone("trash", 14.0), text(tr!("Excluir")).size(12)]
                         .spacing(5).align_y(Alignment::Center))
                     .padding([5, 9]).style(estilo_botao_secundario)
                     .on_press_maybe(e.selecionado.map(|_| ev(Evento::Excluir))),
@@ -307,8 +307,8 @@ impl App {
 
         // Formulário do cenário escolhido.
         let direita: Element<'_, Msg> = match e.selecionado.and_then(|i| e.lista.get(i)) {
-            None => container(text("Adicione um cenário: ele começa com as células selecionadas \
-                e os valores de agora.").size(12).color(COR_TEXTO_MUTED()))
+            None => container(text(tr!("Adicione um cenário: ele começa com as células selecionadas \
+                e os valores de agora.")).size(12).color(COR_TEXTO_MUTED()))
                 .width(Length::Fill).into(),
             Some(c) => {
                 let mut valores = column![].spacing(6);
@@ -320,16 +320,16 @@ impl App {
                     ].spacing(8).align_y(Alignment::Center));
                 }
                 column![
-                    row![rotulo("Nome:"), text_input("", &c.nome)
+                    row![rotulo(tr!("Nome:")), text_input("", &c.nome)
                         .on_input(|t| Msg::Cenarios(Evento::Nome(t))).size(13).padding([5, 8])]
                         .spacing(8).align_y(Alignment::Center),
-                    row![rotulo("Células variáveis:"), text_input("ex.: B3;B4 ou B3:B5", &e.celulas)
+                    row![rotulo(tr!("Células variáveis:")), text_input(tr!("ex.: B3;B4 ou B3:B5"), &e.celulas)
                         .on_input(|t| Msg::Cenarios(Evento::Celulas(t))).size(13).padding([5, 8])
                         .style(destaque(e.campo == Campo::Celulas))]
                         .spacing(8).align_y(Alignment::Center),
                     text("VALORES").size(10.5).color(COR_TEXTO_MUTED()),
                     container(rolagem(valores)).max_height(150.0),
-                    row![rotulo("Comentário:"), text_input("opcional", &c.comentario)
+                    row![rotulo(tr!("Comentário:")), text_input("opcional", &c.comentario)
                         .on_input(|t| Msg::Cenarios(Evento::Comentario(t))).size(13).padding([5, 8])]
                         .spacing(8).align_y(Alignment::Center),
                 ].spacing(10).width(Length::Fill).into()
@@ -341,16 +341,16 @@ impl App {
                 direita].spacing(14),
             container(Space::with_height(1)).width(Length::Fill).style(estilo_linha),
             row![
-                rotulo("Células de resultado:"),
-                text_input("ex.: B10", &e.resultados).on_input(|t| Msg::Cenarios(Evento::Resultados(t)))
+                rotulo(tr!("Células de resultado:")),
+                text_input(tr!("ex.: B10"), &e.resultados).on_input(|t| Msg::Cenarios(Evento::Resultados(t)))
                     .size(13).padding([5, 8]).width(Length::Fill)
                     .style(destaque(e.campo == Campo::Resultados)),
-                button(text("Criar resumo").size(12.5)).padding([6, 12])
+                button(text(tr!("Criar resumo")).size(12.5)).padding([6, 12])
                     .style(estilo_botao_secundario).on_press(ev(Evento::Resumo)),
             ].spacing(8).align_y(Alignment::Center),
             row![
                 feather_ui::icones::icone("info-circle", 14.0),
-                text("Clique na planilha para acrescentar endereços ao campo destacado.")
+                text(tr!("Clique na planilha para acrescentar endereços ao campo destacado."))
                     .size(11.5).color(COR_TEXTO_MUTED()),
             ].spacing(6).align_y(Alignment::Center),
         ].spacing(14);
@@ -360,14 +360,14 @@ impl App {
             ].spacing(6).align_y(Alignment::Center));
         }
         // Não modal e à direita: a pessoa clica na planilha para escolher células.
-        self.dialogo("Gerenciador de cenários", corpo)
+        self.dialogo(tr!("Gerenciador de cenários"), corpo)
             .topo(14.0)
             .altura_maxima((self.tamanho_principal.height - self.topo_dialogo() - 28.0).max(320.0))
             .largura(640.0)
             .nao_modal()
             .a_direita()
             .ao_fechar(ev(Evento::Fechar))
-            .primario("Mostrar", e.selecionado.map(|_| ev(Evento::Mostrar)))
+            .primario(tr!("Mostrar"), e.selecionado.map(|_| ev(Evento::Mostrar)))
     }
 
     pub(super) fn sobrepor_cenarios<'a>(&'a self, centro: Element<'a, Msg>) -> Element<'a, Msg> {
@@ -379,7 +379,7 @@ impl App {
 /// Cenário salvo → o que o motor entende (endereços já conferidos).
 fn converter(c: &CenarioSalvo) -> Result<Cenario, String> {
     let celulas = ler_celulas(&c.celulas.join(";"))
-        .map_err(|m| format!("Cenário \"{}\": {m}", c.nome))?;
+        .map_err(|m| trf!("Cenário \"{}\": {m}", c.nome))?;
     Ok(Cenario { nome: c.nome.clone(),
         valores: celulas.into_iter().zip(c.valores.iter().cloned()).collect() })
 }

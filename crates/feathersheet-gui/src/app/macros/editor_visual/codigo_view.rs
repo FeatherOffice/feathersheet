@@ -37,11 +37,11 @@ fn medida<'a>(s: String) -> iced::widget::Text<'a> {
 /// Contador "3 de 12" da barra.
 pub(in crate::app) fn contador(achadas: &[Ocorrencia], atual: Option<(usize, usize)>, consulta: &str) -> String {
     if consulta.is_empty() { return String::new(); }
-    if achadas.is_empty() { return "Nenhum resultado".into(); }
+    if achadas.is_empty() { return tr!("Nenhum resultado").into(); }
     let total = if achadas.len() >= 10_000 { "10.000+".to_string() } else { achadas.len().to_string() };
     match atual.and_then(|p| achadas.iter().position(|o| (o.linha, o.coluna) == p)) {
-        Some(i) => format!("{} de {total}", i + 1),
-        None => format!("{total} resultado(s)"),
+        Some(i) => trf!("{} de {total}", i + 1),
+        None => trf!("{total} resultado(s)"),
     }
 }
 
@@ -52,45 +52,45 @@ fn barra_busca<'a>(app: &'a App, achadas: &[Ocorrencia]) -> Element<'a, Msg> {
     let alternar = com_dica(
         botao_icone_simples(if c.substituir { "chevron-down" } else { "chevron-right" },
             Some(ev(EventoCodigo::AlternarSubstituir))),
-        if c.substituir { "Ocultar Substituir" } else { "Mostrar Substituir  Ctrl+H" },
+        if c.substituir { tr!("Ocultar Substituir") } else { tr!("Mostrar Substituir  Ctrl+H") },
     );
     let tem = !achadas.is_empty();
     let primeira = row![
         alternar,
         feather_ui::icones::icone("search", 15.0),
-        text_input("Localizar no código", &c.consulta)
+        text_input(tr!("Localizar no código"), &c.consulta)
             .id(codigo::id_campo_busca())
             .on_input(|t| ev(EventoCodigo::Consulta(t)))
             .on_submit(ev(EventoCodigo::Enter))
             .size(12).padding([4, 7]).width(Length::Fixed(240.0)).style(estilo_campo),
-        com_dica(botao("Maiúsculas", Some(ev(EventoCodigo::AlternarMaiusculas)), c.maiusculas),
-            "Diferenciar maiúsculas e minúsculas"),
-        com_dica(botao("Palavra inteira", Some(ev(EventoCodigo::AlternarPalavra)), c.palavra),
-            "Só a palavra inteira (não acha \"total\" dentro de \"subtotal\")"),
-        com_dica(botao("Todos os módulos", Some(ev(EventoCodigo::AlternarTodos)), c.todos_modulos),
-            "Listar as ocorrências em todos os módulos"),
+        com_dica(botao(tr!("Maiúsculas"), Some(ev(EventoCodigo::AlternarMaiusculas)), c.maiusculas),
+            tr!("Diferenciar maiúsculas e minúsculas")),
+        com_dica(botao(tr!("Palavra inteira"), Some(ev(EventoCodigo::AlternarPalavra)), c.palavra),
+            tr!("Só a palavra inteira (não acha \"total\" dentro de \"subtotal\")")),
+        com_dica(botao(tr!("Todos os módulos"), Some(ev(EventoCodigo::AlternarTodos)), c.todos_modulos),
+            tr!("Listar as ocorrências em todos os módulos")),
         text(contador(achadas, c.atual, &c.consulta)).size(11).color(COR_TEXTO_MUTED()),
         Space::with_width(Length::Fill),
         com_dica(botao_icone_simples("chevron-up", tem.then(|| ev(EventoCodigo::Anterior))),
-            "Anterior  Shift+Enter / Shift+F3"),
+            tr!("Anterior  Shift+Enter / Shift+F3")),
         com_dica(botao_icone_simples("chevron-down", tem.then(|| ev(EventoCodigo::Proximo))),
-            "Próxima  Enter / F3"),
-        com_dica(botao_icone_simples("x", Some(ev(EventoCodigo::Fechar))), "Fechar  Esc"),
+            tr!("Próxima  Enter / F3")),
+        com_dica(botao_icone_simples("x", Some(ev(EventoCodigo::Fechar))), tr!("Fechar  Esc")),
     ].spacing(5).align_y(Alignment::Center);
     let mut linhas = column![primeira].spacing(4);
     if c.substituir {
         linhas = linhas.push(row![
             Space::with_width(Length::Fixed(29.0)),
             feather_ui::icones::icone("edit", 15.0),
-            text_input("Substituir por", &c.troca)
+            text_input(tr!("Substituir por"), &c.troca)
                 .id(codigo::id_campo_troca())
                 .on_input(|t| ev(EventoCodigo::Troca(t)))
                 .on_submit(ev(EventoCodigo::Substituir))
                 .size(12).padding([4, 7]).width(Length::Fixed(240.0)).style(estilo_campo),
-            com_dica(botao("Substituir", tem.then(|| ev(EventoCodigo::Substituir)), false),
-                "Substituir a ocorrência atual e ir para a próxima  Enter"),
-            com_dica(botao_icone("Substituir todos", "checks", tem.then(|| ev(EventoCodigo::SubstituirTodos)), false),
-                "Substituir todas de uma vez (um só Ctrl+Z desfaz)"),
+            com_dica(botao(tr!("Substituir"), tem.then(|| ev(EventoCodigo::Substituir)), false),
+                tr!("Substituir a ocorrência atual e ir para a próxima  Enter")),
+            com_dica(botao_icone(tr!("Substituir todos"), "checks", tem.then(|| ev(EventoCodigo::SubstituirTodos)), false),
+                tr!("Substituir todas de uma vez (um só Ctrl+Z desfaz)")),
             text(c.aviso.clone()).size(11).color(COR_TEXTO_MUTED()),
         ].spacing(5).align_y(Alignment::Center));
     }
@@ -104,8 +104,8 @@ fn resultados_todos<'a>(app: &'a App) -> Element<'a, Msg> {
     let mut lista = column![].spacing(1);
     if resultados.is_empty() {
         lista = lista.push(text(if app.macro_visual.codigo.consulta.is_empty() {
-            "Digite o que procurar."
-        } else { "Nenhum módulo contém esse texto." }).size(11).color(COR_TEXTO_MUTED()));
+            tr!("Digite o que procurar.")
+        } else { tr!("Nenhum módulo contém esse texto.") }).size(11).color(COR_TEXTO_MUTED()));
     }
     for (modulo, o, trecho) in resultados {
         let rotulo = format!("{modulo}:{}", o.linha + 1);
@@ -316,9 +316,9 @@ pub(super) fn edicao_codigo<'a>(app: &'a App) -> Element<'a, Msg> {
     let linha = row![
         botao_campo("(Geral)"),
         Space::with_width(Length::Fill),
-        com_dica(botao_icone("Localizar", "search", Some(ev(EventoCodigo::Abrir(false))),
-            app.macro_visual.codigo.busca_aberta), "Localizar  Ctrl+F · Substituir  Ctrl+H"),
-        botao_campo("(Declarações)"),
+        com_dica(botao_icone(tr!("Localizar"), "search", Some(ev(EventoCodigo::Abrir(false))),
+            app.macro_visual.codigo.busca_aberta), tr!("Localizar  Ctrl+F · Substituir  Ctrl+H")),
+        botao_campo(tr!("(Declarações)")),
     ].spacing(6).align_y(Alignment::Center).padding([7, 10]);
     let achadas = app.ocorrencias_atuais();
     let mut corpo = column![container(linha).style(estilo_cabecalho(escuro))].spacing(3);
@@ -329,9 +329,9 @@ pub(super) fn edicao_codigo<'a>(app: &'a App) -> Element<'a, Msg> {
         }
     }
     let barra = row![
-        text("JAVASCRIPT  ·  MÓDULO").size(10).color(cor_secundaria(escuro)),
+        text(tr!("JAVASCRIPT  ·  MÓDULO")).size(10).color(cor_secundaria(escuro)),
         Space::with_width(Length::Fill),
-        botao_icone("Guardar  Ctrl+S", "device-floppy", Some(Msg::MacroGuardarModulo), false),
+        botao_icone(tr!("Guardar  Ctrl+S"), "device-floppy", Some(Msg::MacroGuardarModulo), false),
         botao_executar(Some(Msg::MacroExecutar)),
     ].spacing(8).align_y(Alignment::Center).padding([6, 10]);
     container(corpo
@@ -346,7 +346,7 @@ pub(super) fn edicao_codigo<'a>(app: &'a App) -> Element<'a, Msg> {
 pub(super) fn busca_projeto<'a>(app: &'a App) -> Element<'a, Msg> {
     container(row![
         feather_ui::icones::icone("search", 15.0),
-        text_input("Buscar macro pelo nome", &app.macro_visual.codigo.filtro_projeto)
+        text_input(tr!("Buscar macro pelo nome"), &app.macro_visual.codigo.filtro_projeto)
             .id(codigo::id_campo_projeto())
             .on_input(|t| ev(EventoCodigo::FiltroProjeto(t)))
             .on_submit(ev(EventoCodigo::FiltroAbrirPrimeiro))
@@ -359,12 +359,12 @@ pub(super) fn busca_projeto<'a>(app: &'a App) -> Element<'a, Msg> {
 pub(super) fn resultados_projeto<'a>(app: &'a App) -> Element<'a, Msg> {
     let escuro = app.config.escuro;
     let itens = codigo::filtrar_modulos(&app.macro_catalogo.macros, &app.macro_visual.codigo.filtro_projeto);
-    let mut col = column![grupo_arvore(&format!("Resultados ({})", itens.len()), "search", escuro)]
+    let mut col = column![grupo_arvore(&trf!("Resultados ({})", itens.len()), "search", escuro)]
         .spacing(1).padding(4);
     if itens.is_empty() {
         col = col.push(container(column![
-            text("Nenhuma macro com esse nome").size(12),
-            text("Procura no nome do módulo e das funções, sem diferenciar acento.")
+            text(tr!("Nenhuma macro com esse nome")).size(12),
+            text(tr!("Procura no nome do módulo e das funções, sem diferenciar acento."))
                 .size(11).color(COR_TEXTO_MUTED()),
         ].spacing(4)).padding([8, 12]));
     }
@@ -377,7 +377,7 @@ pub(super) fn resultados_projeto<'a>(app: &'a App) -> Element<'a, Msg> {
         ));
         for (funcao, linha) in item.funcoes {
             col = col.push(item_arvore(
-                &format!("{funcao}  (linha {})", linha + 1), "code", 29.0,
+                &trf!("{funcao}  (linha {})", linha + 1), "code", 29.0,
                 Some(ev(EventoCodigo::IrParaFuncao(item.modulo.clone(), linha))), false,
             ));
         }

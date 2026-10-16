@@ -486,7 +486,7 @@ impl App {
 
     pub(in crate::app) fn abrir_busca_codigo(&mut self, substituir: bool) -> Task<Msg> {
         if !self.macro_visual.documento.starts_with("modulo:") {
-            self.macro_saida = "Abra um módulo JavaScript para localizar no código.".into();
+            self.macro_saida = tr!("Abra um módulo JavaScript para localizar no código.").into();
             return Task::none();
         }
         let selecionado = selecao_de_uma_linha(&self.macro_codigo);
@@ -536,7 +536,7 @@ impl App {
     fn substituir_todas_codigo(&mut self) -> Task<Msg> {
         let achadas = self.ocorrencias_atuais();
         if achadas.is_empty() {
-            self.macro_visual.codigo.aviso = "Nenhuma ocorrência".into();
+            self.macro_visual.codigo.aviso = tr!("Nenhuma ocorrência").into();
             return Task::none();
         }
         let (l, c) = linha_coluna(&self.macro_codigo);
@@ -548,7 +548,7 @@ impl App {
         let estado = &mut self.macro_visual.codigo;
         estado.ultimo = None;
         estado.atual = None;
-        estado.aviso = if n == 1 { "1 substituição".into() } else { format!("{n} substituições") };
+        estado.aviso = if n == 1 { tr!("1 substituição").into() } else { trf!("{n} substituições") };
         Task::none()
     }
 
@@ -605,8 +605,8 @@ impl App {
         self.macro_catalogo = feather_macros::Catalogo {
             macros: vec![
                 feather_macros::Macro { name: "Relatorio".into(), code: exemplo.clone(), auto: false },
-                feather_macros::Macro { name: "Importar".into(), code: "function totalPorMes() {}\n".into(), auto: false },
-                feather_macros::Macro { name: "Limpar".into(), code: "sheet.clear('A1:D10');\n".into(), auto: true },
+                feather_macros::Macro { name: tr!("Importar").into(), code: "function totalPorMes() {}\n".into(), auto: false },
+                feather_macros::Macro { name: tr!("Limpar").into(), code: "sheet.clear('A1:D10');\n".into(), auto: true },
             ],
         };
         self.macro_nome = "Relatorio".into();

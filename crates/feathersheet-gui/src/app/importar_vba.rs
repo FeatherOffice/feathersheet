@@ -19,7 +19,7 @@ fn nome_modulo(texto: &str) -> String {
         .map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' })
         .collect();
     let limpo = limpo.trim_matches('_').to_string();
-    if limpo.is_empty() { "Macro".into() } else { limpo }
+    if limpo.is_empty() { tr!("Macro").into() } else { limpo }
 }
 
 /// Um nome que a biblioteca aceita: até 128 letras e sem repetir outro,
@@ -61,16 +61,16 @@ pub(super) fn modulos_da_conversao(
         let code = format!(
             "// Evento {} {onde} (era {} no VBA de {arquivo}).\n// {}\n{}",
             e.evento, e.origem, match e.evento {
-                "aoMudar" => "Roda sozinho quando uma célula da aba muda (valores.intervalo é o endereço mudado).",
-                "aoAtivar" => "Roda sozinho quando a aba é aberta.",
-                _ => "Não roda sozinho ao abrir o arquivo: execute à mão.",
+                "aoMudar" => tr!("Roda sozinho quando uma célula da aba muda (valores.intervalo é o endereço mudado)."),
+                "aoAtivar" => tr!("Roda sozinho quando a aba é aberta."),
+                _ => tr!("Não roda sozinho ao abrir o arquivo: execute à mão."),
             }, e.codigo);
-        acrescentar(format!("Evento_{}_{}", e.evento, e.aba.as_deref().unwrap_or("Pasta")), code, &mut saida);
+        acrescentar(format!("Evento_{}_{}", e.evento, e.aba.as_deref().unwrap_or(tr!("Pasta"))), code, &mut saida);
     }
     if !c.pendencias.is_empty() {
         let mut code = format!("// O que do VBA de {arquivo} não foi convertido (ou pode agir diferente).\n");
         for p in &c.pendencias {
-            let tipo = if p.aviso { "aviso" } else { "não convertido" };
+            let tipo = if p.aviso { "aviso" } else { tr!("não convertido") };
             // Bloco de várias linhas (With … End With): todas comentadas.
             let vba = p.vba.trim().lines().map(|l| format!("//     {l}")).collect::<Vec<_>>().join("\n");
             code.push_str(&format!("// [{tipo}] {} linha {}: {}\n{vba}\n", p.modulo, p.linha, p.motivo));
@@ -83,11 +83,11 @@ pub(super) fn modulos_da_conversao(
 /// Se o módulo foi convertido do VBA de `arquivo` (a 1ª linha diz).
 fn veio_do_arquivo(m: &feather_macros::Macro, arquivo: &str) -> bool {
     let linha = m.code.lines().next().unwrap_or("");
-    [" (", ").", " não"].iter().any(|fim| linha.contains(&format!("VBA de {arquivo}{fim}")))
+    [" (", ").", tr!(" não")].iter().any(|fim| linha.contains(&format!("VBA de {arquivo}{fim}")))
 }
 
 fn resumo(c: &Conversao) -> String {
-    format!("{} macro(s), {} evento(s), {} pendência(s)", c.macros.len(), c.eventos.len(), c.pendencias.len())
+    trf!("{} macro(s), {} evento(s), {} pendência(s)", c.macros.len(), c.eventos.len(), c.pendencias.len())
 }
 
 /// A macro que a forma chama, no nome que o módulo convertido recebe: a do
@@ -141,13 +141,12 @@ impl App {
         self.botoes_das_formas(&bytes, conversao.as_ref().ok());
         match conversao {
             Ok(conversao) if !conversao.macros.is_empty() || !conversao.eventos.is_empty() => {
-                // As macros entram sozinhas no editor (Alt+F11), sem rodar. Os
-                // testes e o modo de captura não mexem na biblioteca de macros
-                // real do disco (uma captura com cópia do .xlsm criava "_2").
-                if !cfg!(test) && std::env::var_os("FEATHERSHEET_CAPTURAR").is_none() {
-                    self.instalar_vba(&arquivo, &conversao, false);
-                }
-                self.status = format!("Aberto: {} · VBA com {}, já no editor de macros (Alt+F11), em JavaScript. Nada roda sozinho.",
+                // As macros entram sozinhas no editor (Alt+F11) desta pasta,
+                // sem rodar. Só abrir o arquivo não o deixa "alterado".
+                let alterado = self.alterado;
+                self.instalar_vba(&arquivo, &conversao, false);
+                self.alterado = alterado;
+                self.status = trf!("Aberto: {} · VBA com {}, já no editor de macros (Alt+F11), em JavaScript. Nada roda sozinho.",
                     path.display(), resumo(&conversao));
                 self.vba_pendente = Some(VbaPendente { arquivo, conversao });
             }
@@ -165,7 +164,7 @@ impl App {
         }
         Task::perform(async {
             let Some(f) = rfd::AsyncFileDialog::new()
-                .add_filter("Pasta do Excel com macros", &["xlsm", "xlam"])
+                .add_filter(tr!("Pasta do Excel com macros"), &["xlsm", "xlam"])
                 .pick_file().await else { return Ok(None) };
             let nome = std::path::Path::new(f.file_name().as_str()).file_stem()
                 .and_then(|s| s.to_str()).unwrap_or("planilha").to_string();
@@ -191,7 +190,7 @@ impl App {
         base.macros.retain(|m| !veio_do_arquivo(m, arquivo));
         let novos = modulos_da_conversao(&base, arquivo, c);
         if novos.is_empty() {
-            self.status = "O VBA deste arquivo não tem macros para importar.".into();
+            self.status = tr!("O VBA deste arquivo não tem macros para importar.").into();
             return;
         }
         // Os botões das formas chamam a macro pelo nome base; se a biblioteca
@@ -222,12 +221,12 @@ impl App {
         let mut catalogo = base;
         let n = novos.len();
         catalogo.macros.extend(novos);
-        if self.persistir_modulos(catalogo, &format!("VBA de {arquivo} importado ({})", resumo(c))) {
+        if self.persistir_modulos(catalogo, &trf!("VBA de {arquivo} importado ({})", resumo(c))) {
             if !abrir_no_editor { return; }
             self.macro_nome = primeiro.name.clone();
             self.macro_codigo = iced::widget::text_editor::Content::with_text(&primeiro.code);
             self.macro_visual.documento = format!("modulo:{}", primeiro.name);
-            self.status = format!("{n} módulo(s) do VBA de {arquivo} no editor de macros (Alt+F11). Nada roda sozinho.");
+            self.status = trf!("{n} módulo(s) do VBA de {arquivo} no editor de macros (Alt+F11). Nada roda sozinho.");
         } else {
             self.status = self.macro_saida.clone();
         }

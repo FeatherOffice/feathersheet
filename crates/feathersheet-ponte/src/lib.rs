@@ -856,7 +856,7 @@ impl Ponte {
                 let chamada = active_call(texto, cursor);
                 em_json(&json!({
                     "token": token_before(texto, cursor).map(|t| json!({ "text": t.text, "start": t.start, "end": t.end })),
-                    "sugestoes": suggest_at(texto, cursor, 8).iter().map(|s| json!({
+                    "sugestoes": suggest_at(texto, cursor, 8, feathersheet_core::get_locale_config().code.starts_with("en")).iter().map(|s| json!({
                         "name": s.name, "help": ajuda_json(s.help), "signature": s.signature,
                     })).collect::<Vec<_>>(),
                     "ajudaDaChamada": ajuda_json(chamada.as_ref().and_then(|c| ajuda(&c.name))),

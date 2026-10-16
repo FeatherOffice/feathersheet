@@ -75,6 +75,11 @@ impl LeitorFaixa {
         LeitorFaixa { sheet: rect.sheet.clone(), lida: ev.ctx.faixa_lida(rect) }
     }
 
+    /// A faixa lida de uma vez, se houver.
+    pub fn lida(&self) -> Option<&std::sync::Arc<crate::planilha::faixa_lida::FaixaLida>> {
+        self.lida.as_ref()
+    }
+
     /// O valor da célula (`row`, `col`) da aba do intervalo.
     pub fn valor(&self, ev: &Evaluator<'_>, row: u32, col: u32) -> std::borrow::Cow<'_, Value> {
         match &self.lida {
@@ -82,6 +87,52 @@ impl LeitorFaixa {
             None => std::borrow::Cow::Owned(ev.ctx.get_value(row, col, self.sheet.as_deref())),
         }
     }
+}
+
+/// Os pares `(faixa; critério)` de `args[inicio..]`: as faixas e os
+/// critérios já avaliados. Erro de critério ou faixa inválida vira `#VALOR!`
+/// (ou o erro do critério), como as funções faziam uma a uma.
+pub fn faixas_e_criterios(args: &[Node], inicio: usize, ev: &Evaluator<'_>)
+    -> Result<(Vec<crate::celulas::refs::Rect>, Vec<Value>), CellError> {
+    let mut rects = Vec::with_capacity((args.len() - inicio) / 2);
+    let mut crits = Vec::with_capacity(rects.capacity());
+    let mut i = inicio;
+    while i + 1 < args.len() {
+        let rect = node_rect(&args[i]).ok_or_else(|| CellError::new(ErrorCode::Value))?;
+        let crit = ev.eval(&args[i + 1]);
+        if let Value::Error(e) = crit {
+            return Err(e);
+        }
+        rects.push(rect);
+        crits.push(crit);
+        i += 2;
+    }
+    Ok((rects, crits))
+}
+
+/// O retângulo de um nó de referência ou intervalo.
+pub fn node_rect(node: &Node) -> Option<crate::celulas::refs::Rect> {
+    use crate::celulas::refs::Rect;
+    match node {
+        Node::Ref { row, col, sheet } => Some(Rect { r0: *row, c0: *col, r1: *row, c1: *col, sheet: sheet.clone() }),
+        Node::Range { r0, c0, r1, c1, sheet } => Some(Rect { r0: *r0, c0: *c0, r1: *r1, c1: *c1, sheet: sheet.clone() }),
+        _ => None,
+    }
+}
+
+/// O grupo agregado das faixas para estes critérios, quando todos são de
+/// igualdade simples e o contexto tem o agregado montado (ou consegue
+/// montar). `None`: a função varre célula por célula, como sempre. Ver
+/// [`crate::planilha::agregado`].
+pub fn grupo_agregado(ev: &Evaluator<'_>, soma: Option<&crate::celulas::refs::Rect>,
+    faixas: &[crate::celulas::refs::Rect], criterios: &[Value]) -> Option<crate::planilha::agregado::Grupo> {
+    use crate::planilha::agregado::ChaveCriterio;
+    if faixas.is_empty() || faixas.len() != criterios.len() {
+        return None;
+    }
+    let chaves = criterios.iter().map(ChaveCriterio::do_criterio).collect::<Option<Vec<_>>>()?;
+    let agregado = ev.ctx.agregado(soma, faixas)?;
+    Some(agregado.grupo(&chaves))
 }
 
 /// Transforma o critério em uma pergunta que se faz a cada valor.

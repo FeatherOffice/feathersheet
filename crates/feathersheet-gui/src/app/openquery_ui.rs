@@ -212,7 +212,7 @@ impl Estado {
         let resultado = fonte.clone();
         Self {
             fonte, fontes: HashMap::new(), origem_aba, origem,
-            nome: "Consulta".into(), destino_modo: DestinoModo::NovaAba,
+            nome: tr!("Consulta").into(), destino_modo: DestinoModo::NovaAba,
             coluna: 0, coluna_numero: "1".into(),
             filtro: String::new(),
             renomear: String::new(), quantidade: "100".into(),
@@ -258,7 +258,7 @@ impl Estado {
     /// Assim, Cancelar/erro não destroem a consulta anterior.
     fn aplicar_editor_avancado(&mut self) -> Result<(), String> {
         let texto = self.editor_avancado.as_ref()
-            .ok_or("Editor avançado não está aberto")?.text();
+            .ok_or(tr!("Editor avançado não está aberto"))?.text();
         let passos = json_passos::ler_codigo_js(&texto)?;
         let tabela = executar_query_limitado(
             self.fonte.clone(), &passos, &self.fontes, MAX_CELULAS_SAIDA,
@@ -344,7 +344,7 @@ impl Estado {
         let total = self.resultado.cabecalho.len();
         if col >= total && !matches!(tipo, "indice" | "limite" | "distintas" |
             "promover" | "rebaixar" | "acrescentar") {
-            self.erro = "Selecione uma coluna na prévia".into();
+            self.erro = tr!("Selecione uma coluna na prévia").into();
             return;
         }
         let passo = match tipo {
@@ -355,7 +355,7 @@ impl Estado {
             "numero" => Passo::Tipar { col, para: "numero".into() },
             "renomear" => {
                 if self.renomear.trim().is_empty() {
-                    self.erro = "Informe o novo nome da coluna".into();
+                    self.erro = tr!("Informe o novo nome da coluna").into();
                     return;
                 }
                 Passo::Renomear { col, nome: self.renomear.trim().into() }
@@ -366,11 +366,11 @@ impl Estado {
             "distintas" => Passo::Distintas { cols: None },
             "limite" => {
                 let Ok(n) = self.quantidade.trim().parse::<f64>() else {
-                    self.erro = "Quantidade de linhas inválida".into();
+                    self.erro = tr!("Quantidade de linhas inválida").into();
                     return;
                 };
                 if !n.is_finite() || n < 0.0 {
-                    self.erro = "Informe um limite não negativo e finito".into();
+                    self.erro = tr!("Informe um limite não negativo e finito").into();
                     return;
                 }
                 Passo::Limite { quantas: n }
@@ -381,14 +381,14 @@ impl Estado {
             "remover_erros" => Passo::RemoverErros { col },
             "dividir" => {
                 if self.separador.is_empty() {
-                    self.erro = "Informe um separador antes de dividir".into();
+                    self.erro = tr!("Informe um separador antes de dividir").into();
                     return;
                 }
                 Passo::Dividir { col, separador: self.separador.clone() }
             }
             "mesclar" => {
                 if col + 1 >= total {
-                    self.erro = "Mesclar exige uma coluna à direita da selecionada".into();
+                    self.erro = tr!("Mesclar exige uma coluna à direita da selecionada").into();
                     return;
                 }
                 Passo::Mesclar {
@@ -408,12 +408,12 @@ impl Estado {
             },
             "juntar" | "acrescentar" => {
                 let Some((nome, outra)) = self.fontes.iter().next() else {
-                    self.erro = "Selecione uma fonte adicional na lateral antes de combinar".into();
+                    self.erro = tr!("Selecione uma fonte adicional na lateral antes de combinar").into();
                     return;
                 };
                 if tipo == "juntar" {
                     if col >= outra.cabecalho.len() {
-                        self.erro = "A segunda fonte não tem a coluna-chave escolhida".into();
+                        self.erro = tr!("A segunda fonte não tem a coluna-chave escolhida").into();
                         return;
                     }
                     Passo::Juntar {
@@ -472,7 +472,7 @@ impl App {
                 self.openquery = Some(editor);
                 self.menu_aberto = false;
                 self.contexto = None;
-                self.status = "OpenQuery: escolha um arquivo, uma URL ou uma tabela existente".into();
+                self.status = tr!("OpenQuery: escolha um arquivo, uma URL ou uma tabela existente").into();
             }
             Evento::Fechar => self.openquery = None,
             Evento::Nome(v) => if let Some(e) = &mut self.openquery { e.nome = v; },
@@ -520,13 +520,13 @@ impl App {
                                 e.mostrar_manual = false;
                                 e.assistente = None;
                                 e.registrar_passos();
-                                self.status = format!("OpenQuery: tabela '{nome}' carregada");
+                                self.status = trf!("OpenQuery: tabela '{nome}' carregada");
                             },
                             Err(erro) => if let Some(e) = &mut self.openquery { e.erro = erro; }
                         }
                     }
                 } else if let Some(e) = &mut self.openquery {
-                    e.erro = format!("A tabela '{nome}' não existe mais nesta pasta");
+                    e.erro = trf!("A tabela '{nome}' não existe mais nesta pasta");
                 }
             }
             Evento::FonteTabela(indice, nome) => {
@@ -535,9 +535,9 @@ impl App {
                 if let Some((i, _, area)) = encontrada {
                     match ler_tabela(&self.workbook, i, area) {
                         Ok(fonte) => if let Some(e) = &mut self.openquery {
-                            let chave = format!("Tabela: {nome}");
+                            let chave = trf!("Tabela: {nome}");
                             if !e.fontes.contains_key(&chave) && e.fontes.len() >= 4 {
-                                e.erro = "Limite de quatro fontes adicionais".into();
+                                e.erro = tr!("Limite de quatro fontes adicionais").into();
                             } else {
                                 e.fontes.insert(chave, fonte);
                                 e.mostrar_tabelas = false;
@@ -553,7 +553,7 @@ impl App {
                 if !matches!(reqwest::Url::parse(e.url_web.trim()), Ok(ref url)
                     if matches!(url.scheme(), "http" | "https"))
                 {
-                    e.erro = "Informe uma URL http:// ou https:// válida".into();
+                    e.erro = tr!("Informe uma URL http:// ou https:// válida").into();
                     return Task::none();
                 }
                 let url = e.url_web.clone();
@@ -567,10 +567,10 @@ impl App {
                     .zip(reqwest::Url::parse(url.trim()).ok())
                     .is_some_and(|(antiga, nova)| antiga == nova);
                 e.importacao_preservar = mesma_url && !e.fonte.cabecalho.is_empty();
-                self.status = "OpenQuery: baixando dados Web em tarefa separada".into();
+                self.status = tr!("OpenQuery: baixando dados Web em tarefa separada").into();
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || importador::ler_web(&url))
-                        .await.unwrap_or_else(|erro| Err(format!("Falha no download Web: {erro}")))
+                        .await.unwrap_or_else(|erro| Err(trf!("Falha no download Web: {erro}")))
                 }, move |resultado| Msg::OpenQuery(Evento::TabelasWebLidas(ticket, resultado)));
             },
             Evento::TabelasWebLidas(ticket, resultado) => {
@@ -591,14 +591,14 @@ impl App {
                             e.indice_tabela_web = 0;
                             e.mostrar_web = true;
                             e.erro.clear();
-                            self.status = format!(
+                            self.status = trf!(
                                 "OpenQuery: {} tabelas encontradas; selecione qual importar",
                                 e.tabelas_web.len(),
                             );
                         }
                     }
                     Ok(_) => return self.evento_openquery(Evento::ArquivoLido(
-                        ticket, Err("A página não contém tabelas para importar".into()),
+                        ticket, Err(tr!("A página não contém tabelas para importar").into()),
                     )),
                 }
             },
@@ -612,7 +612,7 @@ impl App {
                     return Task::none();
                 };
                 if selecionada.linhas.is_empty() {
-                    e.erro = "A tabela HTML selecionada não contém registros".into();
+                    e.erro = tr!("A tabela HTML selecionada não contém registros").into();
                     return Task::none();
                 }
                 let indice = e.indice_tabela_web;
@@ -758,14 +758,14 @@ impl App {
                 }
                 if origem.is_empty() {
                     if let Some(e) = &mut self.openquery {
-                        e.erro = "Selecione primeiro uma fonte de dados".into();
+                        e.erro = tr!("Selecione primeiro uma fonte de dados").into();
                     }
                     return Task::none();
                 }
                 // Tabela estruturada interna: relê apenas o intervalo associado.
                 let Some(indice) = self.workbook.indice_por_nome(&origem) else {
                     if let Some(e) = &mut self.openquery {
-                        e.erro = "A aba da tabela de origem não existe mais".into();
+                        e.erro = tr!("A aba da tabela de origem não existe mais").into();
                     }
                     return Task::none();
                 };
@@ -798,7 +798,7 @@ impl App {
                         let linhas = fonte.linhas.len();
                         let colunas = fonte.cabecalho.len();
                         e.fonte = fonte;
-                        e.origem_aba = "Entrada manual".into();
+                        e.origem_aba = tr!("Entrada manual").into();
                         e.origem = Rect::new(0, 0, linhas as u32, colunas.saturating_sub(1) as u32);
                         e.edicao = None;
                         e.assistente = None;
@@ -806,7 +806,7 @@ impl App {
                         e.fontes.clear();
                         e.registrar_passos();
                         e.mostrar_manual = false;
-                        self.status = format!("OpenQuery: tabela manual importada ({linhas} linhas)");
+                        self.status = trf!("OpenQuery: tabela manual importada ({linhas} linhas)");
                     }
                     Err(erro) => e.erro = erro,
                 }
@@ -819,7 +819,7 @@ impl App {
                 editor.importacao_pendente = Some(ticket);
                 return Task::perform(async {
                     rfd::AsyncFileDialog::new()
-                        .add_filter("Fontes OpenQuery", &["csv","tsv","txt","json","xlsx"])
+                        .add_filter(tr!("Fontes OpenQuery"), &["csv","tsv","txt","json","xlsx"])
                         .pick_file().await.map(|arquivo| arquivo.path().to_path_buf())
                 }, move |arquivo| Msg::OpenQuery(Evento::ArquivoEscolhido(ticket, arquivo)));
             }
@@ -831,10 +831,10 @@ impl App {
                     if let Some(e) = &mut self.openquery { e.importacao_pendente = None; }
                     return Task::none();
                 };
-                self.status = "OpenQuery: importando fonte em tarefa separada".into();
+                self.status = tr!("OpenQuery: importando fonte em tarefa separada").into();
                 return Task::perform(async move {
                     tokio::task::spawn_blocking(move || importador::ler(&caminho))
-                        .await.unwrap_or_else(|e| Err(format!("Falha no importador: {e}")))
+                        .await.unwrap_or_else(|e| Err(trf!("Falha no importador: {e}")))
                 }, move |resultado| Msg::OpenQuery(Evento::ArquivoLido(ticket, resultado)));
             }
             Evento::ArquivoLido(ticket, resultado) => {
@@ -844,18 +844,18 @@ impl App {
                 match resultado {
                     Err(erro) => {
                         editor.erro = erro.clone();
-                        self.status = format!("OpenQuery: {erro}");
+                        self.status = trf!("OpenQuery: {erro}");
                     }
                     Ok((fonte, origem)) => {
                         let preservar = editor.importacao_preservar;
                         editor.importacao_preservar = false;
                         if preservar && !(editor.origem_aba.starts_with("Arquivo: ")
                             || editor.origem_aba.starts_with("Web: ")) {
-                            editor.erro = "Atualização da fonte exige um arquivo ou uma URL previamente importada".into();
+                            editor.erro = tr!("Atualização da fonte exige um arquivo ou uma URL previamente importada").into();
                             return Task::none();
                         }
                         if preservar && fonte.cabecalho != editor.fonte.cabecalho {
-                            editor.erro = "Os cabeçalhos do arquivo mudaram. Para não invalidar as etapas, faça uma nova importação.".into();
+                            editor.erro = tr!("Os cabeçalhos do arquivo mudaram. Para não invalidar as etapas, faça uma nova importação.").into();
                             return Task::none();
                         }
                         let linhas = fonte.linhas.len();
@@ -878,9 +878,9 @@ impl App {
                         }
                         editor.registrar_passos();
                         self.status = if preservar {
-                            format!("OpenQuery: reimportadas {linhas} linhas; salve para atualizar o resultado")
+                            trf!("OpenQuery: reimportadas {linhas} linhas; salve para atualizar o resultado")
                         } else {
-                            format!("OpenQuery: {origem} carregado ({linhas} linhas)")
+                            trf!("OpenQuery: {origem} carregado ({linhas} linhas)")
                         };
                     }
                 }
@@ -912,7 +912,7 @@ impl App {
                                 }
                             }
                             self.alterado = true;
-                            self.status = "Consulta desvinculada; dados da aba preservados".into();
+                            self.status = tr!("Consulta desvinculada; dados da aba preservados").into();
                         }
                         Err(erro) => if let Some(e) = &mut self.openquery {
                             e.erro = erro;
@@ -948,7 +948,7 @@ impl App {
             Evento::Carregar if self.openquery.as_ref()
                 .is_some_and(|e| e.fonte.cabecalho.is_empty()) => {
                 if let Some(e) = &mut self.openquery {
-                    e.erro = "Escolha uma fonte de dados antes de salvar a consulta".into();
+                    e.erro = tr!("Escolha uma fonte de dados antes de salvar a consulta").into();
                 }
             },
             Evento::Carregar => if self.openquery.as_ref()
@@ -1021,27 +1021,27 @@ fn estilo_janela_oq(_tema: &iced::Theme) -> container::Style {
 
 fn passo_rotulo(p: &Passo) -> &'static str {
     match p {
-        Passo::Filtrar { .. } => "Filtrar",
-        Passo::Ordenar { .. } => "Ordenar",
-        Passo::Colunas { .. } => "Selecionar colunas",
-        Passo::Renomear { .. } => "Renomear",
-        Passo::Tipar { .. } => "Alterar tipo",
-        Passo::Substituir { .. } => "Substituir",
-        Passo::SubstituirErros { .. } => "Substituir erros",
-        Passo::RemoverErros { .. } => "Remover erros",
-        Passo::Mesclar { .. } => "Mesclar colunas",
-        Passo::Derivar { .. } => "Data",
-        Passo::Dividir { .. } => "Dividir em linhas",
-        Passo::Distintas { .. } => "Valores distintos",
-        Passo::Agrupar { .. } => "Agrupar",
-        Passo::Pivotar { .. } => "Pivotar",
-        Passo::Juntar { .. } => "Juntar",
-        Passo::Acrescentar { .. } => "Acrescentar",
-        Passo::Despivotar { .. } => "Despivotar",
-        Passo::PromoverCabecalho => "Promover cabeçalho",
-        Passo::RebaixarCabecalho => "Rebaixar cabeçalho",
-        Passo::Indice { .. } => "Adicionar índice",
-        Passo::Condicional { .. } => "Coluna condicional",
-        Passo::Limite { .. } => "Manter linhas",
+        Passo::Filtrar { .. } => tr!("Filtrar"),
+        Passo::Ordenar { .. } => tr!("Ordenar"),
+        Passo::Colunas { .. } => tr!("Selecionar colunas"),
+        Passo::Renomear { .. } => tr!("Renomear"),
+        Passo::Tipar { .. } => tr!("Alterar tipo"),
+        Passo::Substituir { .. } => tr!("Substituir"),
+        Passo::SubstituirErros { .. } => tr!("Substituir erros"),
+        Passo::RemoverErros { .. } => tr!("Remover erros"),
+        Passo::Mesclar { .. } => tr!("Mesclar colunas"),
+        Passo::Derivar { .. } => tr!("Data"),
+        Passo::Dividir { .. } => tr!("Dividir em linhas"),
+        Passo::Distintas { .. } => tr!("Valores distintos"),
+        Passo::Agrupar { .. } => tr!("Agrupar"),
+        Passo::Pivotar { .. } => tr!("Pivotar"),
+        Passo::Juntar { .. } => tr!("Juntar"),
+        Passo::Acrescentar { .. } => tr!("Acrescentar"),
+        Passo::Despivotar { .. } => tr!("Despivotar"),
+        Passo::PromoverCabecalho => tr!("Promover cabeçalho"),
+        Passo::RebaixarCabecalho => tr!("Rebaixar cabeçalho"),
+        Passo::Indice { .. } => tr!("Adicionar índice"),
+        Passo::Condicional { .. } => tr!("Coluna condicional"),
+        Passo::Limite { .. } => tr!("Manter linhas"),
     }
 }

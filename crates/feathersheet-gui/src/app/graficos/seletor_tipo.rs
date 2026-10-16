@@ -197,7 +197,7 @@ fn estilo_opcao(
 /// e categorias compactas. Apenas tipos com renderizador recebem evento Tipo.
 pub(super) fn painel(tipo_ativo: TipoUi) -> Element<'static, Msg> {
     let cabecalho = row![
-        text("Tipo de gráfico").size(13),
+        text(tr!("Tipo de gráfico")).size(13),
         iced::widget::Space::with_width(Length::Fill),
         iced::widget::tooltip(
             button(
@@ -210,7 +210,7 @@ pub(super) fn painel(tipo_ativo: TipoUi) -> Element<'static, Msg> {
             .padding(0)
             .style(feather_ui::tema::estilo_botao_pequeno(false))
             .on_press(Msg::Grafico(Evento::FecharSeletor)),
-            container(text("Fechar").size(11))
+            container(text(tr!("Fechar")).size(11))
                 .padding([4, 8])
                 .style(feather_ui::tema::estilo_dica),
             iced::widget::tooltip::Position::Bottom,
@@ -222,7 +222,7 @@ pub(super) fn painel(tipo_ativo: TipoUi) -> Element<'static, Msg> {
     // o tipo para impedir inferência ambígua do Iced 0.13.
     let mut grupos: iced::widget::Column<'static, Msg> = column![].spacing(8);
     for &(categoria, opcoes) in CATEGORIAS {
-        grupos = grupos.push(text(categoria).size(11));
+        grupos = grupos.push(text(tr!(categoria)).size(11));
         for linha in opcoes.chunks(COLUNAS) {
             let mut cartoes = row![].spacing(ESPACO_CARTOES);
             for op in linha {
@@ -241,7 +241,7 @@ pub(super) fn painel(tipo_ativo: TipoUi) -> Element<'static, Msg> {
                     .height(Length::Fixed(ALTURA_MINIATURA));
                 let item: Element<'static, Msg> = row![
                     imagem,
-                    text(op.rotulo).size(11).width(Length::Fill),
+                    text(tr!(op.rotulo)).size(11).width(Length::Fill),
                 ]
                 .spacing(5)
                 .align_y(Alignment::Center)
@@ -260,7 +260,7 @@ pub(super) fn painel(tipo_ativo: TipoUi) -> Element<'static, Msg> {
         }
     }
 
-    let rodape = text("Opções em cinza estarão disponíveis em breve").size(10);
+    let rodape = text(tr!("Opções em cinza estarão disponíveis em breve")).size(10);
     container(
         column![
             cabecalho,

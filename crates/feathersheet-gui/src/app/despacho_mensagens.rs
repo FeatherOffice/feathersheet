@@ -16,7 +16,7 @@ impl App {
                 | Msg::ExportarJson | Msg::DestinoJson(_)
                 | Msg::ExportarDelimitado(_) | Msg::DestinoDelimitado(..))
         {
-            self.status="Aguarde a conversão terminar ou cancele antes de salvar".into();
+            self.status=tr!("Aguarde a conversão terminar ou cancele antes de salvar").into();
             return Task::none();
         }
         match msg {
@@ -135,7 +135,7 @@ impl App {
                     {
                         Ok(()) => {
                             self.alterado = true;
-                            self.status = format!("Tabela {} criada em {}:{}",
+                            self.status = trf!("Tabela {} criada em {}:{}",
                                 self.tabela_nome, cell_name(area.r0,area.c0),
                                 cell_name(area.r1,area.c1));
                             self.tabela_area = None;
@@ -164,15 +164,15 @@ impl App {
             },
             Msg::ImagemEfeitosAbrir => {
                 let resultado = self.workbook.aba(self.folha)
-                    .ok_or_else(|| "A aba selecionada não existe.".to_string())
+                    .ok_or_else(|| tr!("A aba selecionada não existe.").to_string())
                     .and_then(|aba| imagens_importadas::ultima_imagem(&aba.sheet))
                     .and_then(|ultima| ultima
-                        .ok_or_else(|| "Insira uma imagem PNG/JPEG nesta aba antes de editar.".to_string()));
+                        .ok_or_else(|| tr!("Insira uma imagem PNG/JPEG nesta aba antes de editar.").to_string()));
                 match resultado {
                     Ok((id, dados, nome)) => match self.efeitos_imagem.carregar(&dados, &nome) {
                         Ok(()) => {
                             self.efeitos_imagem.imagem_id = Some(id);
-                            self.status = format!("Editando efeitos de imagem: {nome}");
+                            self.status = trf!("Editando efeitos de imagem: {nome}");
                         }
                         Err(erro) => self.status = erro,
                     },
@@ -185,25 +185,25 @@ impl App {
                 self.efeitos_imagem.aberto = false;
                 Task::perform(async {
                     let Some(arquivo) = rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao())
-                        .add_filter("PNG e JPEG", &["png", "jpg", "jpeg"])
+                        .add_filter(tr!("PNG e JPEG"), &["png", "jpg", "jpeg"])
                         .pick_file().await else { return Ok(None); };
                     let caminho = arquivo.path().to_path_buf();
                     // I/O pesado fora do loop Iced; limites antes da leitura.
                     match tokio::task::spawn_blocking(move || {
                         let nome = caminho.file_name().and_then(|s| s.to_str())
-                            .unwrap_or("Imagem").to_owned();
+                            .unwrap_or(tr!("Imagem")).to_owned();
                         let tamanho = std::fs::metadata(&caminho)
-                            .map_err(|e| format!("Não consegui acessar a imagem: {e}"))?.len();
+                            .map_err(|e| trf!("Não consegui acessar a imagem: {e}"))?.len();
                         if tamanho == 0 || tamanho > imagens_importadas::MAX_BYTES as u64 {
-                            return Err("Escolha um PNG/JPEG de até 16 MiB.".to_string());
+                            return Err(tr!("Escolha um PNG/JPEG de até 16 MiB.").to_string());
                         }
                         let bytes = std::fs::read(&caminho)
-                            .map_err(|e| format!("Falha ao ler imagem: {e}"))?;
+                            .map_err(|e| trf!("Falha ao ler imagem: {e}"))?;
                         Ok::<_, String>((bytes, nome))
                     }).await {
                         Ok(Ok(imagem)) => Ok(Some(imagem)),
                         Ok(Err(e)) => Err(e),
-                        Err(e) => Err(format!("Falha ao carregar imagem: {e}")),
+                        Err(e) => Err(trf!("Falha ao carregar imagem: {e}")),
                     }
                 }, Msg::ImagemLaboratorioCarregada)
             }
@@ -213,7 +213,7 @@ impl App {
                         self.confirmar();
                         let (linha, coluna) = (self.linha, self.coluna);
                         let resultado = self.workbook.aba_mut(self.folha)
-                            .ok_or_else(|| "A aba selecionada não existe.".to_string())
+                            .ok_or_else(|| tr!("A aba selecionada não existe.").to_string())
                             .and_then(|aba| imagens_importadas::importar(
                                 &mut aba.sheet, &bytes, &nome, linha, coluna,
                             ));
@@ -229,12 +229,12 @@ impl App {
                                 self.imagens_importadas.handles.borrow_mut().insert(
                                     id, iced::widget::image::Handle::from_bytes(bytes),
                                 );
-                                self.status = format!("Imagem inserida na planilha: {nome}. Arraste para mover ou use a alça ↘ para dimensionar.");
+                                self.status = trf!("Imagem inserida na planilha: {nome}. Arraste para mover ou use a alça ↘ para dimensionar.");
                             }
                             Err(e) => self.status = e,
                         }
                     },
-                    Ok(None) => self.status = "Seleção de imagem cancelada.".into(),
+                    Ok(None) => self.status = tr!("Seleção de imagem cancelada.").into(),
                     Err(e) => self.status = e,
                 }
                 Task::none()
@@ -246,9 +246,9 @@ impl App {
                     .and_then(|_| self.efeitos_imagem.png_exportacao())
                     .and_then(|png| {
                         let id = self.efeitos_imagem.imagem_id.as_deref()
-                            .ok_or_else(|| "Nenhuma imagem da planilha selecionada.".to_string())?;
+                            .ok_or_else(|| tr!("Nenhuma imagem da planilha selecionada.").to_string())?;
                         let aba = self.workbook.aba_mut(self.folha)
-                            .ok_or_else(|| "A aba selecionada não existe mais.".to_string())?;
+                            .ok_or_else(|| tr!("A aba selecionada não existe mais.").to_string())?;
                         imagens_importadas::substituir_png(&mut aba.sheet, id, &png)?;
                         self.imagens_importadas.handles.borrow_mut()
                             .insert(id.to_owned(), iced::widget::image::Handle::from_bytes(png));
@@ -258,7 +258,7 @@ impl App {
                     Ok(()) => {
                         self.invalidar_cache_objetos();
                         self.alterado = true;
-                        self.status = format!("Efeito aplicado à imagem na planilha: {chave}");
+                        self.status = trf!("Efeito aplicado à imagem na planilha: {chave}");
                     }
                     Err(erro) => self.status = erro,
                 }
@@ -266,12 +266,12 @@ impl App {
             }
             Msg::ImagemLaboratorioSalvar => {
                 if self.efeitos_imagem.png_exportacao().is_err() {
-                    self.status = "Abra uma imagem antes de exportar.".into();
+                    self.status = tr!("Abra uma imagem antes de exportar.").into();
                     return Task::none();
                 }
                 Task::perform(async {
                     rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao())
-                        .add_filter("Imagem PNG", &["png"])
+                        .add_filter(tr!("Imagem PNG"), &["png"])
                         .set_file_name("FeatherSheet-efeito.png")
                         .save_file().await.map(|f| f.path().to_path_buf())
                 }, Msg::ImagemLaboratorioDestino)
@@ -281,8 +281,8 @@ impl App {
                     caminho.set_extension("png");
                     self.status = match self.efeitos_imagem.png_exportacao()
                         .and_then(|bytes| feathersheet_io::arquivo::gravar_atomico(&caminho, &bytes)
-                            .map_err(|e| format!("Falha ao gravar PNG: {e}"))) {
-                        Ok(()) => format!("Imagem PNG exportada: {}", caminho.display()),
+                            .map_err(|e| trf!("Falha ao gravar PNG: {e}"))) {
+                        Ok(()) => trf!("Imagem PNG exportada: {}", caminho.display()),
                         Err(e) => e,
                     };
                 }
@@ -343,7 +343,7 @@ impl App {
             Msg::MacroCatalogoLido(resultado) => {
                 match resultado {
                     Ok(Some(texto)) => self.mesclar_catalogo_macro(&texto),
-                    Err(e) => self.macro_saida = format!("Erro de importação: {e}"),
+                    Err(e) => self.macro_saida = trf!("Erro de importação: {e}"),
                     _ => {}
                 }
                 Task::none()
@@ -353,8 +353,8 @@ impl App {
                 if let Some(mut path) = path {
                     if path.extension().is_none() { path.set_extension("json"); }
                     self.macro_saida = match self.macro_catalogo.salvar_em(&path) {
-                        Ok(()) => format!("Catálogo exportado: {}", path.display()),
-                        Err(e) => format!("Erro ao exportar catálogo: {e}"),
+                        Ok(()) => trf!("Catálogo exportado: {}", path.display()),
+                        Err(e) => trf!("Erro ao exportar catálogo: {e}"),
                     };
                 }
                 Task::none()
@@ -366,7 +366,7 @@ impl App {
                     Ok(Some(codigo)) => {
                         self.macro_codigo = iced::widget::text_editor::Content::with_text(&codigo);
                         self.macro_visual.documento = format!("modulo:{}", self.macro_nome);
-                        self.macro_saida = "Macro carregada. Clique em Executar para rodar.".into();
+                        self.macro_saida = tr!("Macro carregada. Clique em Executar para rodar.").into();
                     },
                     Err(e) => self.macro_saida = e,
                     _ => {},
@@ -378,8 +378,8 @@ impl App {
                 if let Some(mut path) = path {
                     if path.extension().is_none() { path.set_extension("js"); }
                     self.macro_saida = match feathersheet_io::arquivo::gravar_atomico(&path,self.macro_codigo.text().as_bytes()) {
-                        Ok(()) => format!("Macro salva em {}",path.display()),
-                        Err(e) => format!("Erro ao salvar macro: {e}"),
+                        Ok(()) => trf!("Macro salva em {}",path.display()),
+                        Err(e) => trf!("Erro ao salvar macro: {e}"),
                     };
                 }
                 Task::none()
@@ -461,7 +461,7 @@ impl App {
                 self.lista_aberta = false;
                 self.lista_coluna = None;
                 self.lista_pagina = 0;
-                self.status = format!("{} atualizado", cell_name(self.linha, self.coluna));
+                self.status = trf!("{} atualizado", cell_name(self.linha, self.coluna));
                 Task::none()
             }
             Msg::ValidacaoPermitir(valor) => {
@@ -491,7 +491,7 @@ impl App {
                 };
                 let editando = self.validacao_editando.filter(|&i| i < regras.len());
                 if remover && editando.is_none() {
-                    self.validacao_erro = Some("Nenhuma regra existente nesta seleção".into());
+                    self.validacao_erro = Some(tr!("Nenhuma regra existente nesta seleção").into());
                     return Task::none();
                 }
                 let destino = editando.map(|i| regras[i].ranges.clone())
@@ -517,7 +517,7 @@ impl App {
                 let json = match serde_json::to_string(&regras) {
                     Ok(json) => json,
                     Err(e) => {
-                        self.validacao_erro = Some(format!("Não foi possível salvar: {e}"));
+                        self.validacao_erro = Some(trf!("Não foi possível salvar: {e}"));
                         return Task::none();
                     }
                 };
@@ -528,8 +528,8 @@ impl App {
                 self.validacao_editando = None;
                 self.validacao_erro = None;
                 self.lista_aberta = false;
-                self.status = if remover { "Validação removida" }
-                    else { "Validação salva" }.into();
+                self.status = if remover { tr!("Validação removida") }
+                    else { tr!("Validação salva") }.into();
                 Task::none()
             }
             Msg::Busca => self.abrir_busca(self.busca.substituir),
@@ -704,28 +704,28 @@ impl App {
             Msg::Abrir => {
                 self.menu_aberto = false;
                 if self.carregando {
-                    self.status = "Uma planilha já está sendo importada. Aguarde concluir ou cancelar.".into();
+                    self.status = tr!("Uma planilha já está sendo importada. Aguarde concluir ou cancelar.").into();
                     Task::none()
                 } else {
-                    self.status = "Selecione uma planilha para abrir…".into();
+                    self.status = tr!("Selecione uma planilha para abrir…").into();
                     self.proteger(Pendente::Abrir)
                 }
             },
             Msg::BackupCriar => self.criar_backup(),
             Msg::BackupCriado(resultado) => {
                 self.status = match resultado {
-                    Ok(path) => format!("Cópia de segurança criada: {}", path.display()),
-                    Err(e) => format!("Não foi possível criar o backup: {e}"),
+                    Ok(path) => trf!("Cópia de segurança criada: {}", path.display()),
+                    Err(e) => trf!("Não foi possível criar o backup: {e}"),
                 };
                 Task::none()
             },
             Msg::RecuperarTemporario => {
                 self.menu_aberto = false;
                 if !Self::existem_temporarios() {
-                    self.status = "Nenhuma cópia temporária encontrada em Documentos/FeatherSheet/Temporarios.".into();
+                    self.status = tr!("Nenhuma cópia temporária encontrada em Documentos/FeatherSheet/Temporarios.").into();
                     Task::none()
                 } else if self.carregando {
-                    self.status = "Aguarde a planilha em carregamento.".into();
+                    self.status = tr!("Aguarde a planilha em carregamento.").into();
                     Task::none()
                 } else {
                     self.proteger(Pendente::RecuperarTemporario)
@@ -733,11 +733,11 @@ impl App {
             }
             Msg::DestinoTemporario(Some(path)) => {
                 self.carregando = true;
-                self.status = "Recuperando cópia temporária…".into();
+                self.status = tr!("Recuperando cópia temporária…").into();
                 Self::tarefa_abrir_recente(path, self.config.separador_csv())
             }
             Msg::DestinoTemporario(None) => {
-                self.status = "Recuperação cancelada; planilha preservada.".into();
+                self.status = tr!("Recuperação cancelada; planilha preservada.").into();
                 Task::none()
             }
             Msg::Aberto(resultado) => {
@@ -750,15 +750,15 @@ impl App {
                             self.instalar(pasta.caminho, workbook, folha);
                             // Tempo real de leitura (sem o diálogo) e a memória ao final, no console.
                             let memoria = Self::rss_atual_kb()
-                                .map(|kb| format!(" · {:.0} MB de RAM", kb as f64 / 1024.0))
+                                .map(|kb| trf!(" · {:.0} MB de RAM", kb as f64 / 1024.0))
                                 .unwrap_or_default();
-                            self.status = format!("{} · carregado em {:.1} s{memoria}",
+                            self.status = trf!("{} · carregado em {:.1} s{memoria}",
                                 self.status, pasta.ms as f64 / 1000.0);
                         } else {
-                            self.status = "Não foi possível receber a planilha carregada".into();
+                            self.status = tr!("Não foi possível receber a planilha carregada").into();
                         }
                     }
-                    Ok(None) => self.status = "Abertura cancelada; planilha preservada".into(),
+                    Ok(None) => self.status = tr!("Abertura cancelada; planilha preservada").into(),
                     Err(e) => self.status = e,
                 }
                 Task::none()
@@ -1114,7 +1114,7 @@ impl App {
                 ])
             }
             Msg::AceitarSugestao(i) => {
-                if self.editor_formula.aceitar_sugestao(&mut self.edicao,i) {
+                if self.editor_formula.aceitar_sugestao(&mut self.edicao,i,self.config.idioma=="en-US") {
                     Task::batch([
                         text_input::focus(text_input::Id::new("feathersheet.fx")),
                         text_input::move_cursor_to(text_input::Id::new("feathersheet.fx"),
@@ -1123,7 +1123,7 @@ impl App {
                 } else { Task::none() }
             }
             Msg::NavegarSugestao(delta) => {
-                let n=self.editor_formula.sugestoes(&self.edicao).len();
+                let n=self.editor_formula.sugestoes(&self.edicao,self.config.idioma=="en-US").len();
                 if n>0 {
                     self.editor_formula.sugestao=(self.editor_formula.sugestao as i32+delta)
                         .rem_euclid(n as i32) as usize;
@@ -1131,7 +1131,7 @@ impl App {
                 Task::none()
             }
             Msg::EnviarEditor => {
-                if !self.editor_formula.sugestoes(&self.edicao).is_empty() {
+                if !self.editor_formula.sugestoes(&self.edicao,self.config.idioma=="en-US").is_empty() {
                     // Enquanto houver autocomplete, Enter insere a sugestão.
                     self.update(Msg::AceitarSugestao(self.editor_formula.sugestao))
                 } else {
@@ -1274,7 +1274,7 @@ impl App {
             }
             Msg::ColarImagemLida(png) => match png {
                 Some(bytes) => self.update(Msg::ImagemLaboratorioCarregada(
-                    Ok(Some((bytes, "Captura de tela.png".to_string()))))),
+                    Ok(Some((bytes, tr!("Captura de tela.png").to_string()))))),
                 None => self.update(Msg::Colar(String::new())),
             },
             Msg::Pincel => { self.capturar_pincel(); Task::none() },
@@ -1332,10 +1332,10 @@ impl App {
                         mudou = mesclas::desmesclar(sheet, area.clone());
                     });
                     self.alterado |= mudou;
-                    self.status = if mudou { "Mesclagem desfeita".into() }
-                        else { "Não foi possível desmesclar a seleção".into() };
+                    self.status = if mudou { tr!("Mesclagem desfeita").into() }
+                        else { tr!("Não foi possível desmesclar a seleção").into() };
                 } else if area.area() < 2 {
-                    self.status = "Selecione duas ou mais células para mesclar".into();
+                    self.status = tr!("Selecione duas ou mais células para mesclar").into();
                 } else {
                     let mut mudou = false;
                     self.workbook.editar(self.folha, |sheet| {
@@ -1343,9 +1343,9 @@ impl App {
                     });
                     self.alterado |= mudou;
                     self.status = if mudou {
-                        format!("Células {}:{} mescladas",
+                        trf!("Células {}:{} mescladas",
                             cell_name(area.r0, area.c0), cell_name(area.r1, area.c1))
-                    } else { "Não foi possível mesclar a seleção".into() };
+                    } else { tr!("Não foi possível mesclar a seleção").into() };
                 }
                 Task::none()
             }
@@ -1361,9 +1361,9 @@ impl App {
                 };
                 self.aplicar_estilo_menu("rotation", nova);
                 self.status = if rotacao == 45 {
-                    "Orientação normal do texto".into()
+                    tr!("Orientação normal do texto").into()
                 } else {
-                    "Texto inclinado em 45°".into()
+                    tr!("Texto inclinado em 45°").into()
                 };
                 Task::none()
             }

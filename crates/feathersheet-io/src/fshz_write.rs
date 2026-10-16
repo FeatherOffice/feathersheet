@@ -161,6 +161,14 @@ pub struct AbaBruta {
     /// célula — separado das avulsas porque no TypeScript também é.
     #[serde(default)]
     pub estilos_literais: Vec<(u64, Json)>,
+    /// Estilo direto por **faixa**: `(coluna, linha inicial, linha final,
+    /// estilo)`. É como a aba viva guarda (`Sheet::styles`, Fase 2 do plano
+    /// de 400 MB) e como o arquivo grava desde 16/10/2026 (`sf` no
+    /// `AbaMeta`): a Planilha Pesada tinha 6 milhões de entradas em
+    /// `estilos_literais`, um JSON clonado por célula — era o Ctrl+S de
+    /// 12 GB.
+    #[serde(default)]
+    pub estilos_faixa: Vec<(u32, u32, u32, Json)>,
     /// `sheet.colStyles`: estilo de coluna inteira.
     ///
     /// ISTO NÃO ERA GRAVADO POR GRAVADOR NENHUM até 22/09/2026, e o efeito era
@@ -201,6 +209,9 @@ pub struct PastaBruta {
     /// Propriedades do arquivo (autor, modificadoPor, organizacao).
     #[serde(default)]
     pub pr: Option<Json>,
+    /// Catálogo de macros da pasta.
+    #[serde(default)]
+    pub mc: Option<Json>,
     pub sheets: Vec<AbaBruta>,
 }
 
@@ -283,6 +294,10 @@ struct AbaMeta<'a> {
     c: Vec<CelulaAvulsaMeta<'a>>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     st: Vec<(u64, usize)>,
+    /// Estilo direto por faixa: `[coluna, linha inicial, linha final,
+    /// índice na tabela de estilos]`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    sf: Vec<(u32, u32, u32, usize)>,
     /// Estilo de coluna inteira: `[coluna, índice na tabela de estilos]`.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     cs: Vec<(u32, usize)>,
@@ -312,6 +327,8 @@ struct LivroMeta<'a> {
     es: Option<Json>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pr: Option<Json>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    mc: Option<Json>,
     t: Vec<Json>,
     s: Vec<AbaMeta<'a>>,
 }
@@ -480,6 +497,8 @@ fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<
     avulsas.sort_by_key(|c| c.k);
     let st: Vec<(u64, usize)> =
         aba.estilos_literais.iter().map(|(k, estilo)| (*k, estilos.indexar(estilo))).collect();
+    let sf: Vec<(u32, u32, u32, usize)> =
+        aba.estilos_faixa.iter().map(|(c, r0, r1, estilo)| (*c, *r0, *r1, estilos.indexar(estilo))).collect();
     let cs: Vec<(u32, usize)> =
         aba.estilos_coluna.iter().map(|(c, estilo)| (*c, estilos.indexar(estilo))).collect();
     let rs: Vec<(u32, usize)> =
@@ -512,6 +531,7 @@ fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<
         ce: aba.ce.clone(),
         c: avulsas,
         st,
+        sf,
         cs,
         rs,
         ss,
@@ -636,6 +656,7 @@ fn montar_partes(pasta: &PastaBruta) -> Result<(LivroMeta<'_>, Vec<Vec<u8>>), St
         names: pasta.names.clone(),
         es: pasta.es.clone(),
         pr: pasta.pr.clone(),
+        mc: pasta.mc.clone(),
         t: estilos.valores,
         s: abas_meta,
     };
@@ -738,6 +759,7 @@ mod testes {
             names: None,
             es: None,
             pr: None,
+            mc: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -764,6 +786,7 @@ mod testes {
                 ce: None,
                 avulsas: vec![CelulaAvulsaBruta { k: 0, v: "10".into(), estilo: None }],
                 estilos_literais: vec![],
+                estilos_faixa: vec![],
                 estilos_coluna: vec![],
                 estilos_linha: vec![],
                 estilo_aba: None,
@@ -798,6 +821,7 @@ mod testes {
             names: None,
             es: None,
             pr: None,
+            mc: None,
             sheets: vec![AbaBruta {
                 n: "Dados".into(),
                 tc: None,
@@ -824,6 +848,7 @@ mod testes {
                 ce: None,
                 avulsas: vec![],
                 estilos_literais: vec![],
+                estilos_faixa: vec![],
                 estilos_coluna: vec![],
                 estilos_linha: vec![],
                 estilo_aba: None,
@@ -867,6 +892,7 @@ mod testes {
             names: None,
             es: None,
             pr: None,
+            mc: None,
             sheets: vec![AbaBruta {
                 n: "Dados".into(),
                 tc: None,
@@ -893,6 +919,7 @@ mod testes {
                 ce: None,
                 avulsas: vec![],
                 estilos_literais: vec![],
+                estilos_faixa: vec![],
                 estilos_coluna: vec![],
                 estilos_linha: vec![],
                 estilo_aba: None,
@@ -921,6 +948,7 @@ mod testes {
             names: None,
             es: None,
             pr: None,
+            mc: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -950,6 +978,7 @@ mod testes {
                     CelulaAvulsaBruta { k: 1, v: "b".into(), estilo: Some(estilo.clone()) },
                 ],
                 estilos_literais: vec![],
+                estilos_faixa: vec![],
                 estilos_coluna: vec![],
                 estilos_linha: vec![],
                 estilo_aba: None,
@@ -986,6 +1015,7 @@ mod testes {
             names: None,
             es: None,
             pr: None,
+            mc: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -1012,6 +1042,7 @@ mod testes {
                 ce: None,
                 avulsas: vec![],
                 estilos_literais: vec![],
+                estilos_faixa: vec![],
                 estilos_coluna: vec![(7, moeda.clone()), (2, negrito.clone())],
                 estilos_linha: vec![(4, negrito.clone())],
                 estilo_aba: Some(centro.clone()),
@@ -1056,6 +1087,7 @@ mod testes {
             names: None,
             es: None,
             pr: None,
+            mc: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -1082,6 +1114,7 @@ mod testes {
                 ce: None,
                 avulsas: vec![],
                 estilos_literais: vec![],
+                estilos_faixa: vec![],
                 estilos_coluna: vec![],
                 estilos_linha: vec![],
                 estilo_aba: None,

@@ -21,16 +21,40 @@ pub struct Versao {
 /// Da mais nova para a mais antiga. A primeira é a desta compilação.
 pub const VERSOES: &[Versao] = &[
     Versao {
+        numero: "0.0.5",
+        data: "16/10/2026",
+        resumo: "Interface em inglês, Layout da Página e .xlsx muito mais rápido",
+        ilustracao: Ilustracao::Planilha,
+        destaques: &[
+            ("world", "Interface em inglês", "Menus, faixa, janelas, Ajuda e fórmulas mudam de idioma em Configurações."),
+            ("printer", "Aba Layout da Página", "Margens, orientação, tamanho, área de impressão, quebras e escala na faixa."),
+            ("palette", "Formatar células refeito", "Seis abas: número, alinhamento, fonte, borda, preenchimento e proteção."),
+            ("bolt", "Abre .xlsx 3,6× mais rápido", "A Planilha Pesada (7 milhões de fórmulas) fica pronta em 9,7 s, antes 34 s."),
+            ("table", "Somar e contar por cor", "SOMAR.POR.COR e CONT.SE.COR pela cor do fundo ou da fonte da célula."),
+            ("chart-bar", "Dica do mouse por tipo", "Gantt mostra início, término e duração; velas, os quatro preços; cascata, o acumulado."),
+        ],
+        tambem: &[
+            "Funções sem nome em português ganharam um (MULT, TETO e outras); o autocompletar segue o idioma.",
+            "Seus dados (nome, iniciais e organização) em formulário alinhado.",
+            "Delete apaga a forma ou o gráfico selecionado; a barra de fórmulas não fica com o foco.",
+            "Barra de progresso por etapas ao abrir arquivos grandes.",
+            "Menos memória ao abrir pastas grandes.",
+            "O monitor (F12) e a barra de baixo também em inglês.",
+        ],
+    },
+    Versao {
         numero: "0.0.4",
         data: "16/10/2026",
-        resumo: "Novidades ao atualizar",
+        resumo: "Macros dentro do arquivo e novidades ao atualizar",
         ilustracao: Ilustracao::Atualizacao,
         destaques: &[
             ("sparkles", "O que há de novo ao atualizar", "Quem vem de uma versão anterior vê esta janela na primeira abertura."),
             ("rocket", "Primeiros passos na instalação", "O assistente abre sozinho só numa instalação nova; depois, no menu Ajuda."),
+            ("code", "Macros dentro do arquivo", "Cada planilha guarda as suas macros no .fshz; uma nova começa sem nenhuma."),
         ],
         tambem: &[
             "Na 0.0.3, quem atualizava da 0.0.2 recebia os Primeiros passos em vez das novidades.",
+            "Atribuir macro e o editor (Alt+F11) não mostram mais macros de outros arquivos.",
         ],
     },
     Versao {
@@ -117,9 +141,9 @@ impl App {
     pub(super) fn view_novidades(&self) -> Element<'_, Msg> {
         use iced::widget::column;
         let atual = self.novidades_versao.min(VERSOES.len() - 1);
-        let mut nav = column![consulta::rotulo_grupo("Versões")].spacing(2);
+        let mut nav = column![consulta::rotulo_grupo(tr!("Versões"))].spacing(2);
         for (i, v) in VERSOES.iter().enumerate() {
-            nav = nav.push(consulta::item_nav(format!("Versão {}", v.numero),
+            nav = nav.push(consulta::item_nav(trf!("Versão {}", v.numero),
                 if i == 0 { "sparkles" } else { "history" }, i == atual,
                 Some(Msg::Novidades(Evento::Versao(i)))));
         }
@@ -129,24 +153,24 @@ impl App {
         for item in v.tambem {
             tambem = tambem.push(row![
                 feather_ui::icones::icone("check", 15.),
-                text(*item).size(13).line_height(1.4),
+                text(tr!(*item)).size(13).line_height(1.4),
             ].spacing(9).align_y(Alignment::Start));
         }
         let conteudo = column![
-            consulta::cabecalho(format!("Versão {}", v.numero),
-                format!("{} · {}{}", v.data, v.resumo, if instalada { " · instalada neste computador" } else { "" }),
+            consulta::cabecalho(trf!("Versão {}", v.numero),
+                format!("{} · {}{}", v.data, tr!(v.resumo), if instalada { tr!(" · instalada neste computador") } else { "" }),
                 Some(consulta::ilustracao(v.ilustracao))),
-            consulta::negrito("Destaques", 18.),
+            consulta::negrito(tr!("Destaques"), 18.),
             consulta::grade(v.destaques.iter()
-                .map(|(icone, titulo, descricao)| consulta::cartao(icone, *titulo, *descricao, None))
+                .map(|(icone, titulo, descricao)| consulta::cartao(icone, tr!(*titulo), tr!(*descricao), None))
                 .collect(), 3),
             consulta::divisor(),
-            consulta::negrito("Também nesta versão", 18.),
+            consulta::negrito(tr!("Também nesta versão"), 18.),
             tambem,
         ].spacing(17);
         let rodape = row![
             Space::with_width(Length::Fill),
-            button(row![feather_ui::icones::icone("link", 15.), text("Ver no GitHub").size(12)]
+            button(row![feather_ui::icones::icone("link", 15.), text(tr!("Ver no GitHub")).size(12)]
                 .spacing(6).align_y(Alignment::Center))
                 .padding([8, 13]).style(consulta::estilo_cartao)
                 .on_press(Msg::Novidades(Evento::VerNoGithub)),

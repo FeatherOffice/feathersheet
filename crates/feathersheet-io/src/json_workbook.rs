@@ -71,7 +71,7 @@ fn escrever_celulas<W: Write>(destino: &mut W, aba: &Sheet) -> io::Result<()> {
     if let Some(erro) = falha.take() { return Err(erro); }
 
     // Uma célula pode possuir estilo sem conteúdo.
-    for &chave in aba.styles.keys() {
+    for chave in aba.styles.keys() {
         let (r, c) = Sheet::key_to_coord(chave);
         if !aba.cells.contains_key(&chave) && !aba.data.has_cell(r, c)
             && !aba.formulas.has(r, c)

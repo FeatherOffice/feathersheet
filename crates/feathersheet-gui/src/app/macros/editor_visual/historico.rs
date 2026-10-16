@@ -33,7 +33,7 @@ fn linha<'a>(e: &Execucao, escolhida: bool) -> Element<'a, Msg> {
     let muted = COR_TEXTO_MUTED();
     let resultado = match &e.resultado {
         // O motor já escreve "Error: …"; o ícone e a coluna dizem que é erro.
-        ResultadoExecucao::Erro(msg) => format!("Erro: {}", cortar(sem_prefixo(msg), 26)),
+        ResultadoExecucao::Erro(msg) => trf!("Erro: {}", cortar(sem_prefixo(msg), 26)),
         outro => outro.rotulo().to_owned(),
     };
     let conteudo = row![
@@ -70,37 +70,37 @@ fn detalhe<'a>(app: &'a App, e: &Execucao) -> Element<'a, Msg> {
             feather_ui::icones::icone(e.resultado.icone(), 17.0),
             text(e.resultado.rotulo()).size(13.5).font(iced::Font { weight: iced::font::Weight::Semibold, ..Default::default() }),
         ].spacing(6).align_y(Alignment::Center),
-        par("Macro", e.macro_.clone()),
-        par("Gatilho", e.gatilho.descricao()),
-        par("Quando", format!("{} · {} ms", e.hora, e.ms)),
-        par("Planilha", if e.alterou { "alterada".into() } else { "sem mudança".into() }),
+        par(tr!("Macro"), e.macro_.clone()),
+        par(tr!("Gatilho"), e.gatilho.descricao()),
+        par(tr!("Quando"), trf!("{} · {} ms", e.hora, e.ms)),
+        par(tr!("Planilha"), if e.alterou { "alterada".into() } else { tr!("sem mudança").into() }),
     ].spacing(5);
     if !e.respostas.is_empty() {
-        corpo = corpo.push(par("Respostas", respostas_texto(&e.respostas)));
+        corpo = corpo.push(par(tr!("Respostas"), respostas_texto(&e.respostas)));
     }
     match &e.resultado {
         ResultadoExecucao::Erro(msg) => {
-            corpo = corpo.push(text("Erro").size(11).color(COR_TEXTO_MUTED()));
+            corpo = corpo.push(text(tr!("Erro")).size(11).color(COR_TEXTO_MUTED()));
             corpo = corpo.push(container(text(msg.clone()).size(12).font(iced::Font::MONOSPACE))
                 .padding([6, 8]).width(Length::Fill).style(estilo_cabecalho(escuro)));
         }
         ResultadoExecucao::Esperando(pergunta) => {
-            corpo = corpo.push(par("Pergunta", pergunta.clone()));
+            corpo = corpo.push(par(tr!("Pergunta"), pergunta.clone()));
         }
         _ => {}
     }
     if !e.arquivos.is_empty() {
-        corpo = corpo.push(text("Arquivos").size(11).color(COR_TEXTO_MUTED()));
+        corpo = corpo.push(text(tr!("Arquivos")).size(11).color(COR_TEXTO_MUTED()));
         for a in &e.arquivos {
             corpo = corpo.push(text(a.clone()).size(11.5));
         }
     }
     // Só módulos guardados no catálogo abrem no editor.
     let existe = app.macro_catalogo.obter(&e.macro_).is_some();
-    let ir = botao_icone("Ir para a macro", "file-code",
+    let ir = botao_icone(tr!("Ir para a macro"), "file-code",
         existe.then(|| Msg::MacroVisual(EventoVisual::HistoricoIrPara(e.macro_.clone()))), false);
     let ir: Element<'a, Msg> = if existe { ir } else {
-        iced::widget::tooltip(ir, text("Esta macro não está guardada na biblioteca").size(11),
+        iced::widget::tooltip(ir, text(tr!("Esta macro não está guardada na biblioteca")).size(11),
             iced::widget::tooltip::Position::Top).style(feather_ui::tema::estilo_dica).into()
     };
     container(column![
@@ -128,13 +128,13 @@ pub(super) fn painel<'a>(app: &'a App) -> Element<'a, Msg> {
     let mut filtros = row![
         container(row![
             feather_ui::icones::icone("search", 14.0),
-            text_input("Filtrar por macro", &h.filtro_macro)
+            text_input(tr!("Filtrar por macro"), &h.filtro_macro)
                 .on_input(|t| Msg::MacroVisual(EventoVisual::HistoricoFiltroMacro(t)))
                 .size(12).padding([4, 6]).width(Length::Fixed(190.0)),
         ].spacing(4).align_y(Alignment::Center)),
         container(Space::with_width(Length::Fixed(1.0))).height(Length::Fixed(20.0))
             .style(estilo_divisor(app.config.escuro)),
-        chip("Todos", None, ev(EventoVisual::HistoricoFiltroGatilho(None)), h.filtro_gatilho.is_none()),
+        chip(tr!("Todos"), None, ev(EventoVisual::HistoricoFiltroGatilho(None)), h.filtro_gatilho.is_none()),
     ].spacing(5).align_y(Alignment::Center);
     for t in TipoGatilho::TODOS {
         filtros = filtros.push(chip(t.rotulo(), Some(t.icone()),
@@ -145,23 +145,23 @@ pub(super) fn painel<'a>(app: &'a App) -> Element<'a, Msg> {
     filtros = filtros
         .push(container(Space::with_width(Length::Fixed(1.0))).height(Length::Fixed(20.0))
             .style(estilo_divisor(app.config.escuro)))
-        .push(chip("Só erros", Some("bug"), ev(EventoVisual::HistoricoSoErros), h.so_erros))
+        .push(chip(tr!("Só erros"), Some("bug"), ev(EventoVisual::HistoricoSoErros), h.so_erros))
         .push(Space::with_width(Length::Fill))
-        .push(text(format!("{} de {} execuções · {} com erro", lista.len(), h.total(), erros))
+        .push(text(trf!("{} de {} execuções · {} com erro", lista.len(), h.total(), erros))
             .size(11).color(COR_TEXTO_MUTED()));
 
     let corpo: Element<'a, Msg> = if h.total() == 0 {
-        vazio("Nenhuma macro rodou nesta sessão",
-            "Cada execução aparece aqui: Executar (F5), botão na planilha, evento ou MCP.")
+        vazio(tr!("Nenhuma macro rodou nesta sessão"),
+            tr!("Cada execução aparece aqui: Executar (F5), botão na planilha, evento ou MCP."))
     } else if lista.is_empty() {
-        vazio("Nenhuma execução com estes filtros", "Mude o gatilho, o nome ou desligue \"Só erros\".")
+        vazio(tr!("Nenhuma execução com estes filtros"), tr!("Mude o gatilho, o nome ou desligue \"Só erros\"."))
     } else {
         let cabecalho = row![
             text("HORA").size(10.5).width(Length::Fixed(66.0)),
             text("RESULTADO").size(10.5).width(Length::FillPortion(5)),
             text("MACRO").size(10.5).width(Length::FillPortion(3)),
             text("GATILHO").size(10.5).width(Length::FillPortion(5)),
-            text("DURAÇÃO").size(10.5).width(Length::Fixed(62.0)).align_x(iced::alignment::Horizontal::Right),
+            text(tr!("DURAÇÃO")).size(10.5).width(Length::Fixed(62.0)).align_x(iced::alignment::Horizontal::Right),
         ].spacing(10).padding([0, 8]);
         let cabecalho = iced::widget::container(cabecalho).style(|_| iced::widget::container::Style {
             text_color: Some(COR_TEXTO_MUTED()), ..Default::default()

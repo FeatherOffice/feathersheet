@@ -45,8 +45,8 @@ impl App {
         });
         if mudou_algo { self.alterado = true; }
         self.status = match valores.as_slice() {
-            [(_, px)] => format!("Largura ajustada: {px} px"),
-            v => format!("{} colunas ajustadas ao conteúdo", v.len()),
+            [(_, px)] => trf!("Largura ajustada: {px} px"),
+            v => trf!("{} colunas ajustadas ao conteúdo", v.len()),
         };
     }
 
@@ -64,8 +64,8 @@ impl App {
         });
         if mudou_algo { self.alterado = true; }
         self.status = match valores.as_slice() {
-            [(_, px)] => format!("Altura ajustada: {px} px"),
-            v => format!("{} linhas ajustadas ao conteúdo", v.len()),
+            [(_, px)] => trf!("Altura ajustada: {px} px"),
+            v => trf!("{} linhas ajustadas ao conteúdo", v.len()),
         };
     }
 
@@ -92,8 +92,8 @@ impl App {
             let mut r = Ok(0);
             self.workbook.editar(self.folha, |s| { r = s.alterar_visibilidade_dimensoes(coluna, true, de, ate); });
             self.status = match r {
-                Ok(n) if n > 0 => { self.alterado = true; format!("{n} {} ocultada(s)", if coluna { "coluna(s)" } else { "linha(s)" }) }
-                Ok(_) => "Nada a ocultar".into(),
+                Ok(n) if n > 0 => { self.alterado = true; trf!("{n} {} ocultada(s)", if coluna { "coluna(s)" } else { "linha(s)" }) }
+                Ok(_) => tr!("Nada a ocultar").into(),
                 Err(e) => e,
             };
             return;
@@ -105,8 +105,8 @@ impl App {
             s.fechar_transacao();
         });
         self.alterado |= mudou;
-        let alvo = if de == ate { nome(de) } else { format!("{} a {}", nome(de), nome(ate)) };
-        self.status = format!("{} de {alvo}: {px} px", if coluna { "Largura" } else { "Altura" });
+        let alvo = if de == ate { nome(de) } else { trf!("{} a {}", nome(de), nome(ate)) };
+        self.status = trf!("{} de {alvo}: {px} px", if coluna { tr!("Largura") } else { tr!("Altura") });
     }
 
     /// Duplo clique numa divisória: lote se o cabeçalho está na seleção.

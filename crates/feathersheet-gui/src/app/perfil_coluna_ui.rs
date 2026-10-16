@@ -37,7 +37,7 @@ impl App {
         self.confirmar();
         let area = self.area_selecionada();
         let Some(aba) = self.workbook.aba(self.folha) else {
-            self.status = "Não foi possível localizar a planilha".into();
+            self.status = tr!("Não foi possível localizar a planilha").into();
             return Task::none();
         };
         let ultima = aba.sheet.used_rect().r1;
@@ -63,7 +63,7 @@ impl App {
             self.perfil_coluna = None;
             self.menu_aberto = false;
             self.contexto = None;
-            self.status = format!("Analisando {} linhas da coluna…", quantidade(linhas as usize));
+            self.status = trf!("Analisando {} linhas da coluna…", quantidade(linhas as usize));
             return Task::perform(async move {
                 tokio::task::spawn_blocking(move || {
                     let dados = perfil::perfil_coluna(alvo.clone(), ultima, |r, _| {
@@ -81,7 +81,7 @@ impl App {
         });
         self.menu_aberto = false;
         self.contexto = None;
-        self.status = format!(
+        self.status = trf!(
             "Perfil da coluna {} — {} linhas analisadas",
             feathersheet_core::celulas::refs::col_name(coluna), quantidade(linhas as usize),
         );
@@ -95,49 +95,49 @@ impl App {
         let p = &visao.dados;
         let coluna = feathersheet_core::celulas::refs::col_name(visao.coluna);
         let descricao = if visao.inteira {
-            "Da primeira à última linha usada na aba".to_owned()
+            tr!("Da primeira à última linha usada na aba").to_owned()
         } else {
-            format!("Linhas {} a {}", visao.area.r0 + 1, visao.area.r1 + 1)
+            trf!("Linhas {} a {}", visao.area.r0 + 1, visao.area.r1 + 1)
         };
         let preenchidas = p.linhas.saturating_sub(p.vazias);
         let par = |r: &str, v: String| (r.to_owned(), v);
 
         let mut corpo = iced::widget::column![].spacing(8);
         if preenchidas == 0 {
-            let onde = if visao.inteira { "na aba".to_owned() } else {
-                format!("nas linhas {} a {}", visao.area.r0 + 1, visao.area.r1 + 1)
+            let onde = if visao.inteira { tr!("na aba").to_owned() } else {
+                trf!("nas linhas {} a {}", visao.area.r0 + 1, visao.area.r1 + 1)
             };
-            corpo = corpo.push(dlg::aviso_vazio(format!(
+            corpo = corpo.push(dlg::aviso_vazio(trf!(
                 "A coluna {coluna} não tem valores {onde}. Escolha uma coluna com dados para ver o perfil.")));
         } else {
-            corpo = corpo.push(dlg::secao("Visão geral")).push(dlg::grade_rotulo_valor(vec![
-                par("Linhas examinadas", quantidade(p.linhas)),
-                par("Preenchidas", quantidade(preenchidas)),
-                par("Vazias", quantidade(p.vazias)),
-                par("Distintos", quantidade(p.distintos)),
-                par("Repetidos", quantidade(p.repetidos)),
-                par("Números", quantidade(p.numeros)),
-                par("Textos", quantidade(p.textos)),
-                par("Booleanos", quantidade(p.logicos)),
-                par("Erros", quantidade(p.erros)),
+            corpo = corpo.push(dlg::secao(tr!("Visão geral"))).push(dlg::grade_rotulo_valor(vec![
+                par(tr!("Linhas examinadas"), quantidade(p.linhas)),
+                par(tr!("Preenchidas"), quantidade(preenchidas)),
+                par(tr!("Vazias"), quantidade(p.vazias)),
+                par(tr!("Distintos"), quantidade(p.distintos)),
+                par(tr!("Repetidos"), quantidade(p.repetidos)),
+                par(tr!("Números"), quantidade(p.numeros)),
+                par(tr!("Textos"), quantidade(p.textos)),
+                par(tr!("Booleanos"), quantidade(p.logicos)),
+                par(tr!("Erros"), quantidade(p.erros)),
             ], 2));
             if p.numeros > 0 {
                 let mut pares = vec![
-                    par("Mínimo", numero(p.min)),
-                    par("Máximo", numero(p.max)),
-                    par("Média", numero(p.media)),
+                    par(tr!("Mínimo"), numero(p.min)),
+                    par(tr!("Máximo"), numero(p.max)),
+                    par(tr!("Média"), numero(p.media)),
                 ];
                 if let Some(q) = &p.quartis {
                     pares.extend([
-                        par("Mediana", numero(q.mediana)),
-                        par("1º quartil", numero(q.q1)),
-                        par("3º quartil", numero(q.q3)),
-                        par("Limite inferior", numero(q.limite_baixo)),
-                        par("Limite superior", numero(q.limite_alto)),
-                        par("Fora da curva", quantidade(p.outliers)),
+                        par(tr!("Mediana"), numero(q.mediana)),
+                        par(tr!("1º quartil"), numero(q.q1)),
+                        par(tr!("3º quartil"), numero(q.q3)),
+                        par(tr!("Limite inferior"), numero(q.limite_baixo)),
+                        par(tr!("Limite superior"), numero(q.limite_alto)),
+                        par(tr!("Fora da curva"), quantidade(p.outliers)),
                     ]);
                 }
-                corpo = corpo.push(dlg::secao("Estatísticas numéricas")).push(dlg::grade_rotulo_valor(pares, 2));
+                corpo = corpo.push(dlg::secao(tr!("Estatísticas numéricas"))).push(dlg::grade_rotulo_valor(pares, 2));
             }
             if !p.histograma.is_empty() {
                 let max_qtd = p.histograma.iter().map(|f| f.qtd).max().unwrap_or(1).max(1) as f32;
@@ -161,13 +161,13 @@ impl App {
                         text(quantidade(faixa.qtd)).size(11.5),
                     ].spacing(8).align_y(Alignment::Center));
                 }
-                corpo = corpo.push(dlg::secao("Distribuição dos números"))
+                corpo = corpo.push(dlg::secao(tr!("Distribuição dos números")))
                     .push(container(barras).padding([8, 12]).width(Length::Fill).style(dlg::estilo_bloco));
             }
             if !p.frequentes.is_empty() {
                 let pares = p.frequentes.iter()
-                    .map(|(v, q)| (v.clone(), format!("{} vezes", quantidade(*q)))).collect();
-                corpo = corpo.push(dlg::secao("Valores mais repetidos")).push(dlg::grade_rotulo_valor(pares, 1));
+                    .map(|(v, q)| (v.clone(), trf!("{} vezes", quantidade(*q)))).collect();
+                corpo = corpo.push(dlg::secao(tr!("Valores mais repetidos"))).push(dlg::grade_rotulo_valor(pares, 1));
             }
             if !p.exemplos_outliers.is_empty() {
                 let mut lista = iced::widget::column![].spacing(4);
@@ -176,7 +176,7 @@ impl App {
                         button(row![
                             text(cell_name(linha, visao.coluna)).size(12.5).width(Length::Fixed(70.0)),
                             text(numero(valor)).size(12.5).width(Length::Fill),
-                            text("Ir para").size(12).color(COR_TEXTO_MUTED()),
+                            text(tr!("Ir para")).size(12).color(COR_TEXTO_MUTED()),
                             feather_ui::icones::icone("chevron-right", 14.0),
                         ].spacing(6).align_y(Alignment::Center))
                         .width(Length::Fill).padding([5, 10])
@@ -184,13 +184,13 @@ impl App {
                         .style(estilo_botao_pequeno(false))
                     );
                 }
-                corpo = corpo.push(dlg::secao("Exemplos fora da curva"))
+                corpo = corpo.push(dlg::secao(tr!("Exemplos fora da curva")))
                     .push(container(lista).padding(4).width(Length::Fill).style(dlg::estilo_bloco));
             }
         }
-        self.dialogo(format!("Perfil da coluna {coluna}"), corpo)
+        self.dialogo(trf!("Perfil da coluna {coluna}"), corpo)
             .icone("columns")
-            .subtitulo(format!("{descricao} · somente leitura"))
+            .subtitulo(trf!("{descricao} · somente leitura"))
             .largura(560.0)
             .ao_fechar(Msg::PerfilColunaFechar)
     }

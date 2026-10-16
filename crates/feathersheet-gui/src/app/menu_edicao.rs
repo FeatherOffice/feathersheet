@@ -2,6 +2,8 @@
 //! Formatar (grupo Células) e Mesclar.
 //! Painéis ancorados à Ribbon, sem substituir o conteúdo da planilha.
 use super::*;
+use super::impressao_ui::{EscalaUi, MargemUi, PapelUi};
+use feathersheet_core::planilha::impressao::Orientacao;
 
 const LARGURA: f32 = 262.0;
 
@@ -16,103 +18,133 @@ fn itens(tipo: &str) -> Vec<Item> {
     use Item::{Acao, Divisor, Titulo};
     match tipo {
         "autosoma" => vec![
-            Titulo("INSERIR FUNÇÃO"),
-            Acao("Soma", "sum", Msg::AutoSoma),
-            Acao("Média", "math-function", Msg::InserirFuncao("MÉDIA".into())),
-            Acao("Contagem", "list-numbers", Msg::InserirFuncao("COUNT".into())),
-            Acao("Máximo", "sort-descending", Msg::InserirFuncao("MAX".into())),
-            Acao("Mínimo", "sort-ascending", Msg::InserirFuncao("MIN".into())),
+            Titulo(tr!("INSERIR FUNÇÃO")),
+            Acao(tr!("Soma"), "sum", Msg::AutoSoma),
+            Acao(tr!("Média"), "math-function", Msg::InserirFuncao("MÉDIA".into())),
+            Acao(tr!("Contagem"), "list-numbers", Msg::InserirFuncao("COUNT".into())),
+            Acao(tr!("Máximo"), "sort-descending", Msg::InserirFuncao("MAX".into())),
+            Acao(tr!("Mínimo"), "sort-ascending", Msg::InserirFuncao("MIN".into())),
         ],
         "preencher" => vec![
-            Titulo("PREENCHER CÉLULAS"),
-            Acao("Para baixo · Ctrl+D", "arrow-down", Msg::Preencher(DirecaoPreenchimento::Baixo)),
-            Acao("Para direita · Ctrl+R", "seta_direita", Msg::Preencher(DirecaoPreenchimento::Direita)),
-            Acao("Para cima", "sort-ascending", Msg::Preencher(DirecaoPreenchimento::Cima)),
-            Acao("Para esquerda", "seta_esquerda", Msg::Preencher(DirecaoPreenchimento::Esquerda)),
-            Acao("Continuar até o fim", "arrow-step", Msg::Preencher(DirecaoPreenchimento::AteOFim)),
-            Acao("Série…", "list-numbers", Msg::Serie(serie_ui::Evento::Abrir)),
+            Titulo(tr!("PREENCHER CÉLULAS")),
+            Acao(tr!("Para baixo · Ctrl+D"), "arrow-down", Msg::Preencher(DirecaoPreenchimento::Baixo)),
+            Acao(tr!("Para direita · Ctrl+R"), "seta_direita", Msg::Preencher(DirecaoPreenchimento::Direita)),
+            Acao(tr!("Para cima"), "sort-ascending", Msg::Preencher(DirecaoPreenchimento::Cima)),
+            Acao(tr!("Para esquerda"), "seta_esquerda", Msg::Preencher(DirecaoPreenchimento::Esquerda)),
+            Acao(tr!("Continuar até o fim"), "arrow-step", Msg::Preencher(DirecaoPreenchimento::AteOFim)),
+            Acao(tr!("Série…"), "list-numbers", Msg::Serie(serie_ui::Evento::Abrir)),
             Divisor,
-            Acao("Preenchimento relâmpago · Ctrl+E", "bolt", Msg::PreenchimentoRelampago),
+            Acao(tr!("Preenchimento relâmpago · Ctrl+E"), "bolt", Msg::PreenchimentoRelampago),
         ],
         // Validação ▾ da aba Dados, como no Excel.
         "validacao" => vec![
-            Titulo("VALIDAÇÃO DE DADOS"),
-            Acao("Validação de dados…", "checks", Msg::ValidacaoAbrir),
-            Acao("Circular dados inválidos", "circle", Msg::ValidacaoEv(validacao_dialogo::Evento::Circular)),
-            Acao("Limpar círculos de validação", "eraser",
+            Titulo(tr!("VALIDAÇÃO DE DADOS")),
+            Acao(tr!("Validação de dados…"), "checks", Msg::ValidacaoAbrir),
+            Acao(tr!("Circular dados inválidos"), "circle", Msg::ValidacaoEv(validacao_dialogo::Evento::Circular)),
+            Acao(tr!("Limpar círculos de validação"), "eraser",
                 Msg::ValidacaoEv(validacao_dialogo::Evento::LimparCirculos)),
         ],
         // Formatar ▾ do grupo Células, na ordem do Excel.
         "formatar" => vec![
-            Titulo("TAMANHO DA CÉLULA"),
-            Acao("Altura da linha…", "line-height",
+            Titulo(tr!("TAMANHO DA CÉLULA")),
+            Acao(tr!("Altura da linha…"), "line-height",
                 Msg::Dimensao(dimensao_dialogo::Evento::Abrir(false))),
-            Acao("AutoAjuste da altura da linha", "arrow-autofit-height", Msg::AjustarAltura),
-            Acao("Largura da coluna…", "arrow-autofit-width",
+            Acao(tr!("AutoAjuste da altura da linha"), "arrow-autofit-height", Msg::AjustarAltura),
+            Acao(tr!("Largura da coluna…"), "arrow-autofit-width",
                 Msg::Dimensao(dimensao_dialogo::Evento::Abrir(true))),
-            Acao("AutoAjuste da largura da coluna", "arrows-horizontal", Msg::AjustarLargura),
-            Acao("Largura padrão…", "arrow-autofit-width", Msg::Dimensao(dimensao_dialogo::Evento::AbrirPadrao)),
+            Acao(tr!("AutoAjuste da largura da coluna"), "arrows-horizontal", Msg::AjustarLargura),
+            Acao(tr!("Largura padrão…"), "arrow-autofit-width", Msg::Dimensao(dimensao_dialogo::Evento::AbrirPadrao)),
             Titulo("VISIBILIDADE"),
-            Acao("Ocultar linhas", "eye-off", Msg::OcultarDimensoes(false)),
-            Acao("Ocultar colunas", "eye-off", Msg::OcultarDimensoes(true)),
-            Acao("Reexibir linhas", "eye", Msg::ReexibirDimensoes(false)),
-            Acao("Reexibir colunas", "eye", Msg::ReexibirDimensoes(true)),
+            Acao(tr!("Ocultar linhas"), "eye-off", Msg::OcultarDimensoes(false)),
+            Acao(tr!("Ocultar colunas"), "eye-off", Msg::OcultarDimensoes(true)),
+            Acao(tr!("Reexibir linhas"), "eye", Msg::ReexibirDimensoes(false)),
+            Acao(tr!("Reexibir colunas"), "eye", Msg::ReexibirDimensoes(true)),
             Divisor,
-            Acao("Formatar células…", "edit", Msg::FormatarCelulasAbrir),
+            Acao(tr!("Formatar células…"), "edit", Msg::FormatarCelulasAbrir),
             Divisor,
-            Titulo("PROTEÇÃO"),
-            Acao("Proteger ou desproteger planilha…", "lock", Msg::Protecao(protecao_ui::Evento::Abrir)),
-            Acao("Bloquear/desbloquear célula", "lock", Msg::Protecao(protecao_ui::Evento::AlternarBloqueio)),
+            Titulo(tr!("PROTEÇÃO")),
+            Acao(tr!("Proteger ou desproteger planilha…"), "lock", Msg::Protecao(protecao_ui::Evento::Abrir)),
+            Acao(tr!("Bloquear/desbloquear célula"), "lock", Msg::Protecao(protecao_ui::Evento::AlternarBloqueio)),
         ],
         // Inserir ▾ / Excluir ▾ do grupo Células, como no Excel.
         "inserir" => vec![
             Titulo("INSERIR"),
-            Acao("Inserir células… · Ctrl++", "table", Msg::Celulas(celulas_dialogo::Evento::Abrir(true))),
-            Acao("Inserir linhas na planilha", "plus", Msg::InserirMenu(Estrutura::InserirLinha, false)),
-            Acao("Inserir colunas na planilha", "columns", Msg::InserirMenu(Estrutura::InserirColuna, false)),
-            Acao("Inserir planilha · Shift+F11", "file-plus", Msg::AdicionarAba),
+            Acao(tr!("Inserir células… · Ctrl++"), "table", Msg::Celulas(celulas_dialogo::Evento::Abrir(true))),
+            Acao(tr!("Inserir linhas na planilha"), "plus", Msg::InserirMenu(Estrutura::InserirLinha, false)),
+            Acao(tr!("Inserir colunas na planilha"), "columns", Msg::InserirMenu(Estrutura::InserirColuna, false)),
+            Acao(tr!("Inserir planilha · Shift+F11"), "file-plus", Msg::AdicionarAba),
         ],
         "excluir" => vec![
             Titulo("EXCLUIR"),
-            Acao("Excluir células… · Ctrl+-", "table", Msg::Celulas(celulas_dialogo::Evento::Abrir(false))),
-            Acao("Excluir linhas da planilha", "trash", Msg::Estrutura(Estrutura::ExcluirLinha)),
-            Acao("Excluir colunas da planilha", "columns", Msg::Estrutura(Estrutura::ExcluirColuna)),
+            Acao(tr!("Excluir células… · Ctrl+-"), "table", Msg::Celulas(celulas_dialogo::Evento::Abrir(false))),
+            Acao(tr!("Excluir linhas da planilha"), "trash", Msg::Estrutura(Estrutura::ExcluirLinha)),
+            Acao(tr!("Excluir colunas da planilha"), "columns", Msg::Estrutura(Estrutura::ExcluirColuna)),
         ],
         // Limpar ▾ do grupo Edição, como no Excel.
         "limpar" => vec![
             Titulo("LIMPAR"),
-            Acao("Limpar tudo", "eraser", Msg::LimparTudo),
-            Acao("Limpar formatos", "eraser", Msg::LimparFormato),
-            Acao("Limpar conteúdo · Delete", "eraser", Msg::Limpar),
-            Acao("Limpar comentários", "message-circle", Msg::Comentario(comentarios_ui::Evento::Limpar)),
-            Acao("Limpar hiperlinks", "link-off", Msg::LimparHiperlinks),
+            Acao(tr!("Limpar tudo"), "eraser", Msg::LimparTudo),
+            Acao(tr!("Limpar formatos"), "eraser", Msg::LimparFormato),
+            Acao(tr!("Limpar conteúdo · Delete"), "eraser", Msg::Limpar),
+            Acao(tr!("Limpar comentários"), "message-circle", Msg::Comentario(comentarios_ui::Evento::Limpar)),
+            Acao(tr!("Limpar hiperlinks"), "link-off", Msg::LimparHiperlinks),
         ],
         // Sublinhado ▾ do grupo Fonte, como no Excel.
         "sublinhado" => vec![
             Titulo("SUBLINHADO"),
-            Acao("Sublinhado · Ctrl+U", "underline", Msg::AlternarEstilo("underline".into())),
-            Acao("Sublinhado duplo", "underline-double",
+            Acao(tr!("Sublinhado · Ctrl+U"), "underline", Msg::AlternarEstilo("underline".into())),
+            Acao(tr!("Sublinhado duplo"), "underline-double",
                 Msg::AlternarEstilo(feathersheet_core::operacoes::sublinhado::CHAVE_DUPLO.into())),
+        ],
+        // Aba Layout da Página: Margens ▾, Orientação ▾, Tamanho ▾,
+        // Área de impressão ▾ e Escala ▾.
+        "pg_margens" => vec![
+            Titulo("MARGENS"),
+            Acao(tr!("Normal · 12 mm"), "borda_externa_espessa", Msg::Impressao(EventoImpressao::Margem(MargemUi::Normal))),
+            Acao(tr!("Estreita · 6,4 mm nas laterais"), "borda_externa_espessa", Msg::Impressao(EventoImpressao::Margem(MargemUi::Estreita))),
+            Acao(tr!("Larga · 25,4 mm"), "borda_externa_espessa", Msg::Impressao(EventoImpressao::Margem(MargemUi::Larga))),
+        ],
+        "pg_orientacao" => vec![
+            Titulo(tr!("ORIENTAÇÃO")),
+            Acao(tr!("Retrato"), "orientacao_pagina", Msg::Impressao(EventoImpressao::Orientacao(Orientacao::Retrato))),
+            Acao(tr!("Paisagem"), "orientacao_pagina", Msg::Impressao(EventoImpressao::Orientacao(Orientacao::Paisagem))),
+        ],
+        "pg_tamanho" => vec![
+            Titulo(tr!("TAMANHO DO PAPEL")),
+            Acao(tr!("A4 · 210 × 297 mm"), "arrows-maximize", Msg::Impressao(EventoImpressao::Papel(PapelUi::A4))),
+            Acao(tr!("Carta · 216 × 279 mm"), "arrows-maximize", Msg::Impressao(EventoImpressao::Papel(PapelUi::Carta))),
+            Acao(tr!("Ofício · 216 × 356 mm"), "arrows-maximize", Msg::Impressao(EventoImpressao::Papel(PapelUi::Oficio))),
+        ],
+        "pg_area" => vec![
+            Titulo(tr!("ÁREA DE IMPRESSÃO")),
+            Acao(tr!("Definir área de impressão"), "area_impressao", Msg::Impressao(EventoImpressao::DefinirArea)),
+            Acao(tr!("Limpar área de impressão"), "limpar_tudo", Msg::Impressao(EventoImpressao::LimparArea)),
+        ],
+        "pg_escala" => vec![
+            Titulo(tr!("DIMENSIONAR PARA AJUSTAR")),
+            Acao(tr!("100% · tamanho real"), "zoom-in", Msg::Impressao(EventoImpressao::Escala(EscalaUi::Cem))),
+            Acao(tr!("Ajustar a planilha a 1 página"), "zoom-out", Msg::Impressao(EventoImpressao::Escala(EscalaUi::Pagina))),
+            Acao(tr!("Ajustar todas as colunas à largura"), "arrow-autofit-width", Msg::Impressao(EventoImpressao::Escala(EscalaUi::Largura))),
         ],
         "mesclar" => vec![
             Titulo("MESCLAR"),
-            Acao("Mesclar e centralizar", "align-center",
+            Acao(tr!("Mesclar e centralizar"), "align-center",
                 Msg::MesclarModo(mesclas::ModoMescla::Centralizar)),
-            Acao("Mesclar através", "columns", Msg::MesclarModo(mesclas::ModoMescla::Atraves)),
-            Acao("Mesclar células", "square", Msg::MesclarModo(mesclas::ModoMescla::Mesclar)),
-            Acao("Desmesclar células", "desmesclar_celulas",
+            Acao(tr!("Mesclar através"), "columns", Msg::MesclarModo(mesclas::ModoMescla::Atraves)),
+            Acao(tr!("Mesclar células"), "square", Msg::MesclarModo(mesclas::ModoMescla::Mesclar)),
+            Acao(tr!("Desmesclar células"), "desmesclar_celulas",
                 Msg::MesclarModo(mesclas::ModoMescla::Desmesclar)),
         ],
         _ => vec![
-            Titulo("CLASSIFICAR E FILTRAR"),
-            Acao("Classificar de A a Z", "sort-ascending", Msg::Ordenar(true)),
-            Acao("Classificar de Z a A", "sort-descending", Msg::Ordenar(false)),
-            Acao("Classificação personalizada…", "sort-ascending",
+            Titulo(tr!("CLASSIFICAR E FILTRAR")),
+            Acao(tr!("Classificar de A a Z"), "sort-ascending", Msg::Ordenar(true)),
+            Acao(tr!("Classificar de Z a A"), "sort-descending", Msg::Ordenar(false)),
+            Acao(tr!("Classificação personalizada…"), "sort-ascending",
                 Msg::Classificar(classificar::Evento::Abrir)),
-            Acao("Ativar/desativar filtro", "filter",
+            Acao(tr!("Ativar/desativar filtro"), "filter",
                 Msg::TabelaAcao(tabelas::Acao::AlternarAutoFiltro)),
-            Acao("Reaplicar", "refresh", Msg::TabelaAcao(tabelas::Acao::Reaplicar)),
-            Acao("Selecionar região atual", "table", Msg::SelecionarRegiaoAtual),
+            Acao(tr!("Reaplicar"), "refresh", Msg::TabelaAcao(tabelas::Acao::Reaplicar)),
+            Acao(tr!("Selecionar região atual"), "table", Msg::SelecionarRegiaoAtual),
         ],
     }
 }
@@ -202,7 +234,8 @@ mod testes {
 
     #[test]
     fn icones_dos_menus_existem_no_catalogo() {
-        for tipo in ["autosoma", "preencher", "classificar", "formatar", "mesclar", "validacao", "limpar", "sublinhado"] {
+        for tipo in ["autosoma", "preencher", "classificar", "formatar", "mesclar", "validacao", "limpar", "sublinhado",
+            "pg_margens", "pg_orientacao", "pg_tamanho", "pg_area", "pg_escala"] {
             for item in itens(tipo) {
                 if let Item::Acao(rotulo, icone, _) = item {
                     assert!(feather_ui::icones::existe(icone), "{tipo}: {rotulo} ({icone})");

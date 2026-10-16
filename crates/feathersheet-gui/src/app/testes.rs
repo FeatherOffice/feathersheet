@@ -895,7 +895,7 @@ fn modelo_orcamento_domestico_preenche_pasta_pelo_motor_real() {
     fn sugestoes_podem_ser_inseridas_antes_de_confirmar_formula() {
         let mut app=App::default();
         app.update(Msg::Editar("=SOM".into()));
-        let nome=app.editor_formula.sugestoes(&app.edicao);
+        let nome=app.editor_formula.sugestoes(&app.edicao,app.config.idioma=="en-US");
         assert!(nome.iter().any(|s|s.name=="SOMA"));
         let idx=nome.iter().position(|s|s.name=="SOMA").unwrap();
         app.update(Msg::AceitarSugestao(idx));

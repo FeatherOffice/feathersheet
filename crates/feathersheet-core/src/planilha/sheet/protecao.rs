@@ -161,10 +161,7 @@ impl Sheet {
         let livre_por_camada = trava(self.sheet_style.as_ref(), "locked") == Some(false)
             || (a.c1 - a.c0 < 16_384 && (a.c0..=a.c1).all(|c| trava(self.col_styles.get(&c), "locked") == Some(false)));
         if !livre_por_camada { return true; }
-        self.styles.keys().any(|&k| {
-            let (r, c) = (crate::celulas::refs::key_row(k), crate::celulas::refs::key_col(k));
-            r >= a.r0 && r <= a.r1 && c >= a.c0 && c <= a.c1 && self.celula_marcada_bloqueada(r, c)
-        })
+        self.styles.alguma_no_retangulo(a.r0, a.c0, a.r1, a.c1, |r, c, _| self.celula_marcada_bloqueada(r, c))
     }
 
     /// Protege a aba (sem desfazer, como no Excel). Falso se já estava.

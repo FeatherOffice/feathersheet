@@ -36,37 +36,38 @@ impl App {
             // Sem o botão "Arquivos": o botão Menu da faixa já abre o mesmo painel.
             &titulo, self.alterado, None,
             [
-                cromo::Acao { icone:"file-plus", dica:"Novo (Ctrl+N)", mensagem:Some(Msg::Novo) },
-                cromo::Acao { icone:"folder-open", dica:"Abrir (Ctrl+O)", mensagem:Some(Msg::Abrir) },
-                cromo::Acao { icone:"device-floppy", dica:"Salvar (Ctrl+S)", mensagem:Some(Msg::Salvar) },
-                cromo::Acao { icone:"device-floppy", dica:"Salvar como", mensagem:Some(Msg::SalvarComo) },
-                cromo::Acao { icone:"file-export", dica:"Exportar Excel", mensagem:Some(Msg::ExportarXlsx) },
-                cromo::Acao { icone:"arrow-back-up", dica:"Desfazer (Ctrl+Z)", mensagem:Some(Msg::Desfazer) },
-                cromo::Acao { icone:"arrow-forward-up", dica:"Refazer (Ctrl+Y)", mensagem:Some(Msg::Refazer) },
-                cromo::Acao { icone:"help", dica:"Ajuda (F1)", mensagem:Some(Msg::Ajuda) },
-                cromo::Acao { icone:"device-desktop", dica:"Monitor (F12)", mensagem:Some(Msg::Monitor) },
+                cromo::Acao { icone:"file-plus", dica:tr!("Novo (Ctrl+N)"), mensagem:Some(Msg::Novo) },
+                cromo::Acao { icone:"folder-open", dica:tr!("Abrir (Ctrl+O)"), mensagem:Some(Msg::Abrir) },
+                cromo::Acao { icone:"device-floppy", dica:tr!("Salvar (Ctrl+S)"), mensagem:Some(Msg::Salvar) },
+                cromo::Acao { icone:"device-floppy", dica:tr!("Salvar como"), mensagem:Some(Msg::SalvarComo) },
+                cromo::Acao { icone:"file-export", dica:tr!("Exportar Excel"), mensagem:Some(Msg::ExportarXlsx) },
+                cromo::Acao { icone:"arrow-back-up", dica:tr!("Desfazer (Ctrl+Z)"), mensagem:Some(Msg::Desfazer) },
+                cromo::Acao { icone:"arrow-forward-up", dica:tr!("Refazer (Ctrl+Y)"), mensagem:Some(Msg::Refazer) },
+                cromo::Acao { icone:"help", dica:tr!("Ajuda (F1)"), mensagem:Some(Msg::Ajuda) },
+                cromo::Acao { icone:"device-desktop", dica:tr!("Monitor (F12)"), mensagem:Some(Msg::Monitor) },
             ], Msg::Configuracoes,
         );
         let topo: Element<'_, Msg> = if self.config.barra_propria {
             cromo::barra_integrada(barra, Self::acoes(id))
         } else { barra };
         let abas_escolha = row![
-            button(row![feather_ui::icones::icone("menu-2", 14.0), text("Menu").size(13)]
+            button(row![feather_ui::icones::icone("menu-2", 14.0), text(tr!("Menu")).size(13)]
                 .spacing(6).align_y(Alignment::Center))
                 .padding([7, 12]).style(estilo_botao_secundario).on_press(Msg::Menu),
-            self.aba_faixa("Página Inicial", AbaFaixa::Inicio),
-            self.aba_faixa("Inserir", AbaFaixa::Inserir),
-            self.aba_faixa("Desenhar", AbaFaixa::Desenhar),
-            self.aba_faixa("Fórmulas", AbaFaixa::Formulas),
-            self.aba_faixa("Dados", AbaFaixa::Dados),
-            self.aba_faixa("Revisão", AbaFaixa::Revisao),
-            self.aba_faixa("Exibir", AbaFaixa::Exibir),
-            self.aba_faixa("Macros", AbaFaixa::Macros),
-            self.aba_faixa("Ferramentas", AbaFaixa::Ferramentas),
+            self.aba_faixa(tr!("Página Inicial"), AbaFaixa::Inicio),
+            self.aba_faixa(tr!("Inserir"), AbaFaixa::Inserir),
+            self.aba_faixa(tr!("Desenhar"), AbaFaixa::Desenhar),
+            self.aba_faixa(tr!("Layout da Página"), AbaFaixa::Layout),
+            self.aba_faixa(tr!("Fórmulas"), AbaFaixa::Formulas),
+            self.aba_faixa(tr!("Dados"), AbaFaixa::Dados),
+            self.aba_faixa(tr!("Revisão"), AbaFaixa::Revisao),
+            self.aba_faixa(tr!("Exibir"), AbaFaixa::Exibir),
+            self.aba_faixa(tr!("Macros"), AbaFaixa::Macros),
+            self.aba_faixa(tr!("Ferramentas"), AbaFaixa::Ferramentas),
             // Contextual: visível só quando a seleção está dentro de uma tabela,
             // como em ribbon-tabela.ts. Não cria aba permanente.
             if tabelas::sob_celula(&self.workbook,self.folha,self.linha,self.coluna).is_some() {
-                self.aba_faixa("Design da Tabela", AbaFaixa::Tabela)
+                self.aba_faixa(tr!("Design da Tabela"), AbaFaixa::Tabela)
             } else { Space::with_width(0).into() },
             // Contextual: "Editar forma" só enquanto houver forma selecionada.
             if self.tem_forma_selecionada() { self.aba_editar_forma() }
@@ -80,7 +81,7 @@ impl App {
             // Salvar, Desfazer e Refazer já estão na barra superior do editor.
             // Evitar duplicá-los libera espaço para as abas e para a pesquisa.
             self.faixa_pesquisa(),
-            button(text(if self.config.faixa_recolhida {"Expandir faixa"} else {"Recolher faixa"}).size(12))
+            button(text(if self.config.faixa_recolhida {tr!("Expandir faixa")} else {tr!("Recolher faixa")}).size(12))
                 .on_press(Msg::Faixa).style(estilo_botao_pequeno(false)),
         ].spacing(4).padding([4,8]).align_y(Alignment::Center);
         let faixa = if self.config.faixa_recolhida { container(Space::with_height(0)).into() }
@@ -102,7 +103,7 @@ impl App {
         let expansao: Element<'_, Msg> = if self.edicao_inline.is_none() {
             if let Some(conteudo) = &self.multilinha {
                 column![
-                    text("Alt+Enter: nova linha  •  Enter: confirmar  •  Esc: cancelar")
+                    text(tr!("Alt+Enter: nova linha  •  Enter: confirmar  •  Esc: cancelar"))
                         .size(11).color(COR_TEXTO_MUTED()),
                     editor_multilinha(conteudo, 14.0, 105.0),
                 ].spacing(4).into()
@@ -116,7 +117,7 @@ impl App {
                 .filter(|area| (area.r0, area.c0) != (self.linha, self.coluna))
                 .map(|area| feathersheet_core::celulas::locale::apresentar_formula(
                     &a.sheet.get_raw(area.r0, area.c0), &self.regionalizacao())))
-            .unwrap_or_else(|| "Valor ou fórmula (ex.: =SOMA(A1:A5))".to_string());
+            .unwrap_or_else(|| tr!("Valor ou fórmula (ex.: =SOMA(A1:A5))").to_string());
         let editor=column![
             row![
                 end, text("fx").size(16).color(COR_AZUL_ACENTO()),
@@ -137,14 +138,15 @@ impl App {
         // a assinatura era enviada só à barra de status, fora do campo de visão.
         let mut assistente: Option<Element<'_, Msg>> = None;
         if self.mostrar_fx && self.editor_formula.ativo {
-            let sugestoes = self.editor_formula.sugestoes(&self.edicao);
+            let sugestoes = self.editor_formula.sugestoes(&self.edicao,self.config.idioma=="en-US");
             if !sugestoes.is_empty() {
                 let mut opcoes = column![].spacing(2);
                 for (i, s) in sugestoes.iter().enumerate() {
                     let linha = row![
                         text(s.name.clone()).size(13),
                         Space::with_width(Length::Fill),
-                        text(s.signature.clone()).size(11).color(COR_TEXTO_MUTED()),
+                        text(s.help.map(|h| crate::idioma::assinatura(&s.name, h))
+                            .unwrap_or_else(|| s.signature.clone())).size(11).color(COR_TEXTO_MUTED()),
                     ].spacing(8).align_y(Alignment::Center);
                     opcoes = opcoes.push(
                         button(linha)
@@ -161,7 +163,7 @@ impl App {
             {
                 let info = column![
                     text(assinatura).size(13).color(COR_AZUL_ACENTO()),
-                    text(format!("Argumento {indice}: {argumento}")).size(12),
+                    text(trf!("Argumento {indice}: {argumento}")).size(12),
                     text(descricao).size(11).color(COR_TEXTO_MUTED()),
                 ].spacing(5);
                 assistente = Some(container(info)
@@ -261,8 +263,11 @@ impl App {
             // Aviso temporário ao lado das guias (antes cobria as abas).
             self.view_aviso_abas().unwrap_or_else(|| Space::with_width(0).into()),
             self.view_progresso_abertura(),
-            text(format!("{}  ·  {} abas",
-                cell_name(self.linha, self.coluna), self.workbook.len()))
+            text(if self.workbook.len() == 1 {
+                trf!("{}  ·  {} aba", cell_name(self.linha, self.coluna), 1)
+            } else {
+                trf!("{}  ·  {} abas", cell_name(self.linha, self.coluna), self.workbook.len())
+            })
                 .size(11).color(COR_TEXTO_MUTED()),
             self.view_resumo_selecao(),
             self.aviso_calcular(),
@@ -353,8 +358,8 @@ impl App {
                 Space::new(Length::Fill, Length::Fill))
                 .on_press(Msg::FecharAbasOcultas);
             let mut lista = column![
-                text("Reexibir aba").size(19),
-                text("Selecione qual aba oculta deseja tornar visível.").size(12)
+                text(tr!("Reexibir aba")).size(19),
+                text(tr!("Selecione qual aba oculta deseja tornar visível.")).size(12)
                     .color(COR_TEXTO_MUTED()),
             ].spacing(10);
             for i in self.workbook.abas_ocultas() {
@@ -370,7 +375,7 @@ impl App {
                 }
             }
             lista = lista.push(
-                button("Cancelar")
+                button(tr!("Cancelar"))
                     .on_press(Msg::FecharAbasOcultas)
                     .style(estilo_botao_secundario));
             let painel = container(scrollable(lista.padding(16)).height(Length::Shrink))
@@ -389,21 +394,21 @@ impl App {
             let local = format!("{}:{}", cell_name(area.r0,area.c0),
                 cell_name(area.r1,area.c1));
             let proposta = column![
-                text("Criar tabela").size(18),
-                text(format!("Intervalo: {local}")).size(12),
-                text("Nome da tabela").size(12),
+                text(tr!("Criar tabela")).size(18),
+                text(trf!("Intervalo: {local}")).size(12),
+                text(tr!("Nome da tabela")).size(12),
                 text_input("Tabela1", &self.tabela_nome)
                     .on_input(Msg::TabelaNome).padding(8),
                 row![
-                    text("Minha tabela tem cabeçalhos").size(12),
+                    text(tr!("Minha tabela tem cabeçalhos")).size(12),
                     toggler(self.tabela_cabecalho).on_toggle(Msg::TabelaCabecalho),
                 ].spacing(12).align_y(Alignment::Center),
-                text("O intervalo será preservado. O estilo azul e as faixas são visuais.")
+                text(tr!("O intervalo será preservado. O estilo azul e as faixas são visuais."))
                     .size(11),
                 row![
-                    button("Cancelar").on_press(Msg::TabelaCancelar)
+                    button(tr!("Cancelar")).on_press(Msg::TabelaCancelar)
                         .style(estilo_botao_secundario),
-                    button("Criar tabela").on_press(Msg::TabelaConfirmar)
+                    button(tr!("Criar tabela")).on_press(Msg::TabelaConfirmar)
                         .style(estilo_botao_primario),
                 ].spacing(10),
             ].spacing(10);
@@ -518,8 +523,8 @@ impl App {
         let base = if let Some(alvo) = self.cor_ativa {
             let atual = self.cor_da_celula(alvo);
             let titulo = match alvo {
-                AlvoCor::Texto => "Cor do texto",
-                AlvoCor::Fundo => "Cor de preenchimento",
+                AlvoCor::Texto => tr!("Cor do texto"),
+                AlvoCor::Fundo => tr!("Cor de preenchimento"),
             };
             let painel = seletor_cor::painel(titulo, &atual, self.cor_hsva, &self.cor_hex)
                 .map(Msg::SeletorCor);
@@ -553,17 +558,17 @@ impl App {
         // a grade e impede cliques/atalhos acidentais enquanto o usuário decide.
         if let Some(destino) = self.pendente {
             let contexto = match destino {
-                Pendente::Novo | Pendente::Modelo(_) => "criar uma nova planilha",
-                Pendente::Abrir | Pendente::Recente => "abrir outra planilha",
-                Pendente::RecuperarTemporario => "recuperar uma cópia temporária",
-                Pendente::Sair => "fechar o FeatherSheet",
+                Pendente::Novo | Pendente::Modelo(_) => tr!("criar uma nova planilha"),
+                Pendente::Abrir | Pendente::Recente => tr!("abrir outra planilha"),
+                Pendente::RecuperarTemporario => tr!("recuperar uma cópia temporária"),
+                Pendente::Sair => tr!("fechar o FeatherSheet"),
             };
             let largura = 500.0_f32.min((self.tamanho_principal.width - 28.0).max(260.0));
             let cabecalho = row![
                 feather_ui::icones::icone("info-circle", 26.0),
                 column![
-                    text("Alterações não salvas").size(20),
-                    text(format!("Antes de {contexto}, escolha o que fazer."))
+                    text(tr!("Alterações não salvas")).size(20),
+                    text(trf!("Antes de {contexto}, escolha o que fazer."))
                         .size(12).color(COR_TEXTO_MUTED()),
                 ].spacing(5)
             ].spacing(12).align_y(Alignment::Center);
@@ -571,38 +576,38 @@ impl App {
                 feather_ui::icones::icone("file-plus", 18.0),
                 text(self.nome_documento()).size(13),
                 Space::with_width(Length::Fill),
-                text("Não salvo").size(11).color(COR_TEXTO_MUTED()),
+                text(tr!("Não salvo")).size(11).color(COR_TEXTO_MUTED()),
             ].spacing(9).align_y(Alignment::Center))
                 .width(Length::Fill).padding(12).style(estilo_container_topo);
             let salvar = button(row![
                 feather_ui::icones::icone("device-floppy", 18.0),
-                text("Salvar e continuar").size(14),
+                text(tr!("Salvar e continuar")).size(14),
             ].spacing(10).align_y(Alignment::Center))
                 .on_press(Msg::SalvarAntes).width(Length::Fill)
                 .padding([12, 14]).style(estilo_botao_primario);
             let temporario = button(row![
                 feather_ui::icones::icone("clock", 18.0),
                 column![
-                    text("Guardar temporariamente").size(14),
-                    text("Recupere depois pelo menu Arquivo").size(11),
+                    text(tr!("Guardar temporariamente")).size(14),
+                    text(tr!("Recupere depois pelo menu Arquivo")).size(11),
                 ].spacing(3),
             ].spacing(10).align_y(Alignment::Center))
                 .on_press(Msg::GuardarTemporariamente).width(Length::Fill)
                 .padding([10, 14]).style(estilo_botao_secundario);
-            let descartar = button(text("Descartar alterações").size(12))
+            let descartar = button(text(tr!("Descartar alterações")).size(12))
                 .on_press(Msg::Descartar).width(Length::Fill)
                 .padding([10, 8]).style(|tema, estado| {
                     let mut estilo = estilo_botao_secundario(tema, estado);
                     estilo.text_color = iced::Color::from_rgb8(184, 49, 57);
                     estilo
                 });
-            let cancelar = button(text("Cancelar").size(12))
+            let cancelar = button(text(tr!("Cancelar")).size(12))
                 .on_press(Msg::Cancelar).width(Length::Fill)
                 .padding([10, 8]).style(estilo_botao_secundario);
             let painel = container(column![
                 cabecalho,
                 documento,
-                text("Não perca as alterações desta planilha.").size(12)
+                text(tr!("Não perca as alterações desta planilha.")).size(12)
                     .color(COR_TEXTO_MUTED()),
                 salvar,
                 temporario,
@@ -642,14 +647,14 @@ impl App {
         let mut opcoes: Vec<Option<(String, Msg)>> = vec![];
         if !matches!(tipo, Contexto::Aba(_)) {
             opcoes.extend([
-                Some(("Recortar".into(), Msg::Recortar)),
-                Some(("Copiar".into(), Msg::Copiar)),
-                Some(("Colar".into(), Msg::ColarSolicitar)),
+                Some((tr!("Recortar").into(), Msg::Recortar)),
+                Some((tr!("Copiar").into(), Msg::Copiar)),
+                Some((tr!("Colar").into(), Msg::ColarSolicitar)),
                 // As variações de colar ficam no submenu (submenu_contexto 0).
-                Some(("Colar especial".into(), Msg::ContextoSub(Some(SUB_COLAR)))),
+                Some((tr!("Colar especial").into(), Msg::ContextoSub(Some(SUB_COLAR)))),
             ]);
             if matches!(tipo, Contexto::Celula(..)) {
-                opcoes.push(Some(("Inserir".into(), Msg::ContextoSub(Some(SUB_INSERIR)))));
+                opcoes.push(Some((tr!("Inserir").into(), Msg::ContextoSub(Some(SUB_INSERIR)))));
             }
             opcoes.extend([
                 None,
@@ -660,51 +665,51 @@ impl App {
                 // Como em botao-direito.ts: o diagnóstico só aparece com erro na célula ativa.
                 if feathersheet_core::formula::explicar::explicar_erro(&self.workbook, self.folha, self.linha, self.coluna).is_some() {
                     opcoes.extend([
-                        Some(("Explicar este erro".into(), Msg::ExplicacaoErroAbrir)),
+                        Some((tr!("Explicar este erro").into(), Msg::ExplicacaoErroAbrir)),
                         None,
                     ]);
                 }
                 opcoes.extend([
-                    Some(("Limpar conteúdo".into(), Msg::Limpar)),
+                    Some((tr!("Limpar conteúdo").into(), Msg::Limpar)),
                     None,
                     // Inserir linha/coluna/células estão no submenu Inserir ▸.
-                    Some(("Excluir linha".into(), Msg::Estrutura(Estrutura::ExcluirLinha))),
-                    Some(("Excluir coluna".into(), Msg::Estrutura(Estrutura::ExcluirColuna))),
-                    Some(("Excluir…".into(), Msg::Celulas(celulas_dialogo::Evento::Abrir(false)))),
+                    Some((tr!("Excluir linha").into(), Msg::Estrutura(Estrutura::ExcluirLinha))),
+                    Some((tr!("Excluir coluna").into(), Msg::Estrutura(Estrutura::ExcluirColuna))),
+                    Some((tr!("Excluir…").into(), Msg::Celulas(celulas_dialogo::Evento::Abrir(false)))),
                     None,
-                    Some(("Localizar e substituir".into(), Msg::Busca)),
-                    Some(("Validação de dados".into(), Msg::ValidacaoAbrir)),
+                    Some((tr!("Localizar e substituir").into(), Msg::Busca)),
+                    Some((tr!("Validação de dados").into(), Msg::ValidacaoAbrir)),
                     None,
-                    Some(("Inserir / editar link".into(), Msg::LinkEditar)),
+                    Some((tr!("Inserir / editar link").into(), Msg::LinkEditar)),
                     self.link_da_celula(self.folha, self.linha, self.coluna)
-                        .map(|_| ("Abrir link".into(), Msg::LinkAbrir)),
-                    Some(("Remover hiperlink".into(), Msg::LinkRemover)),
+                        .map(|_| (tr!("Abrir link").into(), Msg::LinkAbrir)),
+                    Some((tr!("Remover hiperlink").into(), Msg::LinkRemover)),
                     None,
                 ]);
                 opcoes.extend(self.opcoes_contexto_comentario());
                 opcoes.extend([
                     None,
-                    Some(("Limpar formatação".into(), Msg::LimparFormato)),
-                    Some(("Definir intervalo nomeado…".into(), Msg::NomesAbrir(true))),
-                    Some(("Perfil da coluna".into(), Msg::PerfilColunaAbrir)),
+                    Some((tr!("Limpar formatação").into(), Msg::LimparFormato)),
+                    Some((tr!("Definir intervalo nomeado…").into(), Msg::NomesAbrir(true))),
+                    Some((tr!("Perfil da coluna").into(), Msg::PerfilColunaAbrir)),
                 ]);
                 // Itens de tabela dinâmica e de tabela, na mesma regra de botao-direito.ts.
                 let dinamica = self.dinamica_sob_celula();
                 let tabela = tabelas::sob_celula(&self.workbook, self.folha, self.linha, self.coluna).is_some();
                 let mut bloco: Vec<Option<(String, Msg)>> = vec![];
                 if dinamica {
-                    bloco.push(Some(("Editar Tabela Dinâmica…".into(), Msg::Dinamica(dinamica_ui::Evento::Editar))));
+                    bloco.push(Some((tr!("Editar Tabela Dinâmica…").into(), Msg::Dinamica(dinamica_ui::Evento::Editar))));
                 }
                 if tabela {
                     bloco.extend([
-                        Some(("Linha de totais".into(), Msg::TabelaAcao(tabelas::Acao::Totais))),
-                        Some(("Renomear tabela…".into(), Msg::TabelaAcao(tabelas::Acao::IniciarRenomeacao))),
+                        Some((tr!("Linha de totais").into(), Msg::TabelaAcao(tabelas::Acao::Totais))),
+                        Some((tr!("Renomear tabela…").into(), Msg::TabelaAcao(tabelas::Acao::IniciarRenomeacao))),
                         None,
-                        Some(("Alternar / Remover Filtros".into(), Msg::TabelaAcao(tabelas::Acao::AlternarAutoFiltro))),
-                        Some(("Converter em Intervalo".into(), Msg::TabelaAcao(tabelas::Acao::Converter))),
+                        Some((tr!("Alternar / Remover Filtros").into(), Msg::TabelaAcao(tabelas::Acao::AlternarAutoFiltro))),
+                        Some((tr!("Converter em Intervalo").into(), Msg::TabelaAcao(tabelas::Acao::Converter))),
                     ]);
                 } else if !dinamica {
-                    bloco.push(Some(("Criar Tabela".into(), Msg::TabelaAbrir)));
+                    bloco.push(Some((tr!("Criar Tabela").into(), Msg::TabelaAbrir)));
                 }
                 if !bloco.is_empty() {
                     opcoes.push(None);
@@ -713,65 +718,65 @@ impl App {
             }
             Contexto::Linha(_) => {
                 opcoes.extend([
-                    Some(("Inserir linha acima".into(), Msg::InserirMenu(Estrutura::InserirLinha, false))),
-                    Some(("Inserir linha abaixo".into(), Msg::InserirMenu(Estrutura::InserirLinha, true))),
-                    Some(("Excluir linha".into(), Msg::Estrutura(Estrutura::ExcluirLinha))),
+                    Some((tr!("Inserir linha acima").into(), Msg::InserirMenu(Estrutura::InserirLinha, false))),
+                    Some((tr!("Inserir linha abaixo").into(), Msg::InserirMenu(Estrutura::InserirLinha, true))),
+                    Some((tr!("Excluir linha").into(), Msg::Estrutura(Estrutura::ExcluirLinha))),
                     None,
-                    Some(("Limpar conteúdo".into(), Msg::Limpar)),
+                    Some((tr!("Limpar conteúdo").into(), Msg::Limpar)),
                     None,
-                    Some(("Ocultar linhas".into(), Msg::OcultarDimensoes(false))),
-                    Some(("Reexibir linhas".into(), Msg::ReexibirDimensoes(false))),
+                    Some((tr!("Ocultar linhas").into(), Msg::OcultarDimensoes(false))),
+                    Some((tr!("Reexibir linhas").into(), Msg::ReexibirDimensoes(false))),
                 ]);
             }
             Contexto::Coluna(_) => {
                 opcoes.extend([
-                    Some(("Inserir coluna à esquerda".into(), Msg::InserirMenu(Estrutura::InserirColuna, false))),
-                    Some(("Inserir coluna à direita".into(), Msg::InserirMenu(Estrutura::InserirColuna, true))),
-                    Some(("Excluir coluna".into(), Msg::Estrutura(Estrutura::ExcluirColuna))),
+                    Some((tr!("Inserir coluna à esquerda").into(), Msg::InserirMenu(Estrutura::InserirColuna, false))),
+                    Some((tr!("Inserir coluna à direita").into(), Msg::InserirMenu(Estrutura::InserirColuna, true))),
+                    Some((tr!("Excluir coluna").into(), Msg::Estrutura(Estrutura::ExcluirColuna))),
                     None,
-                    Some(("Limpar conteúdo".into(), Msg::Limpar)),
+                    Some((tr!("Limpar conteúdo").into(), Msg::Limpar)),
                     None,
-                    Some(("Perfil da coluna".into(), Msg::PerfilColunaAbrir)),
+                    Some((tr!("Perfil da coluna").into(), Msg::PerfilColunaAbrir)),
                     None,
-                    Some(("Ocultar colunas".into(), Msg::OcultarDimensoes(true))),
-                    Some(("Reexibir colunas".into(), Msg::ReexibirDimensoes(true))),
+                    Some((tr!("Ocultar colunas").into(), Msg::OcultarDimensoes(true))),
+                    Some((tr!("Reexibir colunas").into(), Msg::ReexibirDimensoes(true))),
                 ]);
             }
             Contexto::Aba(i) => {
                 opcoes.extend([
-                    Some(("Nova aba".into(), Msg::AdicionarAba)),
-                    Some(("Renomear aba".into(), Msg::EditarNomeAba)),
-                    Some(("Cor da aba…".into(), Msg::AlternarPaletaAba)),
-                    Some(("Duplicar aba".into(), Msg::DuplicarAba)),
+                    Some((tr!("Nova aba").into(), Msg::AdicionarAba)),
+                    Some((tr!("Renomear aba").into(), Msg::EditarNomeAba)),
+                    Some((tr!("Cor da aba…").into(), Msg::AlternarPaletaAba)),
+                    Some((tr!("Duplicar aba").into(), Msg::DuplicarAba)),
                 ]);
                 let visiveis = self.workbook.abas_visiveis().collect::<Vec<_>>();
                 let (esquerda, direita) = self.vizinhas_visiveis(i);
                 // Só apresentar deslocamentos possíveis. Abas ocultas não
                 // aparecem no rodapé, mas continuam na ordenação física.
                 if let Some(alvo) = esquerda {
-                    opcoes.push(Some(("Mover aba à esquerda".into(), Msg::MoverAba(i, alvo))));
+                    opcoes.push(Some((tr!("Mover aba à esquerda").into(), Msg::MoverAba(i, alvo))));
                 }
                 if let Some(alvo) = direita {
-                    opcoes.push(Some(("Mover aba à direita".into(), Msg::MoverAba(i, alvo))));
+                    opcoes.push(Some((tr!("Mover aba à direita").into(), Msg::MoverAba(i, alvo))));
                 }
                 if let Some(&primeira) = visiveis.first() {
                     if esquerda.is_some() && primeira != esquerda.unwrap_or(i) {
-                        opcoes.push(Some(("Mover para o início".into(), Msg::MoverAba(i, primeira))));
+                        opcoes.push(Some((tr!("Mover para o início").into(), Msg::MoverAba(i, primeira))));
                     }
                 }
                 if let Some(&ultima) = visiveis.last() {
                     if direita.is_some() && ultima != direita.unwrap_or(i) {
-                        opcoes.push(Some(("Mover para o fim".into(), Msg::MoverAba(i, ultima))));
+                        opcoes.push(Some((tr!("Mover para o fim").into(), Msg::MoverAba(i, ultima))));
                     }
                 }
                 if visiveis.len() > 1 {
-                    opcoes.push(Some(("Ocultar aba".into(), Msg::OcultarAba(i))));
+                    opcoes.push(Some((tr!("Ocultar aba").into(), Msg::OcultarAba(i))));
                 }
                 if !self.workbook.abas_ocultas().is_empty() {
-                    opcoes.push(Some(("Reexibir abas…".into(), Msg::MostrarAbasOcultas)));
+                    opcoes.push(Some((tr!("Reexibir abas…").into(), Msg::MostrarAbasOcultas)));
                 }
                 if self.workbook.len() > 1 && visiveis.len() > 1 {
-                    opcoes.push(Some(("Excluir aba".into(), Msg::RemoverAba)));
+                    opcoes.push(Some((tr!("Excluir aba").into(), Msg::RemoverAba)));
                 }
             }
         }
@@ -801,20 +806,20 @@ impl App {
         let x = |m: Msg| Msg::ContextoExecutar(Box::new(m));
         match sub {
             SUB_COLAR => vec![
-                I::acao("Colar somente valores", "clipboard", x(Msg::ColarValoresSolicitar)),
-                I::acao("Colar valores com formatação", "clipboard", x(Msg::ColarEspecialSolicitar(ModoColagem::ValoresComFormato))),
-                I::acao("Colar fórmulas sem formatação", "math-function", x(Msg::ColarEspecialSolicitar(ModoColagem::FormulasSemFormato))),
-                I::acao("Colar fórmulas com formatação", "math-function", x(Msg::ColarSolicitar)),
-                I::acao("Colar transposto", "arrows-horizontal", x(Msg::ColarEspecialSolicitar(ModoColagem::Transposta))),
-                I::acao("Colar somente formatação", "brush", x(Msg::ColarFormatoSolicitar)),
+                I::acao(tr!("Colar somente valores"), "clipboard", x(Msg::ColarValoresSolicitar)),
+                I::acao(tr!("Colar valores com formatação"), "clipboard", x(Msg::ColarEspecialSolicitar(ModoColagem::ValoresComFormato))),
+                I::acao(tr!("Colar fórmulas sem formatação"), "math-function", x(Msg::ColarEspecialSolicitar(ModoColagem::FormulasSemFormato))),
+                I::acao(tr!("Colar fórmulas com formatação"), "math-function", x(Msg::ColarSolicitar)),
+                I::acao(tr!("Colar transposto"), "arrows-horizontal", x(Msg::ColarEspecialSolicitar(ModoColagem::Transposta))),
+                I::acao(tr!("Colar somente formatação"), "brush", x(Msg::ColarFormatoSolicitar)),
             ],
             _ => vec![
-                I::acao("Linha acima", "table", x(Msg::InserirMenu(Estrutura::InserirLinha, false))),
-                I::acao("Linha abaixo", "table", x(Msg::InserirMenu(Estrutura::InserirLinha, true))),
-                I::acao("Coluna à esquerda", "columns", x(Msg::InserirMenu(Estrutura::InserirColuna, false))),
-                I::acao("Coluna à direita", "columns", x(Msg::InserirMenu(Estrutura::InserirColuna, true))),
+                I::acao(tr!("Linha acima"), "table", x(Msg::InserirMenu(Estrutura::InserirLinha, false))),
+                I::acao(tr!("Linha abaixo"), "table", x(Msg::InserirMenu(Estrutura::InserirLinha, true))),
+                I::acao(tr!("Coluna à esquerda"), "columns", x(Msg::InserirMenu(Estrutura::InserirColuna, false))),
+                I::acao(tr!("Coluna à direita"), "columns", x(Msg::InserirMenu(Estrutura::InserirColuna, true))),
                 I::Separador,
-                I::acao("Células (deslocar para baixo ou para a direita)…", "layout-grid", x(Msg::Celulas(celulas_dialogo::Evento::Abrir(true)))),
+                I::acao(tr!("Células (deslocar para baixo ou para a direita)…"), "layout-grid", x(Msg::Celulas(celulas_dialogo::Evento::Abrir(true)))),
             ],
         }
     }
@@ -845,7 +850,7 @@ impl App {
                 let cor = cores_aba::cor_css(hex).unwrap_or(iced::Color::BLACK);
                 let item = button(row![
                     text("●").size(17).color(cor),
-                    text(*nome).size(13),
+                    text(tr!(*nome)).size(13),
                 ].align_y(Alignment::Center).spacing(4))
                     .padding([5, 6]).width(Length::Fill)
                     .style(estilo_item_menu(false, true))
@@ -854,11 +859,11 @@ impl App {
                 else { direita = direita.push(item); }
             }
             let lista = column![
-                button(text("← Voltar").size(12))
+                button(text(tr!("← Voltar")).size(12))
                     .on_press(Msg::VoltarMenuAba)
                     .style(estilo_item_menu(false, true)),
                 row![esquerda.width(Length::Fill), direita.width(Length::Fill)].spacing(2),
-                button(text("Sem cor").size(12))
+                button(text(tr!("Sem cor")).size(12))
                     .on_press(Msg::PintarAba(None))
                     .style(estilo_item_menu(false, true)),
             ].padding(5).spacing(3);
@@ -901,7 +906,7 @@ impl App {
         for (i, menu) in dados.menus.iter().enumerate() {
             categorias = categorias.push(
                 iced::widget::mouse_area(
-                    button(text(menu.titulo.to_uppercase()).size(11.5))
+                    button(text(tr!(&menu.titulo).to_uppercase()).size(11.5))
                         .height(Length::Fixed(22.0))
                         .width(Length::Fixed(80.0))
                         .padding([0, 5])
@@ -923,20 +928,20 @@ impl App {
         if !self.menu_caminho.is_empty() {
             let nivel = &self.menu_caminho;
             let mut trilha = dados.menus.get(self.menu_grupo)
-                .map(|m| m.titulo.clone()).unwrap_or_default();
+                .map(|m| tr!(&m.titulo).to_owned()).unwrap_or_default();
             let mut itens = dados.menus.get(self.menu_grupo)
                 .map(|m| m.itens.as_slice()).unwrap_or(&[]);
             for &i in nivel {
                 if let Some(item) = itens.get(i) {
                     trilha.push_str(" › ");
-                    trilha.push_str(&item.rotulo);
+                    trilha.push_str(tr!(&item.rotulo));
                     itens = &item.filhos;
                 }
             }
             conteudo = conteudo.push(
                 button(row![
                     text("‹").size(17),
-                    text("Voltar").size(12.5),
+                    text(tr!("Voltar")).size(12.5),
                     Space::with_width(Length::Fill),
                     text(trilha).size(10).color(COR_TEXTO_MUTED()),
                 ].spacing(7).align_y(Alignment::Center))
@@ -973,7 +978,7 @@ impl App {
             } else {
                 linha = linha.push(Space::new(Length::Fixed(16.0), Length::Fixed(16.0)));
             }
-            linha = linha.push(text(&item.rotulo).size(13.5))
+            linha = linha.push(text(tr!(&item.rotulo)).size(13.5))
                 .push(Space::with_width(Length::Fill));
             if !item.atalho.is_empty() {
                 linha = linha.push(text(&item.atalho).size(12).color(COR_TEXTO_MUTED()));
@@ -1182,4 +1187,31 @@ impl App {
         })
     }
 
+}
+
+#[cfg(test)]
+mod testes_idioma {
+    use super::*;
+
+    /// Com en-US, nenhum item dos menus de contexto (célula, linha, coluna,
+    /// aba) e nenhum nome de aba da faixa fica em português.
+    #[test]
+    fn menus_de_contexto_e_abas_da_faixa_ficam_em_ingles() {
+        crate::idioma::definir_na_thread("en-US");
+        let app = App::default();
+        let mut faltam = Vec::new();
+        for tipo in [Contexto::Celula(0, 0), Contexto::Linha(0), Contexto::Coluna(0), Contexto::Aba(0)] {
+            for (rotulo, _) in app.opcoes_contexto(tipo).into_iter().flatten() {
+                if crate::idioma::dicionario().contains_key(&rotulo) {
+                    faltam.push(rotulo);
+                }
+            }
+        }
+        for pt in ["Página Inicial", "Inserir", "Desenhar", "Layout da Página", "Fórmulas",
+            "Dados", "Revisão", "Exibir", "Ferramentas", "Design da Tabela"] {
+            if tr!(pt) == pt { faltam.push(pt.to_owned()); }
+        }
+        crate::idioma::definir_na_thread("pt-BR");
+        assert!(faltam.is_empty(), "ainda em português no en-US: {faltam:?}");
+    }
 }

@@ -145,16 +145,16 @@ impl Formulario {
     }
 
     pub fn construir(&self, ranges: Vec<Rect>) -> Result<Validacao, String> {
-        if ranges.is_empty() { return Err("Selecione um intervalo".into()); }
+        if ranges.is_empty() { return Err(tr!("Selecione um intervalo").into()); }
         let regra = self.construir_regra()?;
         for (rotulo, texto, max) in [
-            ("O título da mensagem de entrada", &self.entrada_titulo, MAX_TITULO),
-            ("A mensagem de entrada", &self.entrada_texto, MAX_TEXTO_ENTRADA),
-            ("O título do alerta de erro", &self.erro_titulo, MAX_TITULO),
-            ("A mensagem de erro", &self.mensagem, MAX_TEXTO_ERRO),
+            (tr!("O título da mensagem de entrada"), &self.entrada_titulo, MAX_TITULO),
+            (tr!("A mensagem de entrada"), &self.entrada_texto, MAX_TEXTO_ENTRADA),
+            (tr!("O título do alerta de erro"), &self.erro_titulo, MAX_TITULO),
+            (tr!("A mensagem de erro"), &self.mensagem, MAX_TEXTO_ERRO),
         ] {
             if texto.chars().count() > max {
-                return Err(format!("{rotulo} pode ter até {max} caracteres"));
+                return Err(trf!("{rotulo} pode ter até {max} caracteres"));
             }
         }
         Ok(Validacao {
@@ -174,8 +174,8 @@ impl Formulario {
     fn construir_regra(&self) -> Result<Regra, String> {
         let numero = |s: &str| -> Result<f64, String> {
             let n = s.trim().replace(',', ".").parse::<f64>()
-                .map_err(|_| "Digite um número válido".to_string())?;
-            if !n.is_finite() { return Err("O número deve ser finito".into()); }
+                .map_err(|_| tr!("Digite um número válido").to_string())?;
+            if !n.is_finite() { return Err(tr!("O número deve ser finito").into()); }
             Ok(n)
         };
         let regra = match self.criterio {
@@ -191,7 +191,7 @@ impl Formulario {
                     let t = s.trim();
                     parse_hora_segundos(&Value::Text(t.to_owned()))
                         .map(|_| t.to_owned())
-                        .ok_or_else(|| "Digite a hora como HH:MM ou HH:MM:SS".to_string())
+                        .ok_or_else(|| tr!("Digite a hora como HH:MM ou HH:MM:SS").to_string())
                 };
                 let a = hora(&self.primeiro)?;
                 let b = if matches!(op, NumeroOp::Entre | NumeroOp::Fora) { Some(hora(&self.segundo)?) } else { None };
@@ -203,7 +203,7 @@ impl Formulario {
                 };
                 if self.primeiro.trim().is_empty() ||
                     (op == DataOp::Entre && self.segundo.trim().is_empty()) {
-                    return Err("Informe as datas obrigatórias".into());
+                    return Err(tr!("Informe as datas obrigatórias").into());
                 }
                 Regra::Data { op, a: self.primeiro.trim().into(),
                     b: (op == DataOp::Entre).then(|| self.segundo.trim().into()) }
@@ -214,7 +214,7 @@ impl Formulario {
                     "url" => TextoOp::Url, _ => TextoOp::Contem,
                 };
                 if matches!(op, TextoOp::Contem | TextoOp::Comeca) && self.primeiro.is_empty() {
-                    return Err("Informe o texto de comparação".into());
+                    return Err(tr!("Informe o texto de comparação").into());
                 }
                 Regra::Texto { op, valor: if matches!(op, TextoOp::Email | TextoOp::Url) {
                     None
@@ -227,20 +227,20 @@ impl Formulario {
             Criterio::Lista => {
                 let valores: Vec<_> = self.primeiro.split(['\n', ';', ',']).map(str::trim)
                     .filter(|s| !s.is_empty()).map(str::to_owned).collect();
-                if valores.is_empty() { return Err("Digite pelo menos um item".into()); }
+                if valores.is_empty() { return Err(tr!("Digite pelo menos um item").into()); }
                 Regra::Lista { valores }
             }
             Criterio::Intervalo => {
                 let texto = self.primeiro.trim().trim_start_matches('=');
                 if texto.is_empty() {
-                    return Err("Informe a origem, como A2:A20, Dados!A2:A20, um nome ou INDIRETO(B1)".into());
+                    return Err(tr!("Informe a origem, como A2:A20, Dados!A2:A20, um nome ou INDIRETO(B1)").into());
                 }
                 // Outra aba, nome ou INDIRETO: lista por fórmula, resolvida pelo motor.
                 let Some(origem) = parse_range_ref(texto).filter(|o| o.sheet.is_none()) else {
                     return Ok(Regra::Formula { formula: format!("={texto}") });
                 };
                 if origem.area() > 10_000 {
-                    return Err("A origem da lista pode ter no máximo 10.000 células".into());
+                    return Err(tr!("A origem da lista pode ter no máximo 10.000 células").into());
                 }
                 Regra::Intervalo { origem }
             }
@@ -320,15 +320,15 @@ impl Formulario {
     /// Rótulos dos campos de valor conforme o critério e o operador: (primeiro, segundo).
     pub fn rotulos_valor(&self) -> (&'static str, &'static str) {
         match self.criterio {
-            Criterio::Numero if self.usa_segundo() => ("Mínimo", "Máximo"),
-            Criterio::Data if self.usa_segundo() => ("Data inicial", "Data final"),
-            Criterio::Hora if self.usa_segundo() => ("Hora inicial", "Hora final"),
-            Criterio::Hora => ("Hora", ""),
-            Criterio::Numero | Criterio::Texto => ("Valor", ""),
-            Criterio::Data => ("Data", ""),
-            Criterio::Lista => ("Itens", ""),
-            Criterio::Intervalo => ("Origem", ""),
-            Criterio::Caixa => ("Valor marcado", "Valor desmarcado"),
+            Criterio::Numero if self.usa_segundo() => (tr!("Mínimo"), tr!("Máximo")),
+            Criterio::Data if self.usa_segundo() => (tr!("Data inicial"), tr!("Data final")),
+            Criterio::Hora if self.usa_segundo() => (tr!("Hora inicial"), tr!("Hora final")),
+            Criterio::Hora => (tr!("Hora"), ""),
+            Criterio::Numero | Criterio::Texto => (tr!("Valor"), ""),
+            Criterio::Data => (tr!("Data"), ""),
+            Criterio::Lista => (tr!("Itens"), ""),
+            Criterio::Intervalo => (tr!("Origem"), ""),
+            Criterio::Caixa => (tr!("Valor marcado"), tr!("Valor desmarcado")),
         }
     }
 }
@@ -342,7 +342,7 @@ pub struct Opcao {
 
 impl std::fmt::Display for Opcao {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.rotulo)
+        f.write_str(tr!(self.rotulo))
     }
 }
 
@@ -413,7 +413,7 @@ pub fn validar_celula(
         let resultado = workbook.validar_na_pasta(folha, linha, coluna, &valor, &regra.regra);
         if !resultado.ok {
             let texto = regra.mensagem.clone().or(resultado.motivo)
-                .unwrap_or_else(|| "Valor fora da regra de validação".into());
+                .unwrap_or_else(|| tr!("Valor fora da regra de validação").into());
             if regra.quando == QuandoValidacao::Recusar {
                 return Err(texto);
             }
@@ -441,7 +441,7 @@ pub fn alerta_da_celula(
         let mut alerta = regra.alerta_de_erro(resultado.motivo.as_deref());
         // O motor usa o título padrão do Excel; aqui o nome é o da janela.
         if regra.mensagens.erro_titulo.as_deref().is_none_or(|t| t.trim().is_empty()) {
-            alerta.titulo = "Validação de dados".into();
+            alerta.titulo = tr!("Validação de dados").into();
         }
         if !alerta.permite_continuar { return Some(alerta); }
         primeiro.get_or_insert(alerta);
@@ -453,7 +453,7 @@ pub fn alerta_da_celula(
 pub fn carregar_regras(json: Option<&str>) -> Result<Vec<Validacao>, String> {
     match json {
         Some(dados) if !dados.trim().is_empty() => serde_json::from_str(dados)
-            .map_err(|_| "As regras de validação da aba estão corrompidas".into()),
+            .map_err(|_| tr!("As regras de validação da aba estão corrompidas").into()),
         _ => Ok(Vec::new()),
     }
 }

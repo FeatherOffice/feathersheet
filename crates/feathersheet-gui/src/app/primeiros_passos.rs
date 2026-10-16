@@ -29,16 +29,14 @@ pub enum Evento {
     Concluir,
 }
 
-/// Linha do formulário dos "Seus dados": rótulo e dica numa coluna fixa,
-/// o campo logo ao lado.
+/// Campo do formulário dos "Seus dados": rótulo em cima, o campo logo
+/// abaixo (largura própria) e a dica curta embaixo, tudo alinhado à esquerda.
 fn campo_formulario<'a>(titulo: &str, dica: &str, controle: Element<'a, Msg>) -> Element<'a, Msg> {
-    row![
-        iced::widget::column![
-            text(titulo.to_owned()).size(13.5).color(COR_TEXTO()),
-            text(dica.to_owned()).size(11.5).color(COR_TEXTO_MUTED()),
-        ].spacing(2).width(Length::Fixed(190.)),
+    iced::widget::column![
+        text(titulo.to_owned()).size(13.5).color(COR_TEXTO()).font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::DEFAULT }),
         controle,
-    ].spacing(16).align_y(Alignment::Center).into()
+        text(dica.to_owned()).size(11.5).color(COR_TEXTO_MUTED()),
+    ].spacing(6).into()
 }
 
 /// Iniciais de um nome: primeira letra da primeira e da última palavra.
@@ -92,10 +90,10 @@ impl App {
         if feathersheet_io::backup_policy::grande_demais_para_copia_automatica(celulas)
             && (self.config.auto_salvar || self.config.recuperacao_automatica)
         {
-            self.monitor.registrar(Nivel::Aviso, "Salvamento", &format!(
+            self.monitor.registrar(Nivel::Aviso, tr!("Salvamento"), &trf!(
                 "Pasta com {} milhões de células: grande demais para cópia automática (recuperação e salvamento automático desligados nela; cada cópia travaria a janela e dobraria a memória). Salve com Ctrl+S.",
                 celulas / 1_000_000));
-            self.faixa_salvamento = Some((format!(
+            self.faixa_salvamento = Some((trf!(
                 "Esta pasta tem {} milhões de células: grande demais para cópia automática. Nem a recuperação nem o salvamento automático a gravam; salve com Ctrl+S.",
                 celulas / 1_000_000), true));
             self.aviso_salvamento_de = Some(nome);
@@ -109,8 +107,8 @@ impl App {
         let tipo = self.origem.as_ref().and_then(|p| p.extension()).and_then(|e| e.to_str())
             .map(str::to_lowercase).filter(|e| e != "fshz")
             .map_or("uma planilha ainda não salva".to_owned(), |e| format!("arquivos .{e}"));
-        let mensagem = format!("O salvamento automático não vale para {tipo}. Até salvar como .fshz, só a recuperação automática protege esta planilha.");
-        self.monitor.registrar(Nivel::Info, "Salvamento", &mensagem);
+        let mensagem = trf!("O salvamento automático não vale para {tipo}. Até salvar como .fshz, só a recuperação automática protege esta planilha.");
+        self.monitor.registrar(Nivel::Info, tr!("Salvamento"), &mensagem);
         self.faixa_salvamento = Some((mensagem, false));
         self.aviso_salvamento_de = Some(nome);
     }
@@ -125,9 +123,9 @@ impl App {
             .filter(|_| self.aviso_salvamento_de.as_deref() == Some(self.nome_documento().as_str()))
         else { return Space::with_height(0).into() };
         let acao = if *grande {
-            button(text("Salvar (Ctrl+S)").size(12)).padding([5, 12]).style(estilo_botao_primario).on_press(Msg::Salvar)
+            button(text(tr!("Salvar (Ctrl+S)")).size(12)).padding([5, 12]).style(estilo_botao_primario).on_press(Msg::Salvar)
         } else {
-            button(text("Salvar como .fshz…").size(12)).padding([5, 12]).style(estilo_botao_primario).on_press(Msg::SalvarComo)
+            button(text(tr!("Salvar como .fshz…")).size(12)).padding([5, 12]).style(estilo_botao_primario).on_press(Msg::SalvarComo)
         };
         container(row![
             feather_ui::icones::icone_traco(if *grande { "alert-triangle" } else { "info-circle" }, 16.),
@@ -201,18 +199,18 @@ impl App {
 
     pub(super) fn view_primeiros_passos(&self) -> Element<'_, Msg> {
         let passo = self.primeiros_passos_passo.min(PASSOS.len() - 1);
-        let mut nav = iced::widget::column![consulta::rotulo_grupo("Passos")].spacing(2);
+        let mut nav = iced::widget::column![consulta::rotulo_grupo(tr!("Passos"))].spacing(2);
         for (i, (titulo, icone)) in PASSOS.iter().enumerate() {
-            nav = nav.push(consulta::item_nav(format!("{}. {titulo}", i + 1), icone, i == passo,
+            nav = nav.push(consulta::item_nav(format!("{}. {}", i + 1, tr!(titulo)), icone, i == passo,
                 Some(Msg::PrimeirosPassos(Evento::Passo(i)))));
         }
-        let pular = button(text("Pular e configurar depois").size(12))
+        let pular = button(text(tr!("Pular e configurar depois")).size(12))
             .padding([8, 12]).width(Length::Fill).style(consulta::estilo_cartao)
             .on_press(Msg::PrimeirosPassos(Evento::Concluir));
         let ultimo = passo + 1 == PASSOS.len();
         let rodape = consulta::paginacao(
-            ("Anterior", (passo > 0).then_some(Msg::PrimeirosPassos(Evento::Anterior))),
-            (if ultimo { "Começar" } else { "Próximo" }, Some(Msg::PrimeirosPassos(Evento::Proximo))),
+            (tr!("Anterior"), (passo > 0).then_some(Msg::PrimeirosPassos(Evento::Anterior))),
+            (if ultimo { tr!("Começar") } else { tr!("Próximo") }, Some(Msg::PrimeirosPassos(Evento::Proximo))),
         );
         consulta::janela(
             consulta::lateral(nav, (!ultimo).then(|| pular.into())),
@@ -231,8 +229,12 @@ impl App {
                     let mut e = iced::widget::text_input::default(tema, status);
                     e.background = iced::Background::Color(COR_PAINEL());
                     e.border = iced::Border {
-                        color: if matches!(status, iced::widget::text_input::Status::Focused) { COR_AZUL_ACENTO() } else { COR_BORDA() },
-                        width: if matches!(status, iced::widget::text_input::Status::Focused) { 1.5 } else { 1. },
+                        color: match status {
+                            iced::widget::text_input::Status::Focused => COR_AZUL_ACENTO(),
+                            iced::widget::text_input::Status::Hovered => COR_TEXTO(),
+                            _ => COR_TEXTO_MUTED(),
+                        },
+                        width: if matches!(status, iced::widget::text_input::Status::Focused) { 2. } else { 1. },
                         radius: 8.0.into(),
                     };
                     e
@@ -240,71 +242,70 @@ impl App {
         };
         match passo {
             0 => column![
-                consulta::cabecalho("Boas-vindas ao FeatherSheet",
-                    "Planilhas rápidas no seu computador, sem conta e sem telemetria. Em quatro passos curtos o app fica do seu jeito; tudo pode ser mudado depois em Configurações.",
+                consulta::cabecalho(tr!("Boas-vindas ao FeatherSheet"),
+                    tr!("Planilhas rápidas no seu computador, sem conta e sem telemetria. Em quatro passos curtos o app fica do seu jeito; tudo pode ser mudado depois em Configurações."),
                     Some(consulta::ilustracao(Ilustracao::Planilha))),
-                consulta::negrito("O que você encontra aqui", 18.),
+                consulta::negrito(tr!("O que você encontra aqui"), 18.),
                 consulta::grade(vec![
-                    consulta::cartao("folder-open", "Arquivos grandes",
-                        "Abre .xlsx, .csv e .parquet com milhões de linhas sem travar a janela.", None),
-                    consulta::cartao("lock", "Privado por padrão",
-                        "Tudo roda no computador; nada das suas planilhas é enviado.", None),
-                    consulta::cartao("code", "Macros e consultas",
-                        "Macros em JavaScript (Alt+F11) e o OpenQuery para juntar dados.", None),
-                    consulta::cartao("chart-bar", "Gráficos completos",
-                        "25 tipos, com dica do mouse, legenda clicável e elementos analíticos.", None),
-                    consulta::cartao("history", "Recuperação automática",
-                        "Se o computador desligar, a planilha volta pela tela inicial.", None),
-                    consulta::cartao("math-function", "Fórmulas em português",
-                        "SOMA, PROCV e centenas de outras, com ajuda na F1.", None),
+                    consulta::cartao("folder-open", tr!("Arquivos grandes"),
+                        tr!("Abre .xlsx, .csv e .parquet com milhões de linhas sem travar a janela."), None),
+                    consulta::cartao("lock", tr!("Privado por padrão"),
+                        tr!("Tudo roda no computador; nada das suas planilhas é enviado."), None),
+                    consulta::cartao("code", tr!("Macros e consultas"),
+                        tr!("Macros em JavaScript (Alt+F11) e o OpenQuery para juntar dados."), None),
+                    consulta::cartao("chart-bar", tr!("Gráficos completos"),
+                        tr!("25 tipos, com dica do mouse, legenda clicável e elementos analíticos."), None),
+                    consulta::cartao("history", tr!("Recuperação automática"),
+                        tr!("Se o computador desligar, a planilha volta pela tela inicial."), None),
+                    consulta::cartao("math-function", tr!("Fórmulas em português"),
+                        tr!("SOMA, PROCV e centenas de outras, com ajuda na F1."), None),
                 ], 3),
             ].spacing(17).into(),
             1 => column![
-                consulta::cabecalho("Seus dados",
-                    "Usados como autor dos comentários e nas propriedades dos arquivos que você salvar (.fshz e .xlsx).",
+                consulta::cabecalho(tr!("Seus dados"),
+                    tr!("Usados como autor dos comentários e nas propriedades dos arquivos que você salvar (.fshz e .xlsx)."),
                     Some(consulta::ilustracao(Ilustracao::Pessoa))),
-                // Formulário: rótulo numa coluna fixa e o campo logo ao lado
-                // (antes os campos ficavam soltos na ponta direita).
+                // Formulário: rótulo em cima do campo, dica embaixo.
                 column![
-                    campo_formulario("Nome", "Em branco, usa o do sistema",
-                        campo(format!("Ex.: {}", autor_do_sistema()), &self.config.autor_nome, Evento::Nome, 420.)),
-                    campo_formulario("Iniciais", "Aparecem nos comentários",
-                        campo(format!("Ex.: {}", iniciais_de(&self.autor())), &self.config.autor_iniciais, Evento::Iniciais, 120.)),
-                    campo_formulario("Organização", "Opcional, vai no arquivo",
-                        campo("Empresa ou equipe".into(), &self.config.autor_organizacao, Evento::Organizacao, 420.)),
-                ].spacing(10),
-                consulta::apagado("Nada disso sai do computador: fica nas preferências locais do FeatherSheet.", 11.5),
+                    campo_formulario(tr!("Nome"), tr!("Em branco, usa o do sistema"),
+                        campo(trf!("Ex.: {}", autor_do_sistema()), &self.config.autor_nome, Evento::Nome, 440.)),
+                    campo_formulario(tr!("Iniciais"), tr!("Aparecem nos comentários"),
+                        campo(trf!("Ex.: {}", iniciais_de(&self.autor())), &self.config.autor_iniciais, Evento::Iniciais, 160.)),
+                    campo_formulario(tr!("Organização"), tr!("Opcional, vai no arquivo"),
+                        campo(tr!("Empresa ou equipe").into(), &self.config.autor_organizacao, Evento::Organizacao, 440.)),
+                ].spacing(20),
+                consulta::apagado(tr!("Nada disso sai do computador: fica nas preferências locais do FeatherSheet."), 11.5),
             ].spacing(17).into(),
             2 => column![
-                consulta::cabecalho("Salvamento",
-                    "Como o FeatherSheet protege o seu trabalho. A recuperação automática vem ligada.",
+                consulta::cabecalho(tr!("Salvamento"),
+                    tr!("Como o FeatherSheet protege o seu trabalho. A recuperação automática vem ligada."),
                     Some(consulta::ilustracao(Ilustracao::Salvamento))),
                 linhas_salvamento(self),
-                consulta::apagado("Resumo: o salvamento automático grava só arquivos .fshz já salvos. Um .xlsx, .csv ou .parquet aberto, ou uma planilha nova, fica protegido apenas pela recuperação automática até você usar Salvar como… em .fshz.", 11.5),
+                consulta::apagado(tr!("Resumo: o salvamento automático grava só arquivos .fshz já salvos. Um .xlsx, .csv ou .parquet aberto, ou uma planilha nova, fica protegido apenas pela recuperação automática até você usar Salvar como… em .fshz."), 11.5),
             ].spacing(17).into(),
             3 => column![
-                consulta::cabecalho("Aparência",
-                    "Idioma das fórmulas e da Ajuda, tema e cor de destaque. Menus e janelas ainda são só em português.",
+                consulta::cabecalho(tr!("Aparência"),
+                    tr!("Idioma, tema e cor de destaque."),
                     Some(consulta::ilustracao(Ilustracao::Aparencia))),
                 column![
-                    linha("Idioma das fórmulas", "Nomes das funções, separadores (; ou ,) e a Ajuda F1.", lista_idioma(self)),
-                    linha("Tema", "Automático acompanha o sistema na abertura.", opcoes_tema(self)),
-                    linha("Cor de destaque", "Botões, seleção e a marca do app.", amostras_acento(self)),
+                    linha(tr!("Idioma"), tr!("Interface, nomes das funções, separadores (; ou ,) e a Ajuda F1."), lista_idioma(self)),
+                    linha(tr!("Tema"), tr!("Automático acompanha o sistema na abertura."), opcoes_tema(self)),
+                    linha(tr!("Cor de destaque"), tr!("Botões, seleção e a marca do app."), amostras_acento(self)),
                 ],
             ].spacing(17).into(),
             _ => column![
-                consulta::cabecalho("Tudo pronto",
-                    "Algumas portas de entrada para quando precisar. Esta janela continua no menu Ajuda, em Primeiros passos.",
+                consulta::cabecalho(tr!("Tudo pronto"),
+                    tr!("Algumas portas de entrada para quando precisar. Esta janela continua no menu Ajuda, em Primeiros passos."),
                     Some(consulta::ilustracao(Ilustracao::Pronto))),
                 consulta::grade(vec![
-                    consulta::cartao("help", "Ajuda (F1)",
-                        "Guia de uso, todas as funções com exemplos e os atalhos.", Some(Msg::Ajuda)),
-                    consulta::cartao("code", "Editor de macros (Alt+F11)",
-                        "Automatize tarefas com JavaScript.", Some(Msg::Macros)),
-                    consulta::cartao("sparkles", "O que há de novo",
-                        "As novidades de cada versão do FeatherSheet.", Some(Msg::NovidadesAbrir)),
-                    consulta::cartao("settings", "Configurações",
-                        "Todas as preferências, incluindo atalhos do teclado.", Some(Msg::Configuracoes)),
+                    consulta::cartao("help", tr!("Ajuda (F1)"),
+                        tr!("Guia de uso, todas as funções com exemplos e os atalhos."), Some(Msg::Ajuda)),
+                    consulta::cartao("code", tr!("Editor de macros (Alt+F11)"),
+                        tr!("Automatize tarefas com JavaScript."), Some(Msg::Macros)),
+                    consulta::cartao("sparkles", tr!("O que há de novo"),
+                        tr!("As novidades de cada versão do FeatherSheet."), Some(Msg::NovidadesAbrir)),
+                    consulta::cartao("settings", tr!("Configurações"),
+                        tr!("Todas as preferências, incluindo atalhos do teclado."), Some(Msg::Configuracoes)),
                 ], 2),
             ].spacing(17).into(),
         }

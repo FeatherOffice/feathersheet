@@ -5,10 +5,10 @@ const MAX_TEXTO_MANUAL: usize = 2 * 1024 * 1024;
 
 pub(super) fn ler(texto: &str) -> Result<Tabela, String> {
     if texto.trim().is_empty() {
-        return Err("Cole uma tabela com cabeçalhos na primeira linha".into());
+        return Err(tr!("Cole uma tabela com cabeçalhos na primeira linha").into());
     }
     if texto.len() > MAX_TEXTO_MANUAL {
-        return Err("Entrada manual acima de 2 MiB; importe um arquivo".into());
+        return Err(tr!("Entrada manual acima de 2 MiB; importe um arquivo").into());
     }
     let separador = if texto.lines().next().unwrap_or("").contains('\t') {
         '\t'
@@ -16,21 +16,21 @@ pub(super) fn ler(texto: &str) -> Result<Tabela, String> {
         feathersheet_io::csv::detectar_separador(texto)
     };
     let mut linhas = feathersheet_io::csv::dividir_csv(texto, separador);
-    if linhas.is_empty() { return Err("Tabela manual vazia".into()); }
+    if linhas.is_empty() { return Err(tr!("Tabela manual vazia").into()); }
     let cabecalho = linhas.remove(0).into_iter().enumerate()
         .map(|(i,nome)| if nome.trim().is_empty() {
-            format!("Coluna {}",i+1)
+            trf!("Coluna {}",i+1)
         } else { nome }).collect::<Vec<_>>();
     let largura = cabecalho.len();
-    if largura == 0 { return Err("Cabeçalho vazio".into()); }
+    if largura == 0 { return Err(tr!("Cabeçalho vazio").into()); }
     let celulas = (linhas.len() as u64+1).saturating_mul(largura as u64);
     if celulas > MAX_CELULAS_FONTE {
-        return Err(format!("Entrada manual de {celulas} células excede o limite de {MAX_CELULAS_FONTE}"));
+        return Err(trf!("Entrada manual de {celulas} células excede o limite de {MAX_CELULAS_FONTE}"));
     }
     let mut out = Vec::with_capacity(linhas.len());
     for (i,linha) in linhas.into_iter().enumerate() {
         if linha.len() > largura {
-            return Err(format!("Linha {} possui {} colunas, mas o cabeçalho possui {}",
+            return Err(trf!("Linha {} possui {} colunas, mas o cabeçalho possui {}",
                 i+2, linha.len(), largura));
         }
         let mut valores = linha.into_iter().map(|v| if v.is_empty() {

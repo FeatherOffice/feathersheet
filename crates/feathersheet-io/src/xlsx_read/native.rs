@@ -76,16 +76,46 @@ const CHAVES_QUE_COBREM_A_LINHA: &[&str] = &["bg", "borders", "color"];
 /// Células por lote entre os estágios da leitura.
 const LOTE_CARGA: usize = 32_768;
 
-/// Prepara o lote em `nucleos` threads, mantendo a ordem.
-fn preparar_em_paralelo(lote: LoteBruto, nucleos: usize) -> LotePreparado {
+/// Marca, no texto bruto do lote, o que a leitura deixou para converter
+/// aqui, em paralelo: fórmula a traduzir do Excel e número a formatar pelo
+/// estilo. Sem marca, o texto já é o final.
+const MARCA_FORMULA: char = '\u{1}';
+const MARCA_NUMERO: char = '\u{2}';
+
+/// O texto final da célula a partir do bruto que a leitura guardou.
+fn converter<'a>(bruto: &'a str, xf: usize, xfs: &[styles::XfStyle]) -> std::borrow::Cow<'a, str> {
+    if let Some(f) = bruto.strip_prefix(MARCA_FORMULA) {
+        return sheet::formula_da_celula(f).into();
+    }
+    if let Some(n) = bruto.strip_prefix(MARCA_NUMERO) {
+        // Na linha com estilo próprio o índice vem somado de `xfs.len()`.
+        let xf = if xf >= xfs.len() && !xfs.is_empty() { xf - xfs.len() } else { xf };
+        return sheet::numero_da_celula(n.trim(), xfs.get(xf)).into();
+    }
+    bruto.into()
+}
+
+/// Prepara o lote em `nucleos` threads, mantendo a ordem: cada thread
+/// converte (traduz a fórmula, formata o número) e analisa a sua parte num
+/// texto próprio; no fim os textos se juntam e as posições se deslocam.
+fn preparar_em_paralelo(lote: LoteBruto, nucleos: usize, xfs: &[styles::XfStyle]) -> LotePreparado {
+    type Bruta = (u32, u32, usize, Option<Value>, (u32, u32));
     let LoteBruto { texto, celulas } = lote;
-    let preparar = |padroes: &mut Padroes, (r, c, xf, v, faixa): (u32, u32, usize, Option<Value>, (u32, u32))| {
-        let raw = &texto[faixa.0 as usize..faixa.1 as usize];
-        CelulaPreparada::preparar(r, c, raw, faixa, xf, v, padroes)
-    };
-    let celulas = if nucleos <= 1 || celulas.len() < 1_024 {
+    let texto = &texto;
+    let parte_pronta = |parte: Vec<Bruta>| -> (String, Vec<CelulaPreparada>) {
         let mut padroes = Padroes::default();
-        celulas.into_iter().map(|c| preparar(&mut padroes, c)).collect()
+        let mut saida = String::with_capacity(parte.len() * 12);
+        let prontas = parte.into_iter().map(|(r, c, xf, v, faixa)| {
+            let bruto = &texto[faixa.0 as usize..faixa.1 as usize];
+            let raw = converter(bruto, xf, xfs);
+            let inicio = saida.len() as u32;
+            saida.push_str(&raw);
+            CelulaPreparada::preparar(r, c, &raw, (inicio, saida.len() as u32), xf, v, &mut padroes)
+        }).collect();
+        (saida, prontas)
+    };
+    let partes_prontas: Vec<(String, Vec<CelulaPreparada>)> = if nucleos <= 1 || celulas.len() < 1_024 {
+        vec![parte_pronta(celulas)]
     } else {
         let tamanho = celulas.len().div_ceil(nucleos);
         let mut partes = Vec::with_capacity(nucleos);
@@ -96,14 +126,18 @@ fn preparar_em_paralelo(lote: LoteBruto, nucleos: usize) -> LotePreparado {
         }
         partes.push(resto);
         std::thread::scope(|escopo| {
-            let tarefas: Vec<_> = partes.into_iter().map(|parte| escopo.spawn(move || {
-                let mut padroes = Padroes::default();
-                parte.into_iter().map(|c| preparar(&mut padroes, c)).collect::<Vec<_>>()
-            })).collect();
-            tarefas.into_iter().flat_map(|t| t.join().expect("preparar células")).collect()
+            let tarefas: Vec<_> = partes.into_iter().map(|parte| escopo.spawn(move || parte_pronta(parte))).collect();
+            tarefas.into_iter().map(|t| t.join().expect("preparar células")).collect()
         })
     };
-    LotePreparado { texto, celulas }
+    let mut final_texto = String::with_capacity(partes_prontas.iter().map(|(t, _)| t.len()).sum());
+    let mut final_celulas = Vec::with_capacity(partes_prontas.iter().map(|(_, c)| c.len()).sum());
+    for (t, cs) in partes_prontas {
+        let desloc = final_texto.len() as u32;
+        final_texto.push_str(&t);
+        final_celulas.extend(cs.into_iter().map(|mut c| { c.faixa = (c.faixa.0 + desloc, c.faixa.1 + desloc); c }));
+    }
+    LotePreparado { texto: final_texto, celulas: final_celulas }
 }
 
 fn ler_aba(
@@ -151,7 +185,7 @@ fn ler_aba(
             let mut gasto = std::time::Duration::ZERO;
             for lote in a_preparar {
                 let t0 = std::time::Instant::now();
-                let prontas = preparar_em_paralelo(lote, nucleos);
+                let prontas = preparar_em_paralelo(lote, nucleos, xfs);
                 gasto += t0.elapsed();
                 if para_gravar.send(prontas).is_err() { break; }
             }
@@ -185,10 +219,14 @@ fn ler_aba(
         });
 
         let mut lote = LoteBruto::com_capacidade(LOTE_CARGA);
+        let mut bruto = String::with_capacity(256);
         // A closure conserva uma única linha de XML por vez. Se o arquivo
         // extrapolar o limite, a leitura ZIP é cancelada imediatamente.
-        let raiz = xml::parse_xml_items_reader_result(
-            BufReader::new(arquivo), "sheetData", "row", &mut |row| {
+        // Leitor de linhas sem árvore: cada `<c>` vai para buffers
+        // reaproveitados, sem objeto nem mapa de atributos por nó (a árvore
+        // genérica custava ~20 s em 13 milhões de células).
+        let raiz = xml::parse_xml_linhas_rapidas(
+            BufReader::with_capacity(1 << 20, crate::progresso::ContadorEtapa(arquivo)), &mut |row| {
                 let Some(linha) = row.attr("r").and_then(|r| r.parse::<i64>().ok()).map(|r| r - 1) else {
                     return Ok(());
                 };
@@ -202,11 +240,12 @@ fn ler_aba(
                 if let Some(s) = estilo_linha { linhas_com_estilo.push((linha as u32, s)); }
                 let ht = row.attr("ht").and_then(|v| v.parse::<f64>().ok());
                 let propria = matches!(row.attr("customHeight"), Some("1") | Some("true"));
-                let (nivel, recolhida) = sheet::topico_do_no(row);
+                let nivel = row.attr("outlineLevel").and_then(|s| s.parse::<u8>().ok()).unwrap_or(0).min(7);
+                let recolhida = matches!(row.attr("collapsed"), Some("1") | Some("true"));
                 if hidden || ht.is_some() || nivel > 0 || recolhida {
                     alturas.push((linha, ht, hidden, propria, nivel, recolhida));
                 }
-                for celula in row.children_named("c") {
+                for celula in row.celulas() {
                     let Some(at) = parse_cell_ref(celula.attr("r").unwrap_or("")) else { continue };
                     if at.row < 0 || at.row >= 1_048_576 || at.col < 0 || at.col >= MAX_COLS {
                         continue;
@@ -215,8 +254,8 @@ fn ler_aba(
                         continue;
                     }
                     if celula.attr("cm").is_some() {
-                        if let Some(f) = celula.child("f").filter(|f| f.attr("t") == Some("array")) {
-                            let mut p = f.attr("ref").unwrap_or("").split(':');
+                        if celula.f.get().is_some() && celula.f_t.get() == Some("array") {
+                            let mut p = celula.f_ref.get().unwrap_or("").split(':');
                             if let (Some(a), Some(b)) = (p.next().and_then(parse_cell_ref), p.next().and_then(parse_cell_ref)) {
                                 derramadas.push((a.row, a.col, b.row, b.col));
                             }
@@ -224,7 +263,25 @@ fn ler_aba(
                     }
                     let xf_index = celula.attr("s").and_then(|s| s.parse::<usize>().ok()).unwrap_or(0);
                     let xf = xfs.get(xf_index);
-                    let raw = sheet::cell_raw(celula, strings, xf, &mut shared, at.row, at.col);
+                    // Fórmula comum e número ficam para o "preparar" (em
+                    // paralelo); só o que depende de ordem (fórmula
+                    // compartilhada) ou é barato (texto, lógico) sai aqui.
+                    let tipo = celula.attr("t").unwrap_or("n");
+                    let formula_comum = celula.f.get().filter(|f| !f.trim().is_empty() && celula.f_t.get() != Some("shared"));
+                    // O texto vai para um buffer reaproveitado (sem alocar por célula).
+                    bruto.clear();
+                    if let Some(f) = formula_comum {
+                        bruto.push(MARCA_FORMULA);
+                        bruto.push_str(f);
+                    } else if celula.f.get().is_none() && tipo == "n" {
+                        if let Some(v) = celula.v.get().filter(|v| !v.trim().is_empty()) {
+                            bruto.push(MARCA_NUMERO);
+                            bruto.push_str(v);
+                        }
+                    } else {
+                        bruto.push_str(&sheet::cell_raw(celula, strings, xf, &mut shared, at.row, at.col));
+                    }
+                    let raw = &bruto;
                     // Numa linha com estilo, a célula usa a variante que cobre o da linha.
                     let xf_estilo = if estilo_linha.is_some() && xf_index < xfs.len() { xf_index + xfs.len() } else { xf_index };
                     let tem_estilo = estilos.get(xf_estilo).is_some_and(Option::is_some);
@@ -240,7 +297,7 @@ fn ler_aba(
                     *total += 1;
                     celulas += 1;
                     let guardado = sheet::valor_guardado(celula, strings);
-                    lote.push(at.row as u32, at.col as u32, &raw, xf_estilo, guardado);
+                    lote.push(at.row as u32, at.col as u32, raw, xf_estilo, guardado);
                     if lote.len() >= LOTE_CARGA {
                         let cheio = std::mem::replace(&mut lote, LoteBruto::com_capacidade(LOTE_CARGA));
                         para_preparar.send(cheio).map_err(|_| "XLSX: a gravação parou no meio".to_string())?;
@@ -363,6 +420,11 @@ pub fn ler_xlsx_workbook(bytes: Vec<u8>) -> Result<(Workbook, usize), String> {
     let mut resumos = Vec::new();
     let mut caminhos = Vec::new();
     let mut total = 0usize;
+    // A barra da montagem anda pelos bytes de XML das abas.
+    let xml_total: u64 = (0..arquivo.len())
+        .filter_map(|i| arquivo.by_index_raw(i).ok().filter(|e| e.name().starts_with("xl/worksheets/")).map(|e| e.size()))
+        .sum();
+    crate::progresso::etapa_total(xml_total);
     if let Some(sheets) = book.child("sheets") {
         for (i, node) in sheets.children_named("sheet").enumerate() {
             let target = node.attr("r:id")

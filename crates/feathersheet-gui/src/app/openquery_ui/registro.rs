@@ -12,11 +12,11 @@ pub(super) struct Salva {
 }
 
 fn registros(w: &Workbook, aba: usize) -> Result<Vec<Json>, String> {
-    let raw = w.aba(aba).ok_or("Aba de consultas não existe")?
+    let raw = w.aba(aba).ok_or(tr!("Aba de consultas não existe"))?
         .sheet.oq.as_deref();
     match raw {
         Some(raw) => serde_json::from_str::<Vec<Json>>(raw)
-            .map_err(|_| format!("Metadados OpenQuery da aba {} estão inválidos; nada foi alterado", aba + 1)),
+            .map_err(|_| trf!("Metadados OpenQuery da aba {} estão inválidos; nada foi alterado", aba + 1)),
         None => Ok(Vec::new()),
     }
 }
@@ -39,7 +39,7 @@ pub(super) fn listar(w: &Workbook) -> Result<Vec<Salva>, String> {
 
 pub(super) fn buscar(w: &Workbook, id: &str) -> Result<Salva, String> {
     listar(w)?.into_iter().find(|e| e.dados["id"].as_str() == Some(id))
-        .ok_or_else(|| format!("Consulta '{id}' não encontrada"))
+        .ok_or_else(|| trf!("Consulta '{id}' não encontrada"))
 }
 
 pub(super) fn proximo_id(w: &Workbook) -> Result<String, String> {
@@ -88,16 +88,16 @@ fn serializar_tabela(t: &Tabela) -> Json {
 }
 
 pub(super) fn fonte_snapshot(reg: &Json) -> Result<Tabela, String> {
-    let dados = reg.get("fonte").ok_or("Consulta sem fonte salvo")?;
+    let dados = reg.get("fonte").ok_or(tr!("Consulta sem fonte salvo"))?;
     let cabecalho = dados["cabecalho"].as_array()
-        .ok_or("Consulta sem cabeçalho")?.iter().map(|v| v.as_str().unwrap_or("").to_owned()).collect::<Vec<_>>();
+        .ok_or(tr!("Consulta sem cabeçalho"))?.iter().map(|v| v.as_str().unwrap_or("").to_owned()).collect::<Vec<_>>();
     let linhas = dados["linhas"].as_array()
-        .ok_or("Consulta sem linhas")?;
+        .ok_or(tr!("Consulta sem linhas"))?;
     if (linhas.len() as u64).saturating_mul(cabecalho.len() as u64) > MAX_CELULAS_FONTE {
-        return Err("Fonte armazenada supera limite de células para esta etapa".into());
+        return Err(tr!("Fonte armazenada supera limite de células para esta etapa").into());
     }
     let linhas = linhas.iter().map(|linha| {
-        linha.as_array().ok_or("Linha de fonte inválida").map(|celulas|
+        linha.as_array().ok_or(tr!("Linha de fonte inválida")).map(|celulas|
             celulas.iter().map(json_valor).collect::<Vec<_>>()
         )
     }).collect::<Result<Vec<_>, _>>()?;
@@ -158,7 +158,7 @@ pub(super) fn montar(
 pub(super) fn preparar_gravacao(
     w: &Workbook, aba_destino: usize, registro: &Json
 ) -> Result<Vec<(usize, String)>, String> {
-    let id = registro["id"].as_str().ok_or("Consulta sem id")?;
+    let id = registro["id"].as_str().ok_or(tr!("Consulta sem id"))?;
     let mut mudancas = Vec::new();
     for i in 0..w.len() {
         let mut itens = registros(w, i)?;
@@ -188,7 +188,7 @@ pub(super) fn excluir(w: &mut Workbook, id: &str) -> Result<(), String> {
             mudancas.push((i, serde_json::to_string(&lista).map_err(|e| e.to_string())?));
         }
     }
-    if mudancas.is_empty() { return Err("Consulta não encontrada".into()); }
+    if mudancas.is_empty() { return Err(tr!("Consulta não encontrada").into()); }
     aplicar_gravacao(w, mudancas);
     Ok(())
 }

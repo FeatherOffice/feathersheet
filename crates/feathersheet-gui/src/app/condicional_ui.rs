@@ -38,8 +38,8 @@ impl App {
         if regras.is_empty() {
             lista=lista.push(container(column![
                 feather_ui::icones::icone("palette", 28.0),
-                text("Nenhuma regra nesta aba").size(12.5),
-                text("Selecione células e crie a primeira regra ao lado.")
+                text(tr!("Nenhuma regra nesta aba")).size(12.5),
+                text(tr!("Selecione células e crie a primeira regra ao lado."))
                     .size(11).color(COR_TEXTO_MUTED()),
             ].spacing(6).align_x(Alignment::Center)).center_x(Length::Fill).padding([28, 12]));
         }
@@ -55,9 +55,9 @@ impl App {
                     amostra_estilo(c.style.bg.as_deref(), c.style.color.as_deref(),
                         c.style.bold.unwrap_or(false), c.style.italic.unwrap_or(false)),
                 ),
-                Condition::ColorScale(e) => ("Escala de cores".into(), amostra_escala(
+                Condition::ColorScale(e) => (tr!("Escala de cores").into(), amostra_escala(
                     &[Some(e.min.color.as_str()), e.mid.as_ref().map(|m| m.color.as_str()), Some(e.max.color.as_str())])),
-                Condition::DataBar(b) => ("Barras de dados".into(), amostra_barra(&b.color)),
+                Condition::DataBar(b) => (tr!("Barras de dados").into(), amostra_barra(&b.color)),
             };
             let editando = self.condicional_editando == Some(i);
             let acao = |icone: &'static str, dica: &'static str, msg: Option<Msg>| -> Element<'_, Msg> {
@@ -86,10 +86,10 @@ impl App {
                 row![
                     text(format!("{}º", i + 1)).size(10.5).color(COR_TEXTO_MUTED()),
                     Space::with_width(Length::Fill),
-                    acao("chevron-up", "Aplicar antes", (i > 0).then_some(Msg::CondicionalMover(i,-1))),
-                    acao("chevron-down", "Aplicar depois", (i + 1 < total).then_some(Msg::CondicionalMover(i,1))),
-                    acao("edit", "Editar regra", Some(Msg::CondicionalEditar(i))),
-                    acao("trash", "Excluir regra", Some(Msg::CondicionalRemover(i))),
+                    acao("chevron-up", tr!("Aplicar antes"), (i > 0).then_some(Msg::CondicionalMover(i,-1))),
+                    acao("chevron-down", tr!("Aplicar depois"), (i + 1 < total).then_some(Msg::CondicionalMover(i,1))),
+                    acao("edit", tr!("Editar regra"), Some(Msg::CondicionalEditar(i))),
+                    acao("trash", tr!("Excluir regra"), Some(Msg::CondicionalRemover(i))),
                 ].spacing(2).align_y(Alignment::Center),
             ].spacing(6);
             lista=lista.push(container(cartao).padding([9, 10]).width(Length::Fill)
@@ -105,20 +105,20 @@ impl App {
         }
         let esquerda = column![
             row![
-                text(format!("REGRAS ({total})")).size(10.5).color(COR_TEXTO_MUTED()),
+                text(trf!("REGRAS ({total})")).size(10.5).color(COR_TEXTO_MUTED()),
                 Space::with_width(Length::Fill),
-                button(row![feather_ui::icones::icone("plus", 14.0), text("Nova").size(12)]
+                button(row![feather_ui::icones::icone("plus", 14.0), text(tr!("Nova")).size(12)]
                         .spacing(5).align_y(Alignment::Center))
                     .padding([5, 10]).style(estilo_botao_secundario)
                     .on_press(Msg::CondicionalNovaRegra),
             ].align_y(Alignment::Center),
             feather_ui::tema::rolagem(lista).height(Length::Fill),
             row![
-                button(row![feather_ui::icones::icone("eraser", 14.0), text("Limpar seleção").size(12)]
+                button(row![feather_ui::icones::icone("eraser", 14.0), text(tr!("Limpar seleção")).size(12)]
                         .spacing(6).align_y(Alignment::Center))
                     .padding([6, 10]).style(estilo_botao_secundario)
                     .on_press(Msg::CondicionalLimparSelecao),
-                button(row![feather_ui::icones::icone("trash", 14.0), text("Limpar todas").size(12)]
+                button(row![feather_ui::icones::icone("trash", 14.0), text(tr!("Limpar todas")).size(12)]
                         .spacing(6).align_y(Alignment::Center))
                     .padding([6, 10]).style(estilo_botao_secundario)
                     .on_press_maybe((total > 0).then_some(Msg::CondicionalLimparTudo)),
@@ -142,35 +142,35 @@ impl App {
         };
         let tipo = self.condicional_operador;
         let mut formulario = column![
-            text(if self.condicional_editando.is_some() { "Editar regra" } else { "Nova regra para a seleção" })
+            text(if self.condicional_editando.is_some() { tr!("Editar regra") } else { tr!("Nova regra para a seleção") })
                 .size(15).font(negrito),
-            campo("Tipo da regra", pick_list(TipoCondicional::TODOS.to_vec(), Some(tipo),
+            campo(tr!("Tipo da regra"), pick_list(TipoCondicional::TODOS.to_vec(), Some(tipo),
                 Msg::CondicionalTipo).padding([7, 10]).text_size(12.5)
                 .style(estilo_menu_da_faixa).width(Length::Fill).into()),
         ].spacing(12);
         match tipo.aridade() {
-            1 => formulario = formulario.push(campo("Valor, texto ou fórmula",
-                entrada("Ex.: 10, Aprovado ou =A1>B1", &self.condicional_valor, Msg::CondicionalValor))),
+            1 => formulario = formulario.push(campo(tr!("Valor, texto ou fórmula"),
+                entrada(tr!("Ex.: 10, Aprovado ou =A1>B1"), &self.condicional_valor, Msg::CondicionalValor))),
             2 => formulario = formulario.push(row![
-                container(campo("De", entrada("10", &self.condicional_valor, Msg::CondicionalValor))).width(Length::Fill),
-                container(campo("Até", entrada("20", &self.condicional_valor2, Msg::CondicionalValor2))).width(Length::Fill),
+                container(campo(tr!("De"), entrada("10", &self.condicional_valor, Msg::CondicionalValor))).width(Length::Fill),
+                container(campo(tr!("Até"), entrada("20", &self.condicional_valor2, Msg::CondicionalValor2))).width(Length::Fill),
             ].spacing(10)),
             _ => {}
         }
-        formulario = formulario.push(text("Formatação").size(13).font(negrito));
+        formulario = formulario.push(text(tr!("Formatação")).size(13).font(negrito));
         let previa: Element<'_, Msg> = match tipo {
             TipoCondicional::Escala => {
                 formulario = formulario
                     .push(row![
-                        container(cor_campo("Cor do menor valor", "#f8696b", &self.condicional_cor_min, Msg::CondicionalCorMin)).width(Length::Fill),
-                        container(cor_campo("Cor do maior valor", "#63be7b", &self.condicional_cor, Msg::CondicionalCor)).width(Length::Fill),
+                        container(cor_campo(tr!("Cor do menor valor"), "#f8696b", &self.condicional_cor_min, Msg::CondicionalCorMin)).width(Length::Fill),
+                        container(cor_campo(tr!("Cor do maior valor"), "#63be7b", &self.condicional_cor, Msg::CondicionalCor)).width(Length::Fill),
                     ].spacing(10))
                     .push(row![
                         toggler(self.condicional_ponto_meio).on_toggle(Msg::CondicionalPontoMeio).size(18),
-                        text("Usar cor intermediária").size(12),
+                        text(tr!("Usar cor intermediária")).size(12),
                     ].spacing(8).align_y(Alignment::Center));
                 if self.condicional_ponto_meio {
-                    formulario = formulario.push(cor_campo("Cor intermediária", "#ffeb84",
+                    formulario = formulario.push(cor_campo(tr!("Cor intermediária"), "#ffeb84",
                         &self.condicional_cor_meio, Msg::CondicionalCorMeio));
                 }
                 amostra_escala(&[Some(self.condicional_cor_min.as_str()),
@@ -180,12 +180,12 @@ impl App {
             TipoCondicional::Barra => {
                 formulario = formulario
                     .push(row![
-                        container(cor_campo("Cor da barra", "#638ec6", &self.condicional_cor, Msg::CondicionalCor)).width(Length::Fill),
-                        container(cor_campo("Barras negativas", "#d93025", &self.condicional_cor_negativa, Msg::CondicionalCorNegativa)).width(Length::Fill),
+                        container(cor_campo(tr!("Cor da barra"), "#638ec6", &self.condicional_cor, Msg::CondicionalCor)).width(Length::Fill),
+                        container(cor_campo(tr!("Barras negativas"), "#d93025", &self.condicional_cor_negativa, Msg::CondicionalCorNegativa)).width(Length::Fill),
                     ].spacing(10))
                     .push(row![
                         toggler(self.condicional_ocultar_valor).on_toggle(Msg::CondicionalOcultarValor).size(18),
-                        text("Mostrar só a barra, sem o número").size(12),
+                        text(tr!("Mostrar só a barra, sem o número")).size(12),
                     ].spacing(8).align_y(Alignment::Center));
                 amostra_barra(&self.condicional_cor)
             }
@@ -209,21 +209,21 @@ impl App {
                 };
                 formulario = formulario
                     .push(row![
-                        container(cor_campo("Cor de fundo", "#fce8b2", &self.condicional_cor, Msg::CondicionalCor)).width(Length::Fill),
-                        container(cor_campo("Cor do texto", "automática", &self.condicional_cor_texto, Msg::CondicionalCorTexto)).width(Length::Fill),
+                        container(cor_campo(tr!("Cor de fundo"), "#fce8b2", &self.condicional_cor, Msg::CondicionalCor)).width(Length::Fill),
+                        container(cor_campo(tr!("Cor do texto"), tr!("automática"), &self.condicional_cor_texto, Msg::CondicionalCorTexto)).width(Length::Fill),
                     ].spacing(10))
                     .push(row![
-                        efeito("bold", "Negrito", self.condicional_negrito, Msg::CondicionalNegrito),
-                        efeito("italic", "Itálico", self.condicional_italico, Msg::CondicionalItalico),
-                        efeito("underline", "Sublinhado", self.condicional_sublinhado, Msg::CondicionalSublinhado),
-                        efeito("strikethrough", "Tachado", self.condicional_riscado, Msg::CondicionalRiscado),
+                        efeito("bold", tr!("Negrito"), self.condicional_negrito, Msg::CondicionalNegrito),
+                        efeito("italic", tr!("Itálico"), self.condicional_italico, Msg::CondicionalItalico),
+                        efeito("underline", tr!("Sublinhado"), self.condicional_sublinhado, Msg::CondicionalSublinhado),
+                        efeito("strikethrough", tr!("Tachado"), self.condicional_riscado, Msg::CondicionalRiscado),
                     ].spacing(6));
                 let fundo = (!self.condicional_cor.trim().is_empty()).then_some(self.condicional_cor.as_str());
                 let texto = (!self.condicional_cor_texto.trim().is_empty()).then_some(self.condicional_cor_texto.as_str());
                 amostra_estilo(fundo, texto, self.condicional_negrito, self.condicional_italico)
             }
         };
-        formulario = formulario.push(campo("Prévia", container(previa)
+        formulario = formulario.push(campo(tr!("Prévia"), container(previa)
             .center_x(Length::Fill).center_y(Length::Fixed(64.0))
             .style(|_| container::Style {
                 background: Some(iced::Background::Color(COR_PAINEL_FAIXA())),
@@ -232,11 +232,11 @@ impl App {
             }).into()));
         let mut botoes = row![Space::with_width(Length::Fill)].spacing(8);
         if self.condicional_editando.is_some() {
-            botoes = botoes.push(button(text("Cancelar edição").size(12.5)).padding([8, 14])
+            botoes = botoes.push(button(text(tr!("Cancelar edição")).size(12.5)).padding([8, 14])
                 .style(estilo_botao_secundario).on_press(Msg::CondicionalNovaRegra));
         }
         botoes = botoes.push(button(text(if self.condicional_editando.is_some() {
-                "Salvar regra" } else { "Criar regra" }).size(12.5))
+                tr!("Salvar regra") } else { tr!("Criar regra") }).size(12.5))
             .padding([8, 18]).style(estilo_botao_primario).on_press(Msg::CondicionalAdicionar));
         let direita = column![
             feather_ui::tema::rolagem(formulario.padding([2, 4])).height(Length::Fill),
@@ -247,8 +247,8 @@ impl App {
         let nome_aba = self.workbook.nomes().get(self.folha).cloned().unwrap_or_default();
         let cabecalho = row![
             column![
-                text("Formatação condicional").size(18).font(negrito),
-                text(format!("Regras da aba “{nome_aba}”, aplicadas de cima para baixo."))
+                text(tr!("Formatação condicional")).size(18).font(negrito),
+                text(trf!("Regras da aba “{nome_aba}”, aplicadas de cima para baixo."))
                     .size(12).color(COR_TEXTO_MUTED()),
             ].spacing(3).width(Length::Fill),
             tooltip(
@@ -260,7 +260,7 @@ impl App {
                         e
                     })
                     .on_press(Msg::CondicionalFechar),
-                container(text("Fechar").size(11)).padding([4, 8]).style(estilo_dica),
+                container(text(tr!("Fechar")).size(11)).padding([4, 8]).style(estilo_dica),
                 tooltip::Position::Left,
             ),
         ].align_y(Alignment::Center).padding([14, 18]);
@@ -325,29 +325,29 @@ impl App {
 
     fn menu_condicional(&self) -> Element<'_, Msg> {
         let mut opcoes = column![
-            container(text("FORMATAÇÃO CONDICIONAL").size(11.5).color(COR_TEXTO_MUTED()))
+            container(text(tr!("FORMATAÇÃO CONDICIONAL")).size(11.5).color(COR_TEXTO_MUTED()))
                 .padding([8, 9]),
         ].spacing(2);
         let secoes: &[(&str, &[(&str, TipoCondicional)])] = &[
-            ("REALÇAR CÉLULAS", &[
-                ("Maior que…", TipoCondicional::Maior),
-                ("Menor que…", TipoCondicional::Menor),
-                ("Entre…", TipoCondicional::Entre),
-                ("Igual a…", TipoCondicional::Igual),
-                ("Texto que contém…", TipoCondicional::Contem),
-                ("Valores duplicados…", TipoCondicional::Duplicado),
+            (tr!("REALÇAR CÉLULAS"), &[
+                (tr!("Maior que…"), TipoCondicional::Maior),
+                (tr!("Menor que…"), TipoCondicional::Menor),
+                (tr!("Entre…"), TipoCondicional::Entre),
+                (tr!("Igual a…"), TipoCondicional::Igual),
+                (tr!("Texto que contém…"), TipoCondicional::Contem),
+                (tr!("Valores duplicados…"), TipoCondicional::Duplicado),
             ]),
-            ("PRIMEIROS / ÚLTIMOS VALORES", &[
-                ("Acima da média…", TipoCondicional::AcimaMedia),
-                ("Abaixo da média…", TipoCondicional::AbaixoMedia),
+            (tr!("PRIMEIROS / ÚLTIMOS VALORES"), &[
+                (tr!("Acima da média…"), TipoCondicional::AcimaMedia),
+                (tr!("Abaixo da média…"), TipoCondicional::AbaixoMedia),
             ]),
-            ("OUTRAS REGRAS", &[
-                ("Valores únicos…", TipoCondicional::Unico),
-                ("Células vazias…", TipoCondicional::Vazia),
-                ("Células não vazias…", TipoCondicional::NaoVazia),
-                ("Escala de cores…", TipoCondicional::Escala),
-                ("Barras de dados…", TipoCondicional::Barra),
-                ("Usar uma fórmula…", TipoCondicional::Formula),
+            (tr!("OUTRAS REGRAS"), &[
+                (tr!("Valores únicos…"), TipoCondicional::Unico),
+                (tr!("Células vazias…"), TipoCondicional::Vazia),
+                (tr!("Células não vazias…"), TipoCondicional::NaoVazia),
+                (tr!("Escala de cores…"), TipoCondicional::Escala),
+                (tr!("Barras de dados…"), TipoCondicional::Barra),
+                (tr!("Usar uma fórmula…"), TipoCondicional::Formula),
             ]),
         ];
         for &(titulo, regras) in secoes {
@@ -379,10 +379,10 @@ impl App {
                 .width(Length::Fill).style(estilo_linha)
         );
         for (rotulo, icone, evento) in [
-            ("Nova regra…", "plus", Msg::CondicionalNovaRegra),
-            ("Gerenciar regras…", "settings", Msg::CondicionalMostrar),
-            ("Limpar regras da seleção", "eraser", Msg::CondicionalLimparSelecao),
-            ("Limpar regras da planilha", "trash", Msg::CondicionalLimparTudo),
+            (tr!("Nova regra…"), "plus", Msg::CondicionalNovaRegra),
+            (tr!("Gerenciar regras…"), "settings", Msg::CondicionalMostrar),
+            (tr!("Limpar regras da seleção"), "eraser", Msg::CondicionalLimparSelecao),
+            (tr!("Limpar regras da planilha"), "trash", Msg::CondicionalLimparTudo),
         ] {
             opcoes = opcoes.push(
                 button(row![
@@ -442,28 +442,28 @@ fn descrever_regra(op: feathersheet_core::operacoes::rules::CellOp, valores: &[S
         else { format!("“{s}”") }
     };
     match op {
-        GreaterThan => format!("Maior que {}", v(0)),
-        GreaterOrEqual => format!("Maior ou igual a {}", v(0)),
-        LessThan => format!("Menor que {}", v(0)),
-        LessOrEqual => format!("Menor ou igual a {}", v(0)),
-        Equal => format!("Igual a {}", v(0)),
-        NotEqual => format!("Diferente de {}", v(0)),
-        Between => format!("Entre {} e {}", v(0), v(1)),
-        NotBetween => format!("Fora de {} a {}", v(0), v(1)),
-        IsEmpty => "Célula vazia".into(),
-        IsNotEmpty => "Célula preenchida".into(),
-        TextContains => format!("Texto contém {}", v(0)),
-        TextNotContains => format!("Texto não contém {}", v(0)),
-        TextStartsWith => format!("Começa com {}", v(0)),
-        TextEndsWith => format!("Termina com {}", v(0)),
-        DateBefore => format!("Data antes de {}", v(0)),
-        DateAfter => format!("Data depois de {}", v(0)),
-        DateOn => format!("Data igual a {}", v(0)),
-        Duplicate => "Valores duplicados".into(),
-        Unique => "Valores únicos".into(),
-        AboveAverage => "Acima da média".into(),
-        BelowAverage => "Abaixo da média".into(),
-        Formula => format!("Fórmula {}", valores.first().map(String::as_str).unwrap_or("")),
+        GreaterThan => trf!("Maior que {}", v(0)),
+        GreaterOrEqual => trf!("Maior ou igual a {}", v(0)),
+        LessThan => trf!("Menor que {}", v(0)),
+        LessOrEqual => trf!("Menor ou igual a {}", v(0)),
+        Equal => trf!("Igual a {}", v(0)),
+        NotEqual => trf!("Diferente de {}", v(0)),
+        Between => trf!("Entre {} e {}", v(0), v(1)),
+        NotBetween => trf!("Fora de {} a {}", v(0), v(1)),
+        IsEmpty => tr!("Célula vazia").into(),
+        IsNotEmpty => tr!("Célula preenchida").into(),
+        TextContains => trf!("Texto contém {}", v(0)),
+        TextNotContains => trf!("Texto não contém {}", v(0)),
+        TextStartsWith => trf!("Começa com {}", v(0)),
+        TextEndsWith => trf!("Termina com {}", v(0)),
+        DateBefore => trf!("Data antes de {}", v(0)),
+        DateAfter => trf!("Data depois de {}", v(0)),
+        DateOn => trf!("Data igual a {}", v(0)),
+        Duplicate => tr!("Valores duplicados").into(),
+        Unique => tr!("Valores únicos").into(),
+        AboveAverage => tr!("Acima da média").into(),
+        BelowAverage => tr!("Abaixo da média").into(),
+        Formula => trf!("Fórmula {}", valores.first().map(String::as_str).unwrap_or("")),
     }
 }
 

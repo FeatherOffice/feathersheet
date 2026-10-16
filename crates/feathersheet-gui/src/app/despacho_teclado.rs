@@ -150,7 +150,7 @@ impl App {
                                         self.config.atalhos.insert(acao.to_owned(), combo);
                                         self.config.gravar();
                                         self.atalho_captura = None;
-                                        self.status = "Atalho atualizado".into();
+                                        self.status = tr!("Atalho atualizado").into();
                                     }
                                     Err(erro) => self.status = erro.to_owned(),
                                 }
@@ -250,7 +250,7 @@ impl App {
                 if self.editor_formula.ativo {
                     use keyboard::key::Named;
                     if key==keyboard::Key::Named(Named::Escape) {
-                        if !self.editor_formula.sugestoes(&self.edicao).is_empty() {
+                        if !self.editor_formula.sugestoes(&self.edicao,self.config.idioma=="en-US").is_empty() {
                             self.editor_formula.esconder();
                             return Task::none();
                         }
@@ -318,7 +318,7 @@ impl App {
                             self.editor_formula.posicao(&self.edicao)),
                                     ]);
                                 }
-                            } else if dr!=0 && !self.editor_formula.sugestoes(&self.edicao).is_empty() {
+                            } else if dr!=0 && !self.editor_formula.sugestoes(&self.edicao,self.config.idioma=="en-US").is_empty() {
                                 return self.update(Msg::NavegarSugestao(dr as i32));
                             } else if dc!=0 && !mods.control() && !mods.alt() {
                                 let atual=self.editor_formula.posicao(&self.edicao);

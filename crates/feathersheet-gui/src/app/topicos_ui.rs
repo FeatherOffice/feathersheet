@@ -58,7 +58,7 @@ impl App {
 
     fn mexer_topicos(&mut self, acao: impl FnOnce(&mut feathersheet_core::planilha::sheet::Sheet) -> Result<String, String>) {
         if !self.confirmar() { return; }
-        let mut resultado = Err("A planilha não está disponível.".to_string());
+        let mut resultado = Err(tr!("A planilha não está disponível.").to_string());
         self.workbook.editar(self.folha, |s| resultado = acao(s));
         match resultado {
             Ok(msg) => { self.alterado = true; self.status = msg; }
@@ -68,25 +68,25 @@ impl App {
 
     pub(super) fn evento_topicos(&mut self, evento: Evento) -> Task<Msg> {
         let (coluna, a, b) = self.eixo_da_selecao();
-        let eixo = if coluna { "Colunas" } else { "Linhas" };
+        let eixo = if coluna { tr!("Colunas") } else { tr!("Linhas") };
         let ativo = if coluna { self.coluna } else { self.linha };
         match evento {
             Evento::Agrupar => self.mexer_topicos(|s| s.agrupar(coluna, a, b)
-                .map(|()| format!("{eixo} agrupadas. Ctrl+Z desfaz."))),
+                .map(|()| trf!("{eixo} agrupadas. Ctrl+Z desfaz."))),
             Evento::Desagrupar => self.mexer_topicos(|s| match s.desagrupar(coluna, a, b)? {
-                0 => Err(format!("Não há {} agrupadas na seleção.", eixo.to_lowercase())),
-                _ => Ok(format!("{eixo} desagrupadas.")),
+                0 => Err(trf!("Não há {} agrupadas na seleção.", eixo.to_lowercase())),
+                _ => Ok(trf!("{eixo} desagrupadas.")),
             }),
-            Evento::MostrarDetalhe => self.mexer_topicos(|s| s.mostrar_detalhe(coluna, ativo).map(|()| "Detalhe mostrado.".into())),
-            Evento::OcultarDetalhe => self.mexer_topicos(|s| s.ocultar_detalhe(coluna, ativo).map(|()| "Detalhe ocultado.".into())),
+            Evento::MostrarDetalhe => self.mexer_topicos(|s| s.mostrar_detalhe(coluna, ativo).map(|()| tr!("Detalhe mostrado.").into())),
+            Evento::OcultarDetalhe => self.mexer_topicos(|s| s.ocultar_detalhe(coluna, ativo).map(|()| tr!("Detalhe ocultado.").into())),
             Evento::Limpar => self.mexer_topicos(|s| {
                 let l = s.limpar_estrutura(false);
                 let c = s.limpar_estrutura(true);
-                if l || c { Ok("Estrutura de tópicos removida.".into()) } else { Err("A aba não tem estrutura de tópicos.".into()) }
+                if l || c { Ok(tr!("Estrutura de tópicos removida.").into()) } else { Err(tr!("A aba não tem estrutura de tópicos.").into()) }
             }),
             Evento::Alternar(coluna, nivel, resumo) => self.mexer_topicos(|s| s.alternar_grupo(coluna, nivel, resumo).map(|()| String::new())),
             Evento::Nivel(coluna, nivel) => self.mexer_topicos(|s| s.mostrar_nivel(coluna, nivel)
-                .map(|()| format!("Mostrando até o nível {nivel}."))),
+                .map(|()| trf!("Mostrando até o nível {nivel}."))),
             Evento::SubtotalAbrir => self.abrir_subtotal(),
             Evento::SubtotalGrupo(r) => if let Some(e) = &mut self.subtotal { e.grupo = r.0; },
             Evento::SubtotalFuncao(r) => if let Some(e) = &mut self.subtotal { e.funcao = r.0 as u8; },
@@ -106,12 +106,12 @@ impl App {
         let Some(aba) = self.workbook.aba(self.folha) else { return };
         let area = ops::regiao_atual(&aba.sheet, self.area_selecionada());
         if area.r1 <= area.r0 {
-            self.status = "Selecione uma célula da lista (com cabeçalho) para o Subtotal.".into();
+            self.status = tr!("Selecione uma célula da lista (com cabeçalho) para o Subtotal.").into();
             return;
         }
         let colunas: Vec<Rotulo> = (area.c0..=area.c1).map(|c| {
             let t = aba.sheet.get_raw(area.r0, c);
-            Rotulo(c, if t.trim().is_empty() { format!("Coluna {}", col_name(c)) } else { t })
+            Rotulo(c, if t.trim().is_empty() { trf!("Coluna {}", col_name(c)) } else { t })
         }).collect();
         // Como o Excel: agrupa pela primeira coluna e soma a última numérica.
         let numerica = (area.c0..=area.c1).rev()
@@ -136,7 +136,7 @@ impl App {
                 self.subtotal = None;
                 self.alterado = true;
                 self.trocar_selecao(self.linha, self.coluna);
-                self.status = if remover { "Subtotais removidos. Ctrl+Z desfaz.".into() } else { "Subtotais inseridos. Ctrl+Z desfaz.".into() };
+                self.status = if remover { tr!("Subtotais removidos. Ctrl+Z desfaz.").into() } else { tr!("Subtotais inseridos. Ctrl+Z desfaz.").into() };
                 feathersheet_core::diario::anotar(format!("[subtotal] {} · {:.2} s",
                     if remover { "remover" } else { "inserir" }, t.elapsed().as_secs_f64()));
             }
@@ -156,14 +156,14 @@ impl App {
             marcas = marcas.push(iced::widget::checkbox(r.1.clone(), e.marcadas.contains(&c))
                 .on_toggle(move |v| Msg::Topicos(Evento::SubtotalColuna(c, v))).size(14).text_size(12.5));
         }
-        let sub = format!("Lista {}{}:{}{}. Ordene pela coluna de grupo antes; os subtotais de agora são substituídos.",
+        let sub = trf!("Lista {}{}:{}{}. Ordene pela coluna de grupo antes; os subtotais de agora são substituídos.",
             col_name(e.area.c0), e.area.r0 + 1, col_name(e.area.c1), e.area.r1 + 1);
         let mut painel = iced::widget::column![
-            rotulo("A cada alteração em"),
+            rotulo(tr!("A cada alteração em")),
             iced::widget::pick_list(e.colunas.clone(), grupo, |r| Msg::Topicos(Evento::SubtotalGrupo(r))).width(Length::Fill),
-            rotulo("Usar função"),
+            rotulo(tr!("Usar função")),
             iced::widget::pick_list(funcoes, funcao, |r| Msg::Topicos(Evento::SubtotalFuncao(r))).width(Length::Fill),
-            rotulo("Adicionar subtotal a"),
+            rotulo(tr!("Adicionar subtotal a")),
             container(container(super::dialogo_interno::dlg::rolagem(marcas.width(Length::Fill))).max_height(150.0))
                 .width(Length::Fill).padding([8, 10]).style(super::dialogo_interno::dlg::estilo_bloco),
         ].spacing(8);
@@ -172,14 +172,14 @@ impl App {
                 text(erro.clone()).size(12).color(COR_ERRO())]
                 .spacing(6).align_y(Alignment::Center));
         }
-        self.dialogo("Subtotal", painel)
+        self.dialogo(tr!("Subtotal"), painel)
             .icone("sum")
             .subtitulo(sub)
             .largura(460.0)
             .ao_fechar(Msg::Topicos(Evento::SubtotalFechar))
-            .rodape_esquerda(super::dialogo_interno::dlg::botao_secundario("Remover todos",
+            .rodape_esquerda(super::dialogo_interno::dlg::botao_secundario(tr!("Remover todos"),
                 Some(Msg::Topicos(Evento::SubtotalRemover))))
-            .secundario("Cancelar", Some(Msg::Topicos(Evento::SubtotalFechar)))
+            .secundario(tr!("Cancelar"), Some(Msg::Topicos(Evento::SubtotalFechar)))
             .primario("OK", (!e.marcadas.is_empty()).then_some(Msg::Topicos(Evento::SubtotalAplicar)))
     }
 
@@ -191,14 +191,14 @@ impl App {
     /// O grupo "Estrutura de tópicos" da aba Dados.
     pub(super) fn grupo_estrutura_topicos(&self) -> Element<'_, Msg> {
         let tem = self.workbook.aba(self.folha).is_some_and(|a| !a.sheet.topicos.vazio());
-        self.faixa_grupo("Estrutura de tópicos", self.faixa_linha(vec![
-            self.faixa_grande("Agrupar", "sitemap", Some(Msg::Topicos(Evento::Agrupar)), false),
-            self.faixa_grande("Desagrupar", "list", Some(Msg::Topicos(Evento::Desagrupar)), false),
-            self.faixa_grande("Subtotal", "sum", Some(Msg::Topicos(Evento::SubtotalAbrir)), self.subtotal.is_some()),
+        self.faixa_grupo(tr!("Estrutura de tópicos"), self.faixa_linha(vec![
+            self.faixa_grande(tr!("Agrupar"), "sitemap", Some(Msg::Topicos(Evento::Agrupar)), false),
+            self.faixa_grande(tr!("Desagrupar"), "list", Some(Msg::Topicos(Evento::Desagrupar)), false),
+            self.faixa_grande(tr!("Subtotal"), "sum", Some(Msg::Topicos(Evento::SubtotalAbrir)), self.subtotal.is_some()),
             self.faixa_pilha(vec![
-                self.faixa_pequeno("Mostrar detalhe", "plus", tem.then_some(Msg::Topicos(Evento::MostrarDetalhe)), false),
-                self.faixa_pequeno("Ocultar detalhe", "menos", tem.then_some(Msg::Topicos(Evento::OcultarDetalhe)), false),
-                self.faixa_pequeno("Limpar estrutura", "eraser", tem.then_some(Msg::Topicos(Evento::Limpar)), false),
+                self.faixa_pequeno(tr!("Mostrar detalhe"), "plus", tem.then_some(Msg::Topicos(Evento::MostrarDetalhe)), false),
+                self.faixa_pequeno(tr!("Ocultar detalhe"), "menos", tem.then_some(Msg::Topicos(Evento::OcultarDetalhe)), false),
+                self.faixa_pequeno(tr!("Limpar estrutura"), "eraser", tem.then_some(Msg::Topicos(Evento::Limpar)), false),
             ]),
         ]))
     }

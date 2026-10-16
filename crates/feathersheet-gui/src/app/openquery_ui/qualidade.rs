@@ -23,7 +23,7 @@ impl Estatistica {
         }
     }
     pub(super) fn resumo(self) -> String {
-        if self.analisadas == 0 { return "Sem amostra".into(); }
+        if self.analisadas == 0 { return tr!("Sem amostra").into(); }
         format!(
             "✓{}%  ø{}%  !{}%",
             self.validas * 100 / self.analisadas,

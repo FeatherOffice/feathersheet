@@ -43,19 +43,19 @@ pub(super) fn opcoes_de_json(meta: &Json) -> (Layout, bool, bool, Vec<String>, V
 
 pub(super) fn configuracao_avancada(e: &Estado) -> Result<DinamicaConfig, String> {
     if e.linhas.is_empty() && e.colunas.is_empty() {
-        return Err("Escolha ao menos um campo em Linhas ou Colunas.".into());
+        return Err(tr!("Escolha ao menos um campo em Linhas ou Colunas.").into());
     }
     if e.valores.is_empty() {
-        return Err("Escolha ao menos uma medida em Valores.".into());
+        return Err(tr!("Escolha ao menos uma medida em Valores.").into());
     }
     let max = (e.origem.c1 as usize).checked_add(e.calculados.len())
-        .ok_or("Quantidade de colunas fora dos limites.")?;
+        .ok_or(tr!("Quantidade de colunas fora dos limites."))?;
     if max >= MAX_COLS as usize {
-        return Err("Não existe espaço para os campos calculados além da última coluna.".into());
+        return Err(tr!("Não existe espaço para os campos calculados além da última coluna.").into());
     }
     if e.linhas.iter().chain(e.colunas.iter()).chain(e.valores.iter().map(|m| &m.coluna))
         .any(|&c| c < e.origem.c0 as usize || c > max) {
-        return Err("Um campo da dinâmica está fora do intervalo de origem.".into());
+        return Err(tr!("Um campo da dinâmica está fora do intervalo de origem.").into());
     }
     Ok(DinamicaConfig {
         origem: Rect::new(e.origem.r0, e.origem.c0, e.origem.r1, max as u32),
@@ -223,10 +223,10 @@ pub(super) fn conferir_nomes_calculados(e: &Estado) -> Result<(), String> {
     let mut vistos = HashSet::new();
     for c in &e.calculados {
         if c.nome.trim().is_empty() || c.formula.trim().is_empty() {
-            return Err("Informe o nome e a fórmula de cada campo calculado.".into());
+            return Err(tr!("Informe o nome e a fórmula de cada campo calculado.").into());
         }
         if !vistos.insert(c.nome.trim().to_lowercase()) {
-            return Err("Existem nomes duplicados de campos calculados.".into());
+            return Err(tr!("Existem nomes duplicados de campos calculados.").into());
         }
     }
     Ok(())

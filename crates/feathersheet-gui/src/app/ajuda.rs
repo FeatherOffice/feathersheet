@@ -43,23 +43,26 @@ fn topicos_funcoes(json: &Value, idioma: &str) -> Vec<Topico> {
                 let principal = if idioma.starts_with("pt") {
                     apelidos.first().copied().unwrap_or(nome)
                 } else { nome };
-                linhas.push(Linha::Exemplo(format!(
-                    "{}({})", principal, ajuda.args.join("; ")
-                )));
-                linhas.push(Linha::Texto(ajuda.doc.to_owned()));
+                let (args, doc) = crate::idioma::ajuda_funcao_em(nome, idioma)
+                    .unwrap_or_else(|| (ajuda.args.iter().map(|a| (*a).to_owned()).collect(), ajuda.doc.to_owned()));
+                let sep = if idioma.starts_with("pt") { "; " } else { ", " };
+                linhas.push(Linha::Exemplo(format!("{}({})", principal, args.join(sep))));
+                linhas.push(Linha::Texto(doc));
                 // Português + nome internacional permanecem encontráveis.
                 if !apelidos.is_empty() {
                     linhas.push(Linha::Texto(format!(
                         "{}: {}, {}",json["ajuda"]["rotulos"]["apelidos"]
-                            .as_str().unwrap_or("Também"),nome,apelidos.join(", ")
+                            .as_str().unwrap_or(tr!("Também")),nome,apelidos.join(", ")
                     )));
                 }
             }
         }
         Topico {
             id:(*categoria).to_owned(),
-            titulo:json["funcoes"]["categorias"][*categoria]
-                .as_str().unwrap_or(categoria).into(),
+            titulo:json["funcoes"]["categorias"][*categoria].as_str()
+                .or_else(|| idioma.starts_with("en").then(||
+                    crate::idioma::funcoes_en().categorias.get(*categoria).map(String::as_str)).flatten())
+                .unwrap_or(categoria).into(),
             linhas,
         }
     }).collect()
@@ -95,6 +98,8 @@ static EM_INGLES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 
 /// Chamado na abertura e ao trocar o idioma nas Configurações.
 pub fn definir_idioma(idioma: &str) {
+    // A interface inteira (menus, janelas, status) segue o mesmo idioma.
+    crate::idioma::definir(idioma);
     // Global do processo: nos testes (paralelos) a Ajuda fica sempre em pt-BR.
     if cfg!(test) { return; }
     EM_INGLES.store(idioma.starts_with("en"), std::sync::atomic::Ordering::Relaxed);

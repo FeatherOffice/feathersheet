@@ -37,6 +37,7 @@ use crate::formula::formula_table::FormulaTable;
 use crate::formula::modelo_padrao::ModeloPadrao;
 use crate::formula::parser::parse_formula;
 use crate::planilha::data_table::DataTable;
+use crate::planilha::agregado::{Agregado, ChaveCriterio};
 use crate::planilha::faixa_lida::{FaixaLida, MAXIMO, MINIMO, TOTAL};
 use crate::planilha::sheet::{mesmo_nome, CellData, Sheet};
 use crate::planilha::workbook::AbaViva;
@@ -93,7 +94,14 @@ type ChaveFaixa = (usize, u32, u32, u32, u32);
 struct Faixas {
     mapa: Mutex<HashMap<ChaveFaixa, Arc<OnceLock<Option<Arc<FaixaLida>>>>>>,
     celulas: AtomicUsize,
+    /// Agregados por critério (SOMASES, CONT.SES…), montados das faixas
+    /// acima uma vez por conjunto de faixas e usados por todas as threads.
+    agregados: Mutex<HashMap<ChaveAgregado, Arc<OnceLock<Option<Arc<Agregado>>>>>>,
 }
+
+type AreaFaixa = (u32, u32, u32, u32);
+/// Aba, faixa somada (se houver) e faixas de critério.
+type ChaveAgregado = (usize, Option<AreaFaixa>, Vec<AreaFaixa>);
 
 /// Uma coluna em cálculo pela própria thread, de cima para baixo.
 struct Corrente {
@@ -245,6 +253,51 @@ impl EvalContext for Contexto<'_, '_> {
         (rect.c1 - rect.c0 + 1) as u64 * (rect.r1 - rect.r0 + 1) as u64
     }
 
+    /// O agregado por critério também no cálculo paralelo: montado das
+    /// faixas lidas (compartilhadas entre as threads), uma vez por conjunto
+    /// de faixas. Sem isto cada `SOMASES` da Resumo varria 1 milhão de
+    /// linhas (~0,7 s por coluna). `None`: varrer célula por célula.
+    fn agregado(&self, soma: Option<&Rect>, criterios: &[Rect]) -> Option<Arc<Agregado>> {
+        let primeiro = criterios.first()?;
+        let aba = self.indice(primeiro.sheet.as_deref())?;
+        let mesma = |r: &Rect| self.indice(r.sheet.as_deref()) == Some(aba);
+        if !criterios.iter().all(mesma) || !soma.is_none_or(mesma) {
+            return None;
+        }
+        let linhas = primeiro.r1.checked_sub(primeiro.r0)? + 1;
+        let colunas = primeiro.c1.checked_sub(primeiro.c0)? + 1;
+        if (linhas as u64) * (colunas as u64) < crate::planilha::agregado::MINIMO {
+            return None;
+        }
+        let mesmo_tamanho = |r: &Rect| r.r1.checked_sub(r.r0).map(|x| x + 1) == Some(linhas)
+            && r.c1.checked_sub(r.c0).map(|x| x + 1) == Some(colunas);
+        if !criterios.iter().all(mesmo_tamanho) || !soma.is_none_or(mesmo_tamanho) {
+            return None;
+        }
+        // A coluna em cálculo nesta thread muda a cada linha: não se agrega.
+        if self.corrente.is_some_and(|c| c.aba == aba
+            && criterios.iter().chain(soma).any(|r| c.col >= r.c0 && c.col <= r.c1)) {
+            return None;
+        }
+        let area = |r: &Rect| (r.r0, r.c0, r.r1, r.c1);
+        let chave = (aba, soma.map(area), criterios.iter().map(area).collect::<Vec<_>>());
+        let celula = self.faixas.agregados.lock().expect("agregados").entry(chave).or_default().clone();
+        celula.get_or_init(|| {
+            let lidas: Vec<Arc<FaixaLida>> = criterios.iter().map(|r| self.faixa_lida(r)).collect::<Option<_>>()?;
+            let somada = match soma {
+                Some(r) => Some((r, self.faixa_lida(r)?)),
+                None => None,
+            };
+            Agregado::montar(criterios.len(), soma.is_some(), linhas, colunas,
+                |i, r, c| ChaveCriterio::da_celula(lidas[i].valor(criterios[i].r0 + r, criterios[i].c0 + c)),
+                |r, c| match somada.as_ref().map(|(rect, f)| f.valor(rect.r0 + r, rect.c0 + c)) {
+                    Some(Value::Number(n)) => Some(*n),
+                    _ => None,
+                },
+            ).map(Arc::new)
+        }).clone()
+    }
+
     fn resolve_name(&self, _name: &str) -> Option<Rect> {
         self.falhar();
         None
@@ -281,6 +334,12 @@ impl EvalContext for Contexto<'_, '_> {
         -> crate::celulas::values::Computed {
         self.falhar();
         crate::celulas::values::Computed::Scalar(Value::Error(CellError::new(ErrorCode::Value)))
+    }
+
+    /// A vista paralela não carrega estilos: a célula volta ao cálculo comum.
+    fn cor_celula(&self, _: u32, _: u32, _: Option<&str>, _: bool) -> Option<String> {
+        self.falhar();
+        None
     }
 }
 
@@ -495,6 +554,7 @@ pub(crate) fn calcular(abas: &mut [AbaViva], funcoes: &HashSet<String>) -> usize
         (0..nos.len()).filter(|i| !nos_planejados.contains(i)).map(|i| nos[i].linhas.len()).sum()
     };
     let n_niveis = niveis.len();
+    crate::paralelismo::andamento::comecar(niveis.iter().flatten().map(|&i| nos[i].linhas.len() as u64).sum());
     let mut total = 0;
     for nivel in niveis {
         let inicio_nivel = std::time::Instant::now();
@@ -543,6 +603,7 @@ pub(crate) fn calcular(abas: &mut [AbaViva], funcoes: &HashSet<String>) -> usize
                             let Some(tarefa) = tarefas.get(t) else { break };
                             let t0 = std::time::Instant::now();
                             let valores = executar(tarefa, &vistas, funcoes, &faixas, &mut modelos);
+                            crate::paralelismo::andamento::somar(tarefa.linhas.len() as u64);
                             feitas.push((tarefa.no.aba, tarefa.no.col, valores, t0.elapsed()));
                         }
                         feitas

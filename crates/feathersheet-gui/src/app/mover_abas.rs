@@ -17,12 +17,12 @@ impl App {
         // O editor de fórmulas mantém coordenadas por índice de aba. Evitar
         // reordenar com uma referência ainda aberta para não alterá-la.
         if self.editor_formula.ativo {
-            self.status = "Conclua a edição da fórmula antes de mover a aba.".into();
+            self.status = tr!("Conclua a edição da fórmula antes de mover a aba.").into();
             return Task::none();
         }
         // Consultas em edição podem armazenar índices físicos na origem.
         if self.openquery.is_some() {
-            self.status = "Conclua ou feche o OpenQuery antes de mover as abas.".into();
+            self.status = tr!("Conclua ou feche o OpenQuery antes de mover as abas.").into();
             return Task::none();
         }
         if !self.confirmar() { return Task::none(); }
@@ -43,7 +43,7 @@ impl App {
         self.contexto = None;
         self.paleta_aba_aberta = false;
         self.alterado = true;
-        self.status = format!("Aba \"{nome}\" movida para a posição {}.", destino + 1);
+        self.status = trf!("Aba \"{nome}\" movida para a posição {}.", destino + 1);
         Task::none()
     }
 

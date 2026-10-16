@@ -108,7 +108,7 @@ impl App {
                 self.workbook.editar(e.folha, |s| mudou = s.definir_comentario(e.linha, e.coluna, Some(novo)));
                 if mudou {
                     self.alterado = true;
-                    self.status = format!("Comentário {} em {}", if e.novo { "inserido" } else { "editado" }, cell_name(e.linha, e.coluna));
+                    self.status = trf!("Comentário {} em {}", if e.novo { "inserido" } else { "editado" }, cell_name(e.linha, e.coluna));
                 }
             }
             Evento::Excluir | Evento::Limpar => {
@@ -124,10 +124,10 @@ impl App {
                 if total > 0 {
                     self.alterado = true;
                     self.comentario_sobre = None;
-                    self.status = if total == 1 { "Comentário excluído".into() }
-                        else { format!("{total} comentários excluídos") };
+                    self.status = if total == 1 { tr!("Comentário excluído").into() }
+                        else { trf!("{total} comentários excluídos") };
                 } else {
-                    self.status = "A seleção não tem comentários".into();
+                    self.status = tr!("A seleção não tem comentários").into();
                 }
             }
             Evento::Anterior | Evento::Proximo => {
@@ -140,14 +140,14 @@ impl App {
                         self.trocar_selecao(r, c);
                         // O balão do comentário escolhido fica à vista até o mouse passar.
                         self.comentario_sobre = Some((r, c));
-                        self.status = format!("Comentário em {}", cell_name(r, c));
+                        self.status = trf!("Comentário em {}", cell_name(r, c));
                     }
-                    None => self.status = "Esta planilha não tem comentários".into(),
+                    None => self.status = tr!("Esta planilha não tem comentários").into(),
                 }
             }
             Evento::MostrarOcultar => {
                 let Some(atual) = self.comentario_ativo() else {
-                    self.status = "A célula ativa não tem comentário".into();
+                    self.status = tr!("A célula ativa não tem comentário").into();
                     return Task::none();
                 };
                 let visivel = !atual.visivel;
@@ -159,13 +159,13 @@ impl App {
                 self.workbook.editar(self.folha, |s| n = s.mostrar_comentarios(&area, visivel));
                 if n > 0 {
                     self.alterado = true;
-                    self.status = if visivel { "Comentário sempre à mostra".into() } else { "Comentário oculto".into() };
+                    self.status = if visivel { tr!("Comentário sempre à mostra").into() } else { tr!("Comentário oculto").into() };
                 }
             }
             Evento::MostrarTodos => {
                 self.comentarios_todos = !self.comentarios_todos;
-                self.status = if self.comentarios_todos { "Mostrando todos os comentários".into() }
-                    else { "Comentários ocultos (aparecem ao passar o mouse)".into() };
+                self.status = if self.comentarios_todos { tr!("Mostrando todos os comentários").into() }
+                    else { tr!("Comentários ocultos (aparecem ao passar o mouse)").into() };
             }
             Evento::Sobre(celula) => self.comentario_sobre = celula,
         }
@@ -177,11 +177,11 @@ impl App {
         let m = |e: Evento| Msg::Comentario(e);
         match self.comentario_ativo() {
             Some(c) => vec![
-                Some(("Editar comentário".into(), m(Evento::Editar))),
-                Some(("Excluir comentário".into(), m(Evento::Excluir))),
-                Some((if c.visivel { "Ocultar comentário" } else { "Mostrar comentário" }.into(), m(Evento::MostrarOcultar))),
+                Some((tr!("Editar comentário").into(), m(Evento::Editar))),
+                Some((tr!("Excluir comentário").into(), m(Evento::Excluir))),
+                Some((if c.visivel { tr!("Ocultar comentário") } else { tr!("Mostrar comentário") }.into(), m(Evento::MostrarOcultar))),
             ],
-            None => vec![Some(("Inserir comentário".into(), m(Evento::Novo)))],
+            None => vec![Some((tr!("Inserir comentário").into(), m(Evento::Novo)))],
         }
     }
 
@@ -191,28 +191,28 @@ impl App {
         let tem = self.comentario_ativo().is_some();
         let algum = self.aba_tem_comentarios();
         let principal = if tem {
-            self.faixa_grande("Editar comentário", "edit", m(Evento::Editar), self.comentario_editor.is_some())
+            self.faixa_grande(tr!("Editar comentário"), "edit", m(Evento::Editar), self.comentario_editor.is_some())
         } else {
-            self.faixa_grande("Novo comentário", "message-circle", m(Evento::Novo), self.comentario_editor.is_some())
+            self.faixa_grande(tr!("Novo comentário"), "message-circle", m(Evento::Novo), self.comentario_editor.is_some())
         };
         vec![
-            self.faixa_grupo("Comentários", self.faixa_linha(vec![
+            self.faixa_grupo(tr!("Comentários"), self.faixa_linha(vec![
                 principal,
                 self.faixa_pilha(vec![
-                    self.faixa_pequeno("Excluir", "trash", tem.then(|| Msg::Comentario(Evento::Excluir)), false),
-                    self.faixa_pequeno("Anterior", "chevron-left", algum.then(|| Msg::Comentario(Evento::Anterior)), false),
-                    self.faixa_pequeno("Próximo", "chevron-right", algum.then(|| Msg::Comentario(Evento::Proximo)), false),
+                    self.faixa_pequeno(tr!("Excluir"), "trash", tem.then(|| Msg::Comentario(Evento::Excluir)), false),
+                    self.faixa_pequeno(tr!("Anterior"), "chevron-left", algum.then(|| Msg::Comentario(Evento::Anterior)), false),
+                    self.faixa_pequeno(tr!("Próximo"), "chevron-right", algum.then(|| Msg::Comentario(Evento::Proximo)), false),
                 ]),
                 self.faixa_pilha(vec![
-                    self.faixa_pequeno("Mostrar/ocultar comentário", "eye",
+                    self.faixa_pequeno(tr!("Mostrar/ocultar comentário"), "eye",
                         tem.then(|| Msg::Comentario(Evento::MostrarOcultar)),
                         self.comentario_ativo().is_some_and(|c| c.visivel)),
-                    self.faixa_pequeno("Mostrar todos os comentários", "list-details",
+                    self.faixa_pequeno(tr!("Mostrar todos os comentários"), "list-details",
                         m(Evento::MostrarTodos), self.comentarios_todos),
                 ]),
             ])),
-            self.faixa_grupo("Proteger", self.faixa_linha(vec![
-                self.faixa_grande("Proteger planilha", "lock", Some(Msg::Protecao(protecao_ui::Evento::Abrir)),
+            self.faixa_grupo(tr!("Proteger"), self.faixa_linha(vec![
+                self.faixa_grande(tr!("Proteger planilha"), "lock", Some(Msg::Protecao(protecao_ui::Evento::Abrir)),
                     self.protecao_modal.is_some()),
             ])),
         ]
@@ -222,10 +222,10 @@ impl App {
         use iced::widget::column;
         use iced::widget::text_editor::Binding;
         let e = self.comentario_editor.as_ref().expect("editor de comentário aberto");
-        let titulo = if e.novo { "Novo comentário" } else { "Editar comentário" };
-        let autor = if e.autor.is_empty() { "Sem autor".to_string() } else { e.autor.clone() };
+        let titulo = if e.novo { tr!("Novo comentário") } else { tr!("Editar comentário") };
+        let autor = if e.autor.is_empty() { tr!("Sem autor").to_string() } else { e.autor.clone() };
         let editor = iced::widget::text_editor(&e.conteudo)
-            .placeholder("Escreva o comentário")
+            .placeholder(tr!("Escreva o comentário"))
             .on_action(|a| Msg::Comentario(Evento::Acao(a)))
             .key_binding(|tecla| {
                 use iced::keyboard::{key::Named, Key};
@@ -242,13 +242,13 @@ impl App {
             .padding(9);
         let mut rodape = row![].spacing(10).align_y(Alignment::Center);
         if !e.novo {
-            rodape = rodape.push(button(row![feather_ui::icones::icone("trash", 15.), text("Excluir comentário").size(13)]
+            rodape = rodape.push(button(row![feather_ui::icones::icone("trash", 15.), text(tr!("Excluir comentário")).size(13)]
                 .spacing(6).align_y(Alignment::Center))
                 .on_press(Msg::Comentario(Evento::Excluir)).style(estilo_botao_secundario));
         }
         rodape = rodape.push(Space::with_width(Length::Fill))
-            .push(button(text("Cancelar").size(13)).on_press(Msg::Comentario(Evento::Cancelar)).style(estilo_botao_secundario))
-            .push(button(text("Salvar").size(13)).on_press(Msg::Comentario(Evento::Salvar)).style(estilo_botao_primario));
+            .push(button(text(tr!("Cancelar")).size(13)).on_press(Msg::Comentario(Evento::Cancelar)).style(estilo_botao_secundario))
+            .push(button(text(tr!("Salvar")).size(13)).on_press(Msg::Comentario(Evento::Salvar)).style(estilo_botao_primario));
         let painel = column![
             text(titulo).size(18).font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::DEFAULT }),
             row![
@@ -260,10 +260,10 @@ impl App {
                         border: iced::Border { radius: 11.0.into(), ..Default::default() },
                         ..Default::default()
                     }),
-                text(format!("Célula {} · {autor}", cell_name(e.linha, e.coluna))).size(12).color(COR_TEXTO_MUTED()),
+                text(trf!("Célula {} · {autor}", cell_name(e.linha, e.coluna))).size(12).color(COR_TEXTO_MUTED()),
             ].spacing(7).align_y(Alignment::Center),
             container(editor).id(iced::widget::container::Id::new(ID_EDITOR)),
-            text("Enter quebra a linha · Ctrl+Enter salva · Esc cancela").size(11).color(COR_TEXTO_MUTED()),
+            text(tr!("Enter quebra a linha · Ctrl+Enter salva · Esc cancela")).size(11).color(COR_TEXTO_MUTED()),
             rodape,
         ].spacing(10);
         let largura = (self.tamanho_principal.width - 24.0).clamp(300.0, 460.0);

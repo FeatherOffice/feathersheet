@@ -1,6 +1,9 @@
 // Nos testes, `app.update(...)` devolve uma `Task` que só o runtime do Iced
 // executaria: ignorá-la é o esperado, e o aviso escondia os avisos de verdade.
 #![cfg_attr(test, allow(unused_must_use))]
+// Primeiro: as macros tr!/trf! valem para todos os módulos abaixo.
+#[macro_use]
+mod idioma;
 mod app;
 mod configuracao;
 mod grade;
@@ -64,7 +67,20 @@ fn preparar_backend_da_caneta() {
     let _ = MESAS_NA_ABERTURA.set(mesas);
 }
 
+/// Com a sincronia de vídeo (FIFO), cada janela espera o próprio quadro
+/// ser exibido; uma janela auxiliar escondida atrás da principal nunca é
+/// exibida, e o Iced, que redesenha todas as janelas juntas, travava o app
+/// inteiro esperando por ela. `AutoNoVsync` (Mailbox, ou Immediate onde
+/// não houver) não espera. `ICED_PRESENT_MODE` definido pelo usuário vale
+/// mais. Tem de ser antes de qualquer thread.
+fn preparar_modo_de_apresentacao() {
+    if std::env::var_os("ICED_PRESENT_MODE").is_none() {
+        std::env::set_var("ICED_PRESENT_MODE", "no_vsync");
+    }
+}
+
 fn main() -> iced::Result {
+    preparar_modo_de_apresentacao();
     preparar_backend_da_caneta();
     escopo_app::entrar_no_escopo_do_app();
     feathersheet_core::paralelismo::ajustar_alocador();

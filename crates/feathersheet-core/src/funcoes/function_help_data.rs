@@ -591,6 +591,20 @@ pub static HELP: &[(&str, FunctionHelp)] = &[
         },
     ),
     (
+        "SUMBYCOLOR",
+        FunctionHelp {
+            args: &["intervalo", "célula_cor", "[tipo]"],
+            doc: "Soma os números do intervalo cuja cor é a da célula de amostra (ou um texto \"#RRGGBB\"). Tipo 0 (padrão) compara o preenchimento; 1, a cor da fonte. Não vê a formatação condicional. Não existe no Excel.",
+        },
+    ),
+    (
+        "COUNTBYCOLOR",
+        FunctionHelp {
+            args: &["intervalo", "célula_cor", "[tipo]"],
+            doc: "Conta as células com conteúdo no intervalo cuja cor é a da célula de amostra (ou um texto \"#RRGGBB\"). Tipo 0 (padrão) compara o preenchimento; 1, a cor da fonte. Não vê a formatação condicional. Não existe no Excel.",
+        },
+    ),
+    (
         "COUNTUNIQUE",
         FunctionHelp {
             args: &["valor1", "…"],

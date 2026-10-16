@@ -20,9 +20,9 @@ pub(super) struct Dica {
     /// Categoria (vazio = sem título).
     pub titulo: String,
     pub cor: iced::Color,
-    /// Nome da série (vazio = só o valor).
-    pub serie: String,
-    pub valor: String,
+    /// Uma linha por valor: "Série: valor" (ou só o valor). O Gantt traz
+    /// início, término e duração; as velas, os quatro preços…
+    pub linhas: Vec<String>,
     pub fundo: Option<iced::Color>,
     pub texto: Option<iced::Color>,
     pub tamanho: f32,
@@ -133,12 +133,21 @@ impl App {
                     let e = d.estilo.as_ref().unwrap_or(&padrao);
                     let o = &e.dica;
                     dica = mapa.ponto_em(x, y).filter(|_| o.visivel != Some(false)).and_then(|alvo| {
-                        let serie = g.series.get(alvo.serie)?;
-                        let v = *serie.valores.get(alvo.ponto)?;
+                        let conteudo = mapa.conteudo_dica(g, &alvo)?;
                         let pizza = g.tipo == feather_charts::Tipo::Pizza;
                         let formato = o.formato.or(e.rotulos.formato).or(e.eixo_y.formato).unwrap_or_default();
-                        let mut valor = format!("{}{}{}", o.prefixo, formato.formatar(v), o.sufixo);
-                        if o.percentual {
+                        let escrever = |l: &feather_charts::formatado::LinhaDica| if l.data {
+                            feather_charts::formatado::data_de_serie(l.valor)
+                        } else {
+                            format!("{}{}{}", o.prefixo, formato.formatar(l.valor), o.sufixo)
+                        };
+                        let serie = g.series.get(alvo.serie)?;
+                        // Tipo com dica própria (Gantt, velas, cascata…): uma
+                        // linha por valor, com o nome de cada um.
+                        let propria = mapa.dica.is_some();
+                        let v = conteudo.linhas[0].valor;
+                        let mut valor = escrever(&conteudo.linhas[0]);
+                        if o.percentual && !propria {
                             // Pizza: do total; senão, da categoria (séries ligadas).
                             let total: f64 = if pizza {
                                 serie.valores.iter().enumerate().filter(|(i, v)| **v > 0.0 && !e.legenda.desligado(*i)).map(|(_, v)| *v).sum()
@@ -156,12 +165,18 @@ impl App {
                         } else {
                             super::painel::cor_resolvida_serie(e, &cores, alvo.serie).0
                         };
-                        let categoria = g.categorias.get(alvo.ponto).cloned().unwrap_or_default();
+                        let categoria = conteudo.titulo.clone();
+                        let com_nome = |nome: &str, valor: String| if nome.is_empty() { valor } else { format!("{nome}: {valor}") };
+                        let linhas = if propria {
+                            conteudo.linhas.iter().map(|l| com_nome(&l.rotulo, escrever(l))).collect()
+                        } else {
+                            let nome = if pizza { categoria.clone() } else if o.serie.unwrap_or(true) { serie.nome.clone() } else { String::new() };
+                            vec![com_nome(&nome, valor)]
+                        };
                         Some(Dica {
-                            titulo: if o.categoria.unwrap_or(true) && !pizza { categoria.clone() } else { String::new() },
+                            titulo: if o.categoria.unwrap_or(true) && !pizza { categoria } else { String::new() },
                             cor: cor_iced(cor),
-                            serie: if pizza { categoria } else if o.serie.unwrap_or(true) { serie.nome.clone() } else { String::new() },
-                            valor,
+                            linhas,
                             fundo: o.fundo.map(|c| cor_iced(c.0)),
                             texto: o.texto.map(|c| cor_iced(c.0)),
                             tamanho: o.tamanho.unwrap_or(12.0).clamp(8.0, 28.0),
@@ -245,11 +260,18 @@ impl App {
         if !d.titulo.is_empty() {
             corpo = corpo.push(text(d.titulo.clone()).size(tam).font(iced::Font { weight: iced::font::Weight::Bold, ..Default::default() }));
         }
-        let linha = if d.serie.is_empty() { d.valor.clone() } else { format!("{}: {}", d.serie, d.valor) };
-        corpo = corpo.push(
-            iced::widget::row![amostra, text(linha).size(tam)]
-                .spacing(6).align_y(Alignment::Center),
-        );
+        let mut amostra = Some(amostra);
+        for linha in &d.linhas {
+            // A amostra de cor só na primeira linha; as outras alinham com ela.
+            let marca: Element<'a, Msg> = match amostra.take() {
+                Some(a) => a.into(),
+                None => Space::new(Length::Fixed(10.), Length::Fixed(10.)).into(),
+            };
+            corpo = corpo.push(
+                iced::widget::row![marca, text(linha.clone()).size(tam)]
+                    .spacing(6).align_y(Alignment::Center),
+            );
+        }
         let (fundo, cor_texto) = (d.fundo, d.texto);
         let caixa = container(corpo).padding([6, 9]).style(move |_| container::Style {
             background: Some(iced::Background::Color(fundo.unwrap_or_else(feather_ui::tema::COR_PAINEL))),
@@ -263,7 +285,7 @@ impl App {
             ..Default::default()
         });
         // À direita e abaixo do cursor; vira para o outro lado perto da borda.
-        let (lw, lh) = (190.0f32, 52.0f32);
+        let (lw, lh) = (210.0f32, 34.0f32 + 18.0 * d.linhas.len() as f32);
         let x = if p.tela.x + 14.0 + lw > largura { (p.tela.x - 14.0 - lw).max(0.0) } else { p.tela.x + 14.0 };
         let y = if p.tela.y + 16.0 + lh > altura { (p.tela.y - 10.0 - lh).max(0.0) } else { p.tela.y + 16.0 };
         Some(

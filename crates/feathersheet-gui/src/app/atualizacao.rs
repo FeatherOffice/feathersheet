@@ -62,11 +62,11 @@ impl Instalacao {
     /// Frase curta para a tela: como esta cópia foi instalada.
     pub fn descricao(self) -> &'static str {
         match self {
-            Self::Deb => "Instalado pelo pacote .deb",
-            Self::PastaDoUsuario => "Instalado na pasta do usuário (.tar.gz)",
-            Self::Windows => "Instalado pelo instalador do Windows",
-            Self::Mac => "Instalado em Aplicativos (macOS)",
-            Self::Desconhecida => "Cópia compilada ou fora da pasta de instalação",
+            Self::Deb => tr!("Instalado pelo pacote .deb"),
+            Self::PastaDoUsuario => tr!("Instalado na pasta do usuário (.tar.gz)"),
+            Self::Windows => tr!("Instalado pelo instalador do Windows"),
+            Self::Mac => tr!("Instalado em Aplicativos (macOS)"),
+            Self::Desconhecida => tr!("Cópia compilada ou fora da pasta de instalação"),
         }
     }
 
@@ -151,12 +151,12 @@ pub fn consultar() -> Result<Lancamento, String> {
         .arg(format!("User-Agent: FeatherSheet/{}", versao_atual()))
         .arg(&url)
         .output()
-        .map_err(|_| "Não encontrei o programa curl neste sistema para consultar o GitHub.".to_owned())?;
+        .map_err(|_| tr!("Não encontrei o programa curl neste sistema para consultar o GitHub.").to_owned())?;
     if !saida.status.success() {
-        return Err("Não consegui falar com o GitHub. Confira a conexão e tente de novo.".to_owned());
+        return Err(tr!("Não consegui falar com o GitHub. Confira a conexão e tente de novo.").to_owned());
     }
     ler_lancamento(&String::from_utf8_lossy(&saida.stdout))
-        .ok_or_else(|| "O GitHub respondeu, mas não reconheci a versão publicada.".to_owned())
+        .ok_or_else(|| tr!("O GitHub respondeu, mas não reconheci a versão publicada.").to_owned())
 }
 
 fn url_arquivo(versao: &str, arquivo: &str) -> String {
@@ -220,9 +220,9 @@ pub fn roteiro(inst: Instalacao, versao: &str, pid: u32) -> Option<(String, Stri
 /// Grava o roteiro na pasta temporária e abre o terminal do sistema com ele.
 pub fn abrir_no_terminal(inst: Instalacao, versao: &str) -> Result<(), String> {
     let (nome, texto) = roteiro(inst, versao, std::process::id())
-        .ok_or_else(|| "Esta cópia não foi instalada por um pacote: baixe pela página de versões.".to_owned())?;
+        .ok_or_else(|| tr!("Esta cópia não foi instalada por um pacote: baixe pela página de versões.").to_owned())?;
     let caminho = std::env::temp_dir().join(nome);
-    std::fs::write(&caminho, texto).map_err(|e| format!("Não consegui gravar o roteiro: {e}"))?;
+    std::fs::write(&caminho, texto).map_err(|e| trf!("Não consegui gravar o roteiro: {e}"))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -239,10 +239,10 @@ pub fn abrir_no_terminal(inst: Instalacao, versao: &str) -> Result<(), String> {
                 // Console próprio e visível.
                 c.creation_flags(0x0000_0010);
             }
-            c.spawn().map(|_| ()).map_err(|e| format!("Não consegui abrir o PowerShell: {e}"))
+            c.spawn().map(|_| ()).map_err(|e| trf!("Não consegui abrir o PowerShell: {e}"))
         }
         Instalacao::Mac => Command::new("open").args(["-a", "Terminal", &arq]).spawn().map(|_| ())
-            .map_err(|e| format!("Não consegui abrir o Terminal: {e}")),
+            .map_err(|e| trf!("Não consegui abrir o Terminal: {e}")),
         _ => {
             // O primeiro terminal que existir. Cada um tem o seu jeito de receber o comando.
             let tentativas: [(&str, &[&str]); 7] = [
@@ -259,7 +259,7 @@ pub fn abrir_no_terminal(inst: Instalacao, versao: &str) -> Result<(), String> {
                     return Ok(());
                 }
             }
-            Err(format!("Não achei um terminal para abrir. Rode à mão: bash {arq}"))
+            Err(trf!("Não achei um terminal para abrir. Rode à mão: bash {arq}"))
         }
     }
 }
@@ -319,12 +319,12 @@ impl App {
                     let inst = instalacao_atual();
                     let versao = l.versao.clone();
                     self.atualizacao = match abrir_no_terminal(inst, &versao) {
-                        Ok(()) if inst.pede_senha() => Estado::Instalando(format!(
+                        Ok(()) if inst.pede_senha() => Estado::Instalando(trf!(
                             "O terminal abriu com cada passo à vista. Digite sua senha lá; depois feche e abra o FeatherSheet de novo.")),
                         Ok(()) if matches!(inst, Instalacao::Windows | Instalacao::Mac) => Estado::Instalando(
-                            "O terminal abriu e está baixando. Feche o FeatherSheet quando ele pedir: a versão nova abre sozinha.".to_owned()),
+                            tr!("O terminal abriu e está baixando. Feche o FeatherSheet quando ele pedir: a versão nova abre sozinha.").to_owned()),
                         Ok(()) => Estado::Instalando(
-                            "O terminal abriu com cada passo à vista. Depois feche e abra o FeatherSheet de novo.".to_owned()),
+                            tr!("O terminal abriu com cada passo à vista. Depois feche e abra o FeatherSheet de novo.").to_owned()),
                         Err(e) => Estado::Erro(e),
                     };
                 }

@@ -84,7 +84,7 @@ impl App {
         let precisa_interna = matches!(e.colar,
             QueColar::Formatos | QueColar::ValoresEFormatos | QueColar::Larguras);
         if precisa_interna && copia.is_none() {
-            self.status = "Esta opção requer células copiadas do FeatherSheet".into();
+            self.status = tr!("Esta opção requer células copiadas do FeatherSheet").into();
             return;
         }
         if dados.is_empty() && copia.is_none() { return; }
@@ -153,10 +153,10 @@ impl App {
                 for (r, c, s) in &novas {
                     let texto = s.as_ref().map(|s| s.raw.as_str()).unwrap_or("");
                     match validacao_ui::validar_celula(&self.workbook, self.folha, *r, *c, texto, &regras) {
-                        Ok(Some(a)) if aviso.is_none() => aviso = Some(format!("{}: {a}", cell_name(*r, *c))),
+                        Ok(Some(a)) if aviso.is_none() => aviso = Some(trf!("{}: {a}", cell_name(*r, *c))),
                         Ok(_) => {}
                         Err(erro) => {
-                            self.status = format!("Colagem cancelada em {}: {erro}", cell_name(*r, *c));
+                            self.status = trf!("Colagem cancelada em {}: {erro}", cell_name(*r, *c));
                             return;
                         }
                     }
@@ -174,8 +174,8 @@ impl App {
         let area = plano.area();
         self.trocar_selecao(area.r0, area.c0);
         self.fim_selecao = (area.r1, area.c1);
-        self.status = format!("{quantas} célula(s) coladas com Colar especial{}",
-            aviso.map(|a| format!("; aviso de validação: {a}")).unwrap_or_default());
+        self.status = trf!("{quantas} célula(s) coladas com Colar especial{}",
+            aviso.map(|a| trf!("; aviso de validação: {a}")).unwrap_or_default());
     }
 
     /// "Larguras das colunas": só as larguras da origem, a partir da coluna
@@ -194,7 +194,7 @@ impl App {
             sheet.fechar_transacao();
         });
         self.alterado |= mudou;
-        self.status = format!("Largura de {} coluna(s) colada", larguras.len());
+        self.status = trf!("Largura de {} coluna(s) colada", larguras.len());
     }
 
     /// O painel sozinho (testes).
@@ -217,44 +217,44 @@ impl App {
         ];
         let sem_conta = e.colar == QueColar::Formatos || e.colar == QueColar::Larguras;
         let mut operacoes = column![
-            grupo("OPERAÇÃO"),
-            duas(conta("Nenhuma", OperacaoColagem::Nenhuma).into(),
-                conta("Multiplicar", OperacaoColagem::Multiplicar).into()),
-            duas(conta("Somar", OperacaoColagem::Somar).into(),
-                conta("Dividir", OperacaoColagem::Dividir).into()),
-            duas(conta("Subtrair", OperacaoColagem::Subtrair).into(), Space::with_width(0).into()),
+            grupo(tr!("OPERAÇÃO")),
+            duas(conta(tr!("Nenhuma"), OperacaoColagem::Nenhuma).into(),
+                conta(tr!("Multiplicar"), OperacaoColagem::Multiplicar).into()),
+            duas(conta(tr!("Somar"), OperacaoColagem::Somar).into(),
+                conta(tr!("Dividir"), OperacaoColagem::Dividir).into()),
+            duas(conta(tr!("Subtrair"), OperacaoColagem::Subtrair).into(), Space::with_width(0).into()),
         ].spacing(8);
         if sem_conta {
             operacoes = operacoes.push(row![
                 feather_ui::icones::icone("info-circle", 14.0),
-                text("A operação não vale para formatos e larguras.").size(11)
+                text(tr!("A operação não vale para formatos e larguras.")).size(11)
                     .color(COR_TEXTO_MUTED()),
             ].spacing(6).align_y(Alignment::Center));
         }
         let corpo = column![
             column![
                 grupo("COLAR"),
-                duas(opcao("Tudo", QueColar::Tudo).into(),
-                    opcao("Valores e formatos", QueColar::ValoresEFormatos).into()),
-                duas(opcao("Fórmulas", QueColar::Formulas).into(),
-                    opcao("Larguras das colunas", QueColar::Larguras).into()),
-                duas(opcao("Valores", QueColar::Valores).into(),
-                    opcao("Formatos", QueColar::Formatos).into()),
+                duas(opcao(tr!("Tudo"), QueColar::Tudo).into(),
+                    opcao(tr!("Valores e formatos"), QueColar::ValoresEFormatos).into()),
+                duas(opcao(tr!("Fórmulas"), QueColar::Formulas).into(),
+                    opcao(tr!("Larguras das colunas"), QueColar::Larguras).into()),
+                duas(opcao(tr!("Valores"), QueColar::Valores).into(),
+                    opcao(tr!("Formatos"), QueColar::Formatos).into()),
             ].spacing(8),
             operacoes,
             row![
-                checkbox("Ignorar em branco", e.ignorar_branco)
+                checkbox(tr!("Ignorar em branco"), e.ignorar_branco)
                     .on_toggle(move |v| ev(Evento::IgnorarBranco(v))).size(15).text_size(12.5),
-                checkbox("Transpor", e.transpor)
+                checkbox(tr!("Transpor"), e.transpor)
                     .on_toggle(move |v| ev(Evento::Transpor(v))).size(15).text_size(12.5),
             ].spacing(24),
         ].spacing(16);
-        self.dialogo("Colar especial", corpo)
+        self.dialogo(tr!("Colar especial"), corpo)
             .icone("clipboard")
             .largura(480.0)
             .ao_fechar(ev(Evento::Fechar))
-            .secundario("Cancelar", Some(ev(Evento::Fechar)))
-            .primario("Colar", Some(ev(Evento::Confirmar)))
+            .secundario(tr!("Cancelar"), Some(ev(Evento::Fechar)))
+            .primario(tr!("Colar"), Some(ev(Evento::Confirmar)))
     }
 
     pub(super) fn sobrepor_colar_especial<'a>(&'a self, base: Element<'a, Msg>) -> Element<'a, Msg> {

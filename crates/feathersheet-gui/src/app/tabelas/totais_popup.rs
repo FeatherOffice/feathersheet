@@ -41,7 +41,7 @@ impl App {
                 let r = definir_total(&mut self.workbook, self.folha, &id, rel, conta);
                 match r {
                     Ok(()) => {
-                        self.status = "Cálculo da linha de totais atualizado.".into();
+                        self.status = tr!("Cálculo da linha de totais atualizado.").into();
                         self.alterado = true;
                     }
                     Err(e) => self.status = e,
@@ -69,7 +69,7 @@ impl App {
                 Space::with_width(Length::Fixed(13.0)).into()
             };
             itens = itens.push(
-                button(row![marca, text(*rotulo).size(13)]
+                button(row![marca, text(tr!(*rotulo)).size(13)]
                     .spacing(8).align_y(Alignment::Center))
                     .width(Length::Fill)
                     .height(Length::Fixed(28.0))

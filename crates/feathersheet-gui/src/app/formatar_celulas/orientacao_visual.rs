@@ -110,7 +110,7 @@ impl Program<Msg> for Orientacao {
             f.translate(Vector::new(CENTRO.x, CENTRO.y - 12.));
             f.rotate(iced::Radians(rad));
             f.fill_text(canvas::Text {
-                content: "Texto".into(),
+                content: tr!("Texto").into(),
                 position: Point::ORIGIN,
                 color: tinta,
                 size: iced::Pixels(15.),

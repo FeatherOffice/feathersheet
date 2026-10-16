@@ -108,6 +108,14 @@ mod corrente {
     pub(super) fn definir_sem_teto(v: bool) { SEM_TETO.with(|s| s.set(v)); }
 }
 
+/// Resposta de [`Sheet::cru_rapido`].
+enum Rapido {
+    /// O cru e se veio da coluna de literais (`true`) ou de fórmula.
+    Cru(Cru, bool),
+    Vazia,
+    Lento,
+}
+
 #[derive(Debug, Clone)]
 pub struct CellData {
     pub raw: String,
@@ -127,14 +135,16 @@ pub struct CellData {
 /// precisa mudar atrás de um `RefCell`").
 #[derive(Default)]
 struct CalcCache {
-    /// Último valor calculado de cada fórmula.
-    cache: HashMap<CellKey, Value>,
+    /// Último valor calculado de cada fórmula. Hash barato
+    /// ([`crate::celulas::mapa_chave`]): a corrente de 1 milhão passa por
+    /// estes três mapas várias vezes por célula.
+    cache: crate::celulas::mapa_chave::MapaChave<Value>,
     /// Fórmulas que precisam recalcular antes do próximo `get_value` confiar
     /// no `cache`.
-    dirty: HashSet<CellKey>,
+    dirty: crate::celulas::mapa_chave::ConjuntoChave,
     /// Pilha de quem está sendo avaliado agora, nesta cadeia de chamadas —
     /// achar `k` aqui de novo é referência circular.
-    evaluating: HashSet<CellKey>,
+    evaluating: crate::celulas::mapa_chave::ConjuntoChave,
 }
 
 // `Debug`/`Clone` saíram do derive: `DataTable` e `StringPool` não os têm
@@ -192,7 +202,7 @@ pub struct Sheet {
     /// Estilo de célula literal — não cabe mais dentro de [`CellData`]
     /// porque célula literal não tem `CellData` nenhum. Fórmula continua
     /// guardando o próprio `style_idx` no `CellData` de `cells`.
-    pub styles: crate::celulas::mapa_chave::MapaChave<usize>,
+    pub styles: crate::celulas::estilos_celula::EstilosCelula,
     /// A tabela de estilos da aba. O `style_idx` das células aponta para cá —
     /// até 22/09/2026 ele era um índice para lugar nenhum, o que deixava o
     /// quadro binário sem como formatar moeda, data ou porcentagem.
@@ -282,6 +292,9 @@ pub struct Sheet {
     /// Faixas lidas inteiras pelas funções de critério. Ver
     /// [`crate::planilha::faixa_lida`].
     faixas: RefCell<crate::planilha::faixa_lida::Faixas>,
+    /// Agregados por critério (`SOMASES` e família), uma passada por conjunto
+    /// de faixas. Ver [`crate::planilha::agregado`].
+    agregados: RefCell<crate::planilha::agregado::Agregados>,
     /// Árvore de cada padrão da coluna empacotada, analisada uma vez
     /// (`None`: o padrão não aceita modelo; analisa o texto). Ver
     /// [`crate::formula::modelo_padrao`].
@@ -346,6 +359,7 @@ impl Sheet {
             calc: RefCell::new(CalcCache::default()),
             geracao: std::cell::Cell::new(0),
             faixas: RefCell::new(Default::default()),
+            agregados: RefCell::new(Default::default()),
             modelos: RefCell::new(HashMap::new()),
             assincronos: RefCell::new(Default::default()),
             derrame: RefCell::new(Default::default()),
@@ -522,7 +536,24 @@ impl Sheet {
                     calc.cache.insert(k, Value::Error(CellError::new(ErrorCode::Circular)));
                     calc.dirty.remove(&k);
                 }
-                Some((aba, r2, c2)) if aba == eu => pendentes.push((r2, c2)),
+                Some((aba, r2, c2)) if aba == eu => {
+                    // Corrente numa coluna empacotada: em vez de descer 200
+                    // níveis por rodada (e jogar fora o que calculou na
+                    // volta), acha o começo sujo e calcula de cima para
+                    // baixo, uma célula por vez.
+                    match self.calcular_corrente(r2, c2, host) {
+                        Ok(()) => {}
+                        Err(adiada) => {
+                            pendentes.push((r2, c2));
+                            if let Some((aba3, r3, c3)) = adiada.filter(|a| a.0 == eu) {
+                                let _ = aba3;
+                                if !pendentes.contains(&(r3, c3)) {
+                                    pendentes.push((r3, c3));
+                                }
+                            }
+                        }
+                    }
+                }
                 Some((aba, r2, c2)) if corrente::superficies() < 32
                     && host.and_then(|h| h.aba_no_endereco(aba)).is_some() => {
                     // Adiada noutra aba (`=Dados!K1000001` na Resumo): calcula
@@ -546,6 +577,44 @@ impl Sheet {
                 }
             }
         }
+    }
+
+    /// Calcula a corrente que termina em (`row`, `col`): o padrão lê a linha
+    /// de cima na mesma coluna, e a coluna está suja dali para cima até
+    /// `inicio`. Cada passo acha a célula acima já calculada, então nenhum
+    /// desce fundo. `Err(adiada)`: não é corrente, ou algo no meio pediu
+    /// outra célula funda (devolvida para quem chamou tratar); o que já foi
+    /// calculado fica guardado.
+    fn calcular_corrente(&self, row: u32, col: u32, host: Option<&dyn Hospedeiro>)
+        -> Result<(), Option<(usize, u32, u32)>> {
+        let Some((id, _)) = self.formulas.padrao_em(row, col) else { return Err(None) };
+        if !self.formulas.padrao_le_linha_acima(id) {
+            return Err(None);
+        }
+        let mut inicio = row;
+        while inicio > 0
+            && self.formulas.padrao_em(inicio - 1, col).is_some_and(|(i, _)| i == id)
+            && self.precisa_calcular(inicio - 1, col) {
+            inicio -= 1;
+        }
+        if inicio == row {
+            return Err(None);
+        }
+        for r in inicio..=row {
+            corrente::entrar();
+            let _ = self.valor_interno(r, col, host);
+            corrente::sair();
+            if corrente::voltando() {
+                return Err(corrente::tomar_adiada());
+            }
+            // O resultado não ficou guardado (fórmula que lê outra aba sem a
+            // pasta em mãos): continuar seria calcular tudo de novo a cada
+            // rodada, sem fim. O caminho antigo resolve.
+            if self.precisa_calcular(r, col) {
+                return Err(None);
+            }
+        }
+        Ok(())
     }
 
     /// A célula espera um cálculo que pode demorar: fórmula sem valor
@@ -1094,7 +1163,7 @@ impl Sheet {
         if let Some(cell) = self.cells.get(&k) {
             return cell.style_idx;
         }
-        self.styles.get(&k).copied()
+        self.styles.get(k)
     }
 
     /// Quantos itens há em cada estrutura da aba, para achar quem gasta
@@ -1115,6 +1184,94 @@ impl Sheet {
         let mut faixas = self.faixas.borrow_mut();
         faixas.mapa = Default::default();
         faixas.celulas = 0;
+        self.agregados.borrow_mut().mapa = Default::default();
+    }
+
+    /// O agregado por critério das faixas (todas desta aba, de mesmo
+    /// tamanho), montado uma vez e guardado até a aba mudar. `None` quando
+    /// não compensa ou não é seguro (faixa pequena, aba com volátil, cálculo
+    /// sendo desfeito, `NaN`, grupos demais): quem chama varre célula por
+    /// célula, como antes. Ver [`crate::planilha::agregado`].
+    pub fn agregado(&self, soma: Option<&Rect>, criterios: &[Rect], host: Option<&dyn Hospedeiro>)
+        -> Option<std::sync::Arc<crate::planilha::agregado::Agregado>> {
+        use crate::planilha::agregado::{Agregado, Area, MINIMO};
+        let primeiro = criterios.first()?;
+        if !self.deps.volatiles.is_empty() || corrente::voltando() {
+            return None;
+        }
+        let linhas = primeiro.r1.checked_sub(primeiro.r0)? as u64 + 1;
+        let colunas = primeiro.c1.checked_sub(primeiro.c0)? as u64 + 1;
+        if linhas * colunas < MINIMO {
+            return None;
+        }
+        let mesmo_tamanho = |r: &Rect| {
+            r.r1.checked_sub(r.r0).map(|x| x as u64 + 1) == Some(linhas)
+                && r.c1.checked_sub(r.c0).map(|x| x as u64 + 1) == Some(colunas)
+        };
+        if !criterios.iter().all(mesmo_tamanho) || !soma.is_none_or(mesmo_tamanho) {
+            return None;
+        }
+        let area = |r: &Rect| -> Area { (r.r0, r.c0, r.r1, r.c1) };
+        let chave = (soma.map(area), criterios.iter().map(area).collect::<Vec<_>>());
+        let geracao = self.geracao.get();
+        {
+            let mut agregados = self.agregados.borrow_mut();
+            if agregados.geracao != geracao {
+                agregados.mapa.clear();
+                agregados.geracao = geracao;
+            }
+            if let Some(a) = agregados.mapa.get(&chave) {
+                return Some(a.clone());
+            }
+            // Sem faixa agregada (`CONT.SES`), a contagem de linhas é a mesma
+            // de qualquer agregado com estes critérios: reaproveita.
+            if soma.is_none() {
+                if let Some(a) = agregados.mapa.iter().find(|(k, _)| k.1 == chave.1).map(|(_, a)| a.clone()) {
+                    return Some(a);
+                }
+            }
+        }
+        // Além da área usada tudo é vazio, e vazio não casa com critério
+        // indexável: só o trecho da primeira faixa dentro da área usada.
+        let usado = self.used_rect();
+        if self.is_empty() || primeiro.r0 > usado.r1 || primeiro.c0 > usado.c1 {
+            return Some(std::sync::Arc::new(Agregado::default()));
+        }
+        let linhas = (linhas as u32).min(usado.r1 - primeiro.r0 + 1);
+        let colunas = (colunas as u32).min(usado.c1 - primeiro.c0 + 1);
+        // O empréstimo do mapa fica solto aqui: ler pode calcular fórmulas.
+        let texto = |id: i32| self.pool.get(id);
+        let mut leitor = crate::planilha::agregado::LeitorChaves::novo(&texto);
+        let agregado = Agregado::montar(criterios.len(), soma.is_some(), linhas, colunas,
+            |i, r, c| {
+                let (row, col) = (criterios[i].r0 + r, criterios[i].c0 + c);
+                match self.cru_rapido(row, col) {
+                    Rapido::Cru(cru, literal) => leitor.do_cru(cru, literal),
+                    Rapido::Vazia => Ok(None),
+                    Rapido::Lento => crate::planilha::agregado::ChaveCriterio::da_celula(&self.get_value_em(row, col, host)),
+                }
+            },
+            |r, c| {
+                let rect = soma.expect("só é pedido quando há faixa agregada");
+                let (row, col) = (rect.r0 + r, rect.c0 + c);
+                match self.cru_rapido(row, col) {
+                    Rapido::Cru(Cru::Numero(n), _) => Some(n),
+                    Rapido::Cru(Cru::Texto(_), _) | Rapido::Vazia => None,
+                    Rapido::Lento => match self.get_value_em(row, col, host) {
+                        Value::Number(n) => Some(n),
+                        _ => None,
+                    },
+                }
+            },
+        )?;
+        if corrente::voltando() {
+            return None;
+        }
+        let agregado = std::sync::Arc::new(agregado);
+        if self.geracao.get() == geracao {
+            self.agregados.borrow_mut().mapa.insert(chave, agregado.clone());
+        }
+        Some(agregado)
     }
 
     /// Algo na aba mudou (ou pode ter mudado): as faixas guardadas não
@@ -1187,6 +1344,34 @@ impl Sheet {
         Some(faixa)
     }
 
+    /// O valor cru da célula quando ele está pronto no armazenamento colunar
+    /// (literal, ou fórmula empacotada já calculada e sem resultado mais
+    /// novo no `calc`), sem montar `Value`. `Lento`: ler pelo
+    /// [`Self::get_value_em`] de sempre.
+    fn cru_rapido(&self, row: u32, col: u32) -> Rapido {
+        let k = Self::cell_key(row, col);
+        if self.cells.contains_key(&k) {
+            return Rapido::Lento;
+        }
+        if self.formulas.has(row, col) {
+            {
+                let calc = self.calc.borrow();
+                if calc.dirty.contains(&k) || calc.cache.contains_key(&k) {
+                    return Rapido::Lento;
+                }
+            }
+            return match self.formulas.cru_at(row, col) {
+                Some(cru) => Rapido::Cru(cru, false),
+                None => Rapido::Lento,
+            };
+        }
+        match self.data.cru_em(row, col) {
+            Some(cru) => Rapido::Cru(cru, true),
+            None if self.deps.array_cells.is_empty() => Rapido::Vazia,
+            None => Rapido::Lento,
+        }
+    }
+
     pub fn used_rect(&self) -> Rect {
         let mut usado = if self.is_empty() {
             Rect::new(0, 0, 0, 0)
@@ -1253,16 +1438,7 @@ impl Sheet {
             self.data.set_cell_value(novo_r, c, &val, &mut self.pool);
         }
 
-        let mut next_styles = crate::celulas::mapa_chave::MapaChave::with_capacity_and_hasher(self.styles.len(), Default::default());
-        for (k, idx) in self.styles.drain() {
-            let (r, c) = Self::key_to_coord(k);
-            if r >= at {
-                next_styles.insert(Self::cell_key(r + count, c), idx);
-            } else {
-                next_styles.insert(k, idx);
-            }
-        }
-        self.styles = next_styles;
+        self.styles.inserir_linhas(at, count);
 
         let mut next_rh = HashMap::new();
         for (r, h) in self.row_heights.drain() {
@@ -1318,18 +1494,7 @@ impl Sheet {
             self.data.set_cell_value(novo_r, c, &val, &mut self.pool);
         }
 
-        let mut next_styles = crate::celulas::mapa_chave::MapaChave::with_capacity_and_hasher(self.styles.len(), Default::default());
-        for (k, idx) in self.styles.drain() {
-            let (r, c) = Self::key_to_coord(k);
-            if r >= at && r < end {
-                continue;
-            } else if r >= end {
-                next_styles.insert(Self::cell_key(r - count, c), idx);
-            } else {
-                next_styles.insert(k, idx);
-            }
-        }
-        self.styles = next_styles;
+        self.styles.excluir_linhas(at, count);
 
         let mut next_rh = HashMap::new();
         for (r, h) in self.row_heights.drain() {
@@ -1373,16 +1538,7 @@ impl Sheet {
         // Colunar: deslocar é trocar a chave. Ver a nota em `delete_cols`.
         self.data.shift_columns(at, count, false);
 
-        let mut next_styles = crate::celulas::mapa_chave::MapaChave::with_capacity_and_hasher(self.styles.len(), Default::default());
-        for (k, idx) in self.styles.drain() {
-            let (r, c) = Self::key_to_coord(k);
-            if c >= at {
-                next_styles.insert(Self::cell_key(r, c + count), idx);
-            } else {
-                next_styles.insert(k, idx);
-            }
-        }
-        self.styles = next_styles;
+        self.styles.inserir_colunas(at, count);
 
         let mut next_cw = HashMap::new();
         for (c, w) in self.col_widths.drain() {
@@ -1431,18 +1587,7 @@ impl Sheet {
         // ⚠ O `DataTable` é colunar — deslocar é trocar a chave.
         self.data.shift_columns(at, count, true);
 
-        let mut next_styles = crate::celulas::mapa_chave::MapaChave::with_capacity_and_hasher(self.styles.len(), Default::default());
-        for (k, idx) in self.styles.drain() {
-            let (r, c) = Self::key_to_coord(k);
-            if c >= at && c < end {
-                continue;
-            } else if c >= end {
-                next_styles.insert(Self::cell_key(r, c - count), idx);
-            } else {
-                next_styles.insert(k, idx);
-            }
-        }
-        self.styles = next_styles;
+        self.styles.excluir_colunas(at, count);
 
         let mut next_cw = HashMap::new();
         for (c, w) in self.col_widths.drain() {
@@ -1657,6 +1802,16 @@ impl<'a> EvalContext for SheetCtx<'a> {
         self.alvo(rect.sheet.as_deref())?.faixa_lida(rect, self.host)
     }
 
+    fn agregado(&self, soma: Option<&Rect>, criterios: &[Rect]) -> Option<std::sync::Arc<crate::planilha::agregado::Agregado>> {
+        let aba = self.alvo(criterios.first()?.sheet.as_deref())?;
+        // Todas as faixas na mesma aba: o agregado mora nela.
+        let mesma = |r: &Rect| self.alvo(r.sheet.as_deref()).is_some_and(|a| std::ptr::eq(a, aba));
+        if !criterios.iter().all(mesma) || !soma.is_none_or(mesma) {
+            return None;
+        }
+        aba.agregado(soma, criterios, self.host)
+    }
+
     fn range_size(&self, rect: &Rect) -> u64 {
         let largura = (rect.c1 - rect.c0 + 1) as u64;
         let altura = (rect.r1 - rect.r0 + 1) as u64;
@@ -1693,6 +1848,10 @@ impl<'a> EvalContext for SheetCtx<'a> {
 
     fn funcao_externa(&self, nome: &str) -> bool {
         self.host.is_some_and(|h| h.funcao_externa(nome))
+    }
+
+    fn cor_celula(&self, row: u32, col: u32, sheet: Option<&str>, fonte: bool) -> Option<String> {
+        self.alvo(sheet)?.cor_celula(row, col, fonte)
     }
 }
 

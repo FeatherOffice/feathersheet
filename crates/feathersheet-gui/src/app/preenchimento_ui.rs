@@ -28,11 +28,11 @@ fn origem_direcional(
         DirecaoPreenchimento::Esquerda if sel.c0 < sel.c1 =>
             Ok(Rect::new(sel.r0, sel.c1, sel.r1, sel.c1)),
         DirecaoPreenchimento::Baixo | DirecaoPreenchimento::Cima =>
-            Err("Selecione duas ou mais linhas para preencher nesta direção."),
+            Err(tr!("Selecione duas ou mais linhas para preencher nesta direção.")),
         DirecaoPreenchimento::Direita | DirecaoPreenchimento::Esquerda =>
-            Err("Selecione duas ou mais colunas para preencher nesta direção."),
+            Err(tr!("Selecione duas ou mais colunas para preencher nesta direção.")),
         DirecaoPreenchimento::AteOFim =>
-            Err("Continuar até o fim requer detectar a coluna de dados vizinha."),
+            Err(tr!("Continuar até o fim requer detectar a coluna de dados vizinha.")),
     }
 }
 
@@ -47,7 +47,7 @@ impl App {
                 .and_then(|aba| aba.sheet.preencher_ate_o_fim(&selecao, MAX_COLS, true))
                 .map(|(destino, _)| destino);
             let Some(destino) = previsto else {
-                self.status = "Nenhuma continuação encontrada na coluna vizinha.".into();
+                self.status = tr!("Nenhuma continuação encontrada na coluna vizinha.").into();
                 return;
             };
             (selecao.clone(), destino)
@@ -79,11 +79,11 @@ impl App {
         let (origem, destino) = (origem.clone(), destino.clone());
         let quantidade = tamanho(&destino).saturating_sub(tamanho(&origem));
         if quantidade == 0 {
-            self.status = "Não há células de destino para preencher.".into();
+            self.status = tr!("Não há células de destino para preencher.").into();
             return;
         }
         if quantidade > MAX_CELULAS_POR_ACAO {
-            self.status = format!(
+            self.status = trf!(
                 "Preenchimento de {quantidade} células excede o limite de \
                  {MAX_CELULAS_POR_ACAO} células por operação síncrona; selecione um intervalo menor."
             );
@@ -93,21 +93,21 @@ impl App {
         // Não sobrepor mesclas nem preencher a partir de um bloco sem valores.
         let mesclas = mesclas::ler(sheet);
         if mesclas.iter().any(|area| mesclas::cruzam(area, &destino)) {
-            self.status = "Preenchimento bloqueado: o destino cruza células mescladas.".into();
+            self.status = tr!("Preenchimento bloqueado: o destino cruza células mescladas.").into();
             return;
         }
         let tem_origem = (origem.r0..=origem.r1).any(|r| {
             (origem.c0..=origem.c1).any(|c| !sheet.get_raw(r, c).is_empty())
         });
         if !tem_origem {
-            self.status = "A origem está vazia; escolha células com dados ou fórmulas.".into();
+            self.status = tr!("A origem está vazia; escolha células com dados ou fórmulas.").into();
             return;
         }
         let mut preenchidas = 0usize;
         if self.workbook.editar(self.folha, |aba| {
             preenchidas = aba.preencher(&origem, &destino);
         }).is_none() {
-            self.status = "A planilha não está disponível para preenchimento.".into();
+            self.status = tr!("A planilha não está disponível para preenchimento.").into();
             return;
         }
         if preenchidas > 0 {
@@ -118,12 +118,12 @@ impl App {
                 self.coluna = destino.c0;
                 self.fim_selecao = (destino.r1, destino.c1);
             }
-            self.status = format!(
+            self.status = trf!(
                 "{preenchidas} célula(s) preenchida(s) em {}:{}; Ctrl+Z desfaz.",
                 cell_name(destino.r0, destino.c0), cell_name(destino.r1, destino.c1)
             );
         } else {
-            self.status = "Nenhuma célula foi preenchida.".into();
+            self.status = tr!("Nenhuma célula foi preenchida.").into();
         }
     }
 }

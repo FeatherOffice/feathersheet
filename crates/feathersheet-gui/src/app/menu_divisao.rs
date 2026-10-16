@@ -8,20 +8,20 @@ const ALTURA_OUTRO: f32 = 360.0;
 impl App {
     fn menu_divisao(&self) -> Element<'_, Msg> {
         let mut itens = iced::widget::column![
-            text("Dividir texto por").size(12).color(COR_TEXTO_MUTED()),
+            text(tr!("Dividir texto por")).size(12).color(COR_TEXTO_MUTED()),
         ].spacing(3).padding(6);
         itens = itens.push(button(row![
             feather_ui::icones::icone("columns", 17.0),
-            text("Assistente completo · 4 etapas").size(12.5),
+            text(tr!("Assistente completo · 4 etapas")).size(12.5),
         ].spacing(10).align_y(Alignment::Center))
             .width(Length::Fill).padding([10, 10])
             .style(estilo_item_menu(false, true))
             .on_press(Msg::AbrirAssistenteDivisao));
         for (rotulo, separador) in [
-            ("Ponto e vírgula  ;", ";"),
-            ("Vírgula  ,", ","),
-            ("Ponto  .", "."),
-            ("Espaço", "Espaço"),
+            (tr!("Ponto e vírgula  ;"), ";"),
+            (tr!("Vírgula  ,"), ","),
+            (tr!("Ponto  ."), "."),
+            (tr!("Espaço"), tr!("Espaço")),
         ] {
             itens = itens.push(button(row![
                 feather_ui::icones::icone("columns", 16.0),
@@ -33,19 +33,19 @@ impl App {
         }
         itens = itens.push(button(row![
             feather_ui::icones::icone("edit", 16.0),
-            text("Outro…").size(12.5),
+            text(tr!("Outro…")).size(12.5),
         ].spacing(10).align_y(Alignment::Center))
             .width(Length::Fill).padding([7, 10])
             .style(estilo_item_menu(self.divisao_personalizada, true))
             .on_press(Msg::FaixaOpcao("dividir_texto", "Outro…")));
         if self.divisao_personalizada {
             itens = itens.push(row![
-                text_input("Digite o separador", &self.divisao_outro)
+                text_input(tr!("Digite o separador"), &self.divisao_outro)
                     .id(text_input::Id::new("feathersheet.dividir.outro"))
                     .on_input(Msg::DividirTextoOutro)
                     .on_submit(Msg::DividirTextoAplicar)
                     .width(Length::Fill).size(12).padding([5, 7]),
-                button("Aplicar")
+                button(tr!("Aplicar"))
                     .on_press(Msg::DividirTextoAplicar)
                     .style(estilo_botao_primario)
                     .padding([5, 8]),

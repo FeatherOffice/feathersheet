@@ -229,14 +229,51 @@ pub(super) struct SharedFormula {
     col: i64,
 }
 
-pub(super) fn cell_raw(c: &XmlNode, strings: &[String], xf: Option<&XfStyle>, shared: &mut HashMap<String, SharedFormula>, row: i64, col: i64) -> String {
-    if let Some(f) = c.child("f") {
-        let si = f.attr("si");
-        let text = f.text.trim();
+/// Uma `<c>` lida: da árvore ([`XmlNode`]) ou do leitor rápido de linhas
+/// ([`super::xml::CelulaXml`]). As regras da célula são as mesmas nos dois.
+pub(super) trait FonteCelula {
+    fn atributo(&self, nome: &str) -> Option<&str>;
+    /// Texto da `<f>` (sem aparar), `t` e `si`; `None` sem `<f>`.
+    fn formula(&self) -> Option<(&str, Option<&str>, Option<&str>)>;
+    /// Texto do `<v>` (sem aparar); `None` sem `<v>`.
+    fn valor(&self) -> Option<&str>;
+    /// Texto de `<is>`; `None` sem `<is>`.
+    fn inline(&self) -> Option<String>;
+}
+
+impl FonteCelula for XmlNode {
+    fn atributo(&self, nome: &str) -> Option<&str> { self.attr(nome) }
+    fn formula(&self) -> Option<(&str, Option<&str>, Option<&str>)> {
+        self.child("f").map(|f| (f.text.as_str(), f.attr("t"), f.attr("si")))
+    }
+    fn valor(&self) -> Option<&str> { self.child("v").map(|v| v.text.as_str()) }
+    fn inline(&self) -> Option<String> {
+        self.child("is").map(|is| {
+            if let Some(direct) = is.child("t") {
+                direct.text.clone()
+            } else {
+                is.children_named("r").map(|r| r.child("t").map(|t| t.text.clone()).unwrap_or_default()).collect()
+            }
+        })
+    }
+}
+
+impl FonteCelula for super::xml::CelulaXml {
+    fn atributo(&self, nome: &str) -> Option<&str> { self.attr(nome) }
+    fn formula(&self) -> Option<(&str, Option<&str>, Option<&str>)> {
+        self.f.get().map(|t| (t, self.f_t.get(), self.f_si.get()))
+    }
+    fn valor(&self) -> Option<&str> { self.v.get() }
+    fn inline(&self) -> Option<String> { self.inline.get().map(str::to_owned) }
+}
+
+pub(super) fn cell_raw<C: FonteCelula + ?Sized>(c: &C, strings: &[String], xf: Option<&XfStyle>, shared: &mut HashMap<String, SharedFormula>, row: i64, col: i64) -> String {
+    if let Some((f_texto, f_t, si)) = c.formula() {
+        let text = f_texto.trim();
         if !text.is_empty() {
             let formula = safe_formula(text);
             if let Some(si) = si {
-                if f.attr("t") == Some("shared") {
+                if f_t == Some("shared") {
                     shared.insert(si.to_string(), SharedFormula { raw: formula.clone(), row, col });
                 }
             }
@@ -249,47 +286,47 @@ pub(super) fn cell_raw(c: &XmlNode, strings: &[String], xf: Option<&XfStyle>, sh
         }
     }
 
-    let tipo = c.attr("t").unwrap_or("n");
+    let tipo = c.atributo("t").unwrap_or("n");
     if tipo == "inlineStr" {
-        return c
-            .child("is")
-            .map(|is| {
-                if let Some(direct) = is.child("t") {
-                    direct.text.clone()
-                } else {
-                    is.children_named("r").map(|r| r.child("t").map(|t| t.text.clone()).unwrap_or_default()).collect()
-                }
-            })
-            .unwrap_or_default();
+        return c.inline().unwrap_or_default();
     }
-    let Some(v) = c.child("v") else { return String::new() };
-    let text = v.text.trim();
+    let Some(v) = c.valor() else { return String::new() };
+    let text = v.trim();
     match tipo {
         "s" => text.parse::<usize>().ok().and_then(|i| strings.get(i)).cloned().unwrap_or_default(),
         "str" => text.to_string(),
         "b" => if text == "1" { "VERDADEIRO" } else { "FALSO" }.to_string(),
         "e" => text.to_string(),
-        _ => {
-            let Ok(n) = text.parse::<f64>() else { return text.to_string() };
-            match xf.map(|x| x.format) {
-                Some("date") => format_date_serial(n, false, false),
-                Some("datetime") => format_date_serial(n, true, false),
-                Some("time") => format_date_serial(n, false, true),
-                Some("percent") => format!("{}%", format_num(round2(n * 100.0))).replace('.', ","),
-                _ => format_num(n),
-            }
-        }
+        _ => numero_da_celula(text, xf),
     }
+}
+
+/// O `<v>` de uma célula numérica como o motor recebe (data, hora e
+/// porcentagem pelo formato do estilo). Sem estado: roda em qualquer thread.
+pub(super) fn numero_da_celula(text: &str, xf: Option<&XfStyle>) -> String {
+    let Ok(n) = text.parse::<f64>() else { return text.to_string() };
+    match xf.map(|x| x.format) {
+        Some("date") => format_date_serial(n, false, false),
+        Some("datetime") => format_date_serial(n, true, false),
+        Some("time") => format_date_serial(n, false, true),
+        Some("percent") => format!("{}%", format_num(round2(n * 100.0))).replace('.', ","),
+        _ => format_num(n),
+    }
+}
+
+/// Texto de uma `<f>` comum (não compartilhada) como o motor recebe.
+pub(super) fn formula_da_celula(text: &str) -> String {
+    safe_formula(text.trim())
 }
 
 /// O resultado que o Excel gravou de uma fórmula (`<c><f>…</f><v>…</v></c>`).
 /// `None` em célula sem fórmula ou sem `<v>` (arquivo de outro programa).
-pub(super) fn valor_guardado(c: &XmlNode, strings: &[String]) -> Option<Value> {
-    c.child("f")?;
-    let v = c.child("v")?;
-    let texto = v.text.trim();
-    Some(match c.attr("t").unwrap_or("n") {
-        "str" | "inlineStr" => Value::Text(v.text.clone()),
+pub(super) fn valor_guardado<C: FonteCelula + ?Sized>(c: &C, strings: &[String]) -> Option<Value> {
+    c.formula()?;
+    let v = c.valor()?;
+    let texto = v.trim();
+    Some(match c.atributo("t").unwrap_or("n") {
+        "str" | "inlineStr" => Value::Text(v.to_owned()),
         "s" => Value::Text(texto.parse::<usize>().ok().and_then(|i| strings.get(i)).cloned()?),
         "b" => Value::Bool(texto == "1"),
         "e" => Value::Error(CellError::new(ErrorCode::from_code(texto)?)),

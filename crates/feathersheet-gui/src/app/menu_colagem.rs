@@ -20,12 +20,12 @@ const OPCOES: &[(&str, ModoColagem)] = &[
 impl App {
     fn menu_colagem(&self) -> Element<'_, Msg> {
         let mut itens = iced::widget::column![
-            text("Colar especial").size(12).color(COR_TEXTO_MUTED()),
+            text(tr!("Colar especial")).size(12).color(COR_TEXTO_MUTED()),
         ].padding(6).spacing(2);
         for &(titulo, modo) in OPCOES {
             let linha = iced::widget::row![
                 feather_ui::icones::icone("clipboard", 16.0),
-                text(titulo).size(12.5),
+                text(tr!(titulo)).size(12.5),
             ].spacing(9).align_y(Alignment::Center);
             itens = itens.push(
                 button(linha)
@@ -38,7 +38,7 @@ impl App {
         itens = itens.push(
             button(iced::widget::row![
                 feather_ui::icones::icone("clipboard", 16.0),
-                text("Colar especial…").size(12.5),
+                text(tr!("Colar especial…")).size(12.5),
                 Space::with_width(Length::Fill),
                 text("Ctrl+Alt+V").size(11).color(COR_TEXTO_MUTED()),
             ].spacing(9).align_y(Alignment::Center))

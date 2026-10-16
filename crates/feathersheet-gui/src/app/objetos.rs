@@ -323,7 +323,7 @@ impl App {
         let mut objetos = (*lidos).clone();
         let Some(o) = objetos.obter_mut(id) else { return };
         f(o, &ReguaAba(&aba.sheet));
-        self.gravar_objetos(&objetos, format!("{status} (Ctrl+Z desfaz)."));
+        self.gravar_objetos(&objetos, trf!("{status} (Ctrl+Z desfaz)."));
     }
 
     /// Os campos da aba Editar forma voltam a mostrar o objeto selecionado.
@@ -375,7 +375,7 @@ impl App {
             m.us_desenho as f32 / 1000.0 / quadros,
             m.us_max_desenho as f32 / 1000.0,
         );
-        self.monitor.registrar(feather_ui::monitor::Nivel::Info, "Objetos", &linha);
+        self.monitor.registrar(feather_ui::monitor::Nivel::Info, tr!("Objetos"), &linha);
     }
 
     pub(super) fn evento_objetos(&mut self, evento: Evento) -> Task<Msg> {
@@ -413,7 +413,7 @@ impl App {
             Evento::DeformarWordArt(modo, k) => {
                 if self.wordart_selecionado().is_some() && k.is_finite() {
                     let k = (k.clamp(-1.0, 1.0) * 10.0).round() / 10.0;
-                    self.mudar_selecionado(&format!("WordArt: {modo} {:.0}%", k * 100.0), |o, _| {
+                    self.mudar_selecionado(&trf!("WordArt: {modo} {:.0}%", k * 100.0), |o, _| {
                         o.forma = modo.nome().to_owned();
                         o.ajustes = vec![k];
                     });
@@ -421,7 +421,7 @@ impl App {
             }
             Evento::SombraWordArt(ligada) => {
                 if self.wordart_selecionado().is_some() {
-                    let status = if ligada { "Sombra do WordArt ligada" } else { "Sombra do WordArt desligada" };
+                    let status = if ligada { tr!("Sombra do WordArt ligada") } else { tr!("Sombra do WordArt desligada") };
                     self.mudar_selecionado(status, |o, _| wordart::definir_sombra(o, ligada));
                 }
             }
@@ -429,7 +429,7 @@ impl App {
                 let modo = self.objetos.menu.take().unwrap_or(ModoMenu::Inserir);
                 if modo == ModoMenu::Trocar {
                     let nome = geometria::nome(forma);
-                    self.mudar_selecionado(&format!("Forma trocada por {nome}"), |o, _| {
+                    self.mudar_selecionado(&trf!("Forma trocada por {nome}"), |o, _| {
                         // Ícone ou WordArt trocado por forma vira forma (com a cor de forma).
                         if o.tipo != modelo::TipoObjeto::Forma {
                             o.tipo = modelo::TipoObjeto::Forma;
@@ -443,13 +443,13 @@ impl App {
                 } else {
                     self.objetos.inserir = Some(forma);
                     self.desselecionar();
-                    self.status = format!("{}: arraste na planilha para desenhar; um clique cria no tamanho padrão (Shift mantém a proporção, Esc cancela).", geometria::nome(forma));
+                    self.status = trf!("{}: arraste na planilha para desenhar; um clique cria no tamanho padrão (Shift mantém a proporção, Esc cancela).", geometria::nome(forma));
                 }
             }
             Evento::Selecionar(id) => {
                 self.selecionar(id);
                 if let Some(o) = self.objeto_selecionado() {
-                    self.status = format!("{}: arraste para mover, alças para redimensionar (Delete exclui).", geometria::nome_objeto(&o));
+                    self.status = trf!("{}: arraste para mover, alças para redimensionar (Delete exclui).", geometria::nome_objeto(&o));
                 }
             }
             Evento::Desselecionar => self.desselecionar(),
@@ -469,8 +469,8 @@ impl App {
                 } else {
                     "mover"
                 };
-                let status = match gesto { "girar" => "Forma girada", "redimensionar" => "Forma redimensionada", _ => "Forma movida" };
-                self.gravar_objetos(&objetos, format!("{status} (Ctrl+Z desfaz)."));
+                let status = match gesto { "girar" => tr!("Forma girada"), "redimensionar" => tr!("Forma redimensionada"), _ => tr!("Forma movida") };
+                self.gravar_objetos(&objetos, trf!("{status} (Ctrl+Z desfaz)."));
                 self.registrar_medida(gesto, medida);
             }
             Evento::Ajustar { id, forma, ajustes, medida } => {
@@ -479,7 +479,7 @@ impl App {
                 let Some(o) = objetos.obter_mut(id) else { return Task::none() };
                 o.forma = forma.to_owned();
                 o.ajustes = ajustes;
-                self.gravar_objetos(&objetos, "Forma ajustada (Ctrl+Z desfaz).".into());
+                self.gravar_objetos(&objetos, tr!("Forma ajustada (Ctrl+Z desfaz).").into());
                 self.registrar_medida("ajustar", medida);
             }
             Evento::Criar { forma, ret, espelhar } => {
@@ -493,11 +493,11 @@ impl App {
                     novo.aparencia = modelo::Aparencia { preenchimento: None, contorno: Some("#4472c4".into()), espessura: 2.0, transparencia: 0.0 };
                 }
                 let Some(id) = objetos.adicionar(novo) else {
-                    self.status = format!("Limite de {} objetos por aba.", modelo::MAX_OBJETOS);
+                    self.status = trf!("Limite de {} objetos por aba.", modelo::MAX_OBJETOS);
                     return Task::none();
                 };
                 self.objetos.selecionado = Some((aba_id, id));
-                self.gravar_objetos(&objetos, format!("{} inserida (Ctrl+Z desfaz).", geometria::nome(forma)));
+                self.gravar_objetos(&objetos, trf!("{} inserida (Ctrl+Z desfaz).", geometria::nome(forma)));
             }
             Evento::AbrirPainel(p) => {
                 self.objetos.painel = (self.objetos.painel != Some(p)).then_some(p);
@@ -520,15 +520,15 @@ impl App {
             Evento::Cor(e) => self.evento_cor(e),
             Evento::Preenchimento(cor) => {
                 self.objetos.painel = None;
-                self.mudar_selecionado("Preenchimento alterado", |o, _| o.aparencia.preenchimento = cor.map(str::to_owned));
+                self.mudar_selecionado(tr!("Preenchimento alterado"), |o, _| o.aparencia.preenchimento = cor.map(str::to_owned));
             }
             Evento::Contorno(cor) => {
                 self.objetos.painel = None;
-                self.mudar_selecionado("Contorno alterado", |o, _| o.aparencia.contorno = cor.map(str::to_owned));
+                self.mudar_selecionado(tr!("Contorno alterado"), |o, _| o.aparencia.contorno = cor.map(str::to_owned));
             }
             Evento::Espessura(e) => {
                 self.objetos.painel = None;
-                self.mudar_selecionado("Espessura do contorno alterada", |o, _| {
+                self.mudar_selecionado(tr!("Espessura do contorno alterada"), |o, _| {
                     o.aparencia.espessura = e;
                     if o.aparencia.contorno.is_none() {
                         o.aparencia.contorno = Some("#2f528f".into());
@@ -538,7 +538,7 @@ impl App {
             Evento::Transparencia(t) => {
                 self.objetos.painel = None;
                 self.objetos.mais_cores = false;
-                self.mudar_selecionado("Transparência alterada", |o, _| o.aparencia.transparencia = t.clamp(0.0, 1.0));
+                self.mudar_selecionado(tr!("Transparência alterada"), |o, _| o.aparencia.transparencia = t.clamp(0.0, 1.0));
             }
             Evento::Ordem(ordem) => {
                 self.objetos.menu_faixa = None;
@@ -557,17 +557,17 @@ impl App {
                     let o = lista.remove(i);
                     lista.insert(destino, o);
                     let s = match ordem {
-                        Ordem::Frente => "Forma trazida para a frente",
-                        Ordem::Avancar => "Forma avançada um nível",
-                        Ordem::Tras => "Forma enviada para trás",
-                        Ordem::Recuar => "Forma recuada um nível",
+                        Ordem::Frente => tr!("Forma trazida para a frente"),
+                        Ordem::Avancar => tr!("Forma avançada um nível"),
+                        Ordem::Tras => tr!("Forma enviada para trás"),
+                        Ordem::Recuar => tr!("Forma recuada um nível"),
                     };
-                    self.gravar_objetos(&objetos, format!("{s} (Ctrl+Z desfaz)."));
+                    self.gravar_objetos(&objetos, trf!("{s} (Ctrl+Z desfaz)."));
                 }
             }
             Evento::Girar(g) => {
                 self.objetos.menu_faixa = None;
-                self.mudar_selecionado("Forma girada", |o, _| match g {
+                self.mudar_selecionado(tr!("Forma girada"), |o, _| match g {
                     Giro::Direita90 => o.definir_giro(o.giro + 90.0),
                     Giro::Esquerda90 => o.definir_giro(o.giro - 90.0),
                     Giro::EspelharH => o.espelhar_h = !o.espelhar_h,
@@ -576,7 +576,7 @@ impl App {
             }
             Evento::Alinhar(a) => {
                 self.objetos.menu_faixa = None;
-                self.mudar_selecionado("Forma alinhada às células", |o, regua| {
+                self.mudar_selecionado(tr!("Forma alinhada às células"), |o, regua| {
                     let r = o.retangulo(regua);
                     match a {
                         Alinhar::CantoDaCelula => {
@@ -610,7 +610,7 @@ impl App {
                 if let Some(o) = self.objeto_selecionado() {
                     self.objetos.area = vec![o];
                     self.objetos.copia_de_objeto = true;
-                    self.status = "Forma copiada (Ctrl+V cola).".into();
+                    self.status = tr!("Forma copiada (Ctrl+V cola).").into();
                 }
             }
             Evento::Recortar => {
@@ -618,7 +618,7 @@ impl App {
                     self.objetos.area = vec![o];
                     self.objetos.copia_de_objeto = true;
                     self.apagar_objeto_selecionado();
-                    self.status = "Forma recortada (Ctrl+V cola, Ctrl+Z desfaz).".into();
+                    self.status = tr!("Forma recortada (Ctrl+V cola, Ctrl+Z desfaz).").into();
                 }
             }
             Evento::Colar => {
@@ -659,8 +659,8 @@ impl App {
                 self.objetos.texto = Some((id, texto));
                 return iced::widget::text_input::focus(iced::widget::text_input::Id::new(interface::ID_TEXTO));
             }
-            Evento::AlinharTextoH(h) => self.mudar_selecionado("Alinhamento do texto alterado", |o, _| o.alinhar.h = h),
-            Evento::AlinharTextoV(v) => self.mudar_selecionado("Alinhamento do texto alterado", |o, _| o.alinhar.v = v),
+            Evento::AlinharTextoH(h) => self.mudar_selecionado(tr!("Alinhamento do texto alterado"), |o, _| o.alinhar.h = h),
+            Evento::AlinharTextoV(v) => self.mudar_selecionado(tr!("Alinhamento do texto alterado"), |o, _| o.alinhar.v = v),
             Evento::TextoDigitado(t) => {
                 if let Some((_, atual)) = &mut self.objetos.texto {
                     *atual = t;
@@ -670,7 +670,7 @@ impl App {
                 if let Some((id, t)) = self.objetos.texto.take() {
                     if self.objetos.selecionado.map(|s| s.1) == Some(id) {
                         let t = t.trim().to_owned();
-                        self.mudar_selecionado("Texto da forma alterado", |o, _| o.texto = (!t.is_empty()).then_some(t));
+                        self.mudar_selecionado(tr!("Texto da forma alterado"), |o, _| o.texto = (!t.is_empty()).then_some(t));
                     }
                 }
             }
@@ -689,8 +689,8 @@ impl App {
                 if let Some((id, m)) = self.objetos.macro_dialogo.take() {
                     if self.objetos.selecionado.map(|s| s.1) == Some(id) {
                         let status = match &m {
-                            Some(n) => format!("Macro {n} atribuída à forma: o clique a executa, Ctrl+clique seleciona"),
-                            None => "Macro removida da forma".to_owned(),
+                            Some(n) => trf!("Macro {n} atribuída à forma: o clique a executa, Ctrl+clique seleciona"),
+                            None => tr!("Macro removida da forma").to_owned(),
                         };
                         self.mudar_selecionado(&status, |o, _| o.macro_nome = m);
                     }
@@ -726,11 +726,11 @@ impl App {
             }
             Evento::AplicarTamanho => {
                 let (Some(w), Some(h)) = (numero(&self.objetos.campos.largura), numero(&self.objetos.campos.altura)) else {
-                    self.status = "Tamanho inválido: use números em pixels (ex.: 120 ou 80,5).".into();
+                    self.status = tr!("Tamanho inválido: use números em pixels (ex.: 120 ou 80,5).").into();
                     return Task::none();
                 };
                 let (w, h) = (w.clamp(modelo::LADO_MINIMO, 8000.0), h.clamp(0.0, 8000.0));
-                self.mudar_selecionado("Tamanho da forma alterado", |o, regua| {
+                self.mudar_selecionado(tr!("Tamanho da forma alterado"), |o, regua| {
                     let r = o.retangulo(regua);
                     o.ancorar(Retangulo::novo(r.x, r.y, w, h), regua);
                 });
@@ -785,11 +785,11 @@ impl App {
         // Traço só: a cor do ícone é o contorno; espessura 1 = traço do Tabler.
         novo.aparencia = modelo::Aparencia { preenchimento: None, contorno: Some("#4472c4".into()), espessura: 1.0, transparencia: 0.0 };
         let Some(id) = objetos.adicionar(novo) else {
-            self.status = format!("Limite de {} objetos por aba.", modelo::MAX_OBJETOS);
+            self.status = trf!("Limite de {} objetos por aba.", modelo::MAX_OBJETOS);
             return;
         };
         self.objetos.selecionado = Some((aba_id, id));
-        self.gravar_objetos(&objetos, format!("Ícone {} inserido (Ctrl+Z desfaz).", nome.replace('-', " ")));
+        self.gravar_objetos(&objetos, trf!("Ícone {} inserido (Ctrl+Z desfaz).", nome.replace('-', " ")));
     }
 
     /// O objeto selecionado, se for WordArt.
@@ -803,7 +803,7 @@ impl App {
     fn estilo_wordart(&mut self, indice: usize) {
         let estilo = feather_shapes::wordart::estilo(indice);
         if self.wordart_selecionado().is_some() {
-            self.mudar_selecionado(&format!("Estilo do WordArt: {}", estilo.nome), |o, _| wordart::aplicar_estilo(o, estilo));
+            self.mudar_selecionado(&trf!("Estilo do WordArt: {}", estilo.nome), |o, _| wordart::aplicar_estilo(o, estilo));
             return;
         }
         let Some(aba) = self.workbook.aba(self.folha) else { return };
@@ -816,14 +816,14 @@ impl App {
         let mut novo = ObjetoSolto::nova_forma(objetos.proximo_id(), modo.nome(), Retangulo::novo(x, y, w, h), &regua);
         novo.tipo = modelo::TipoObjeto::Wordart;
         novo.ajustes = vec![wordart::INTENSIDADE_PADRAO];
-        novo.texto = Some(wordart::TEXTO_PADRAO.to_owned());
+        novo.texto = Some(tr!(wordart::TEXTO_PADRAO).to_owned());
         wordart::aplicar_estilo(&mut novo, estilo);
         let Some(id) = objetos.adicionar(novo) else {
-            self.status = format!("Limite de {} objetos por aba.", modelo::MAX_OBJETOS);
+            self.status = trf!("Limite de {} objetos por aba.", modelo::MAX_OBJETOS);
             return;
         };
         self.objetos.selecionado = Some((aba_id, id));
-        self.gravar_objetos(&objetos, format!("WordArt {} inserido: F2 ou duplo clique edita o texto (Ctrl+Z desfaz).", estilo.nome));
+        self.gravar_objetos(&objetos, trf!("WordArt {} inserido: F2 ou duplo clique edita o texto (Ctrl+Z desfaz).", estilo.nome));
     }
 
     /// A cor que o painel aberto mostra: a do rascunho, senão a da forma.
@@ -929,8 +929,8 @@ impl App {
             return;
         }
         let status = match r.painel {
-            Painel::Preenchimento => "Preenchimento alterado",
-            Painel::Contorno => "Contorno alterado",
+            Painel::Preenchimento => tr!("Preenchimento alterado"),
+            Painel::Contorno => tr!("Contorno alterado"),
         };
         self.mudar_selecionado(status, |o, _| {
             match r.painel {
@@ -946,7 +946,7 @@ impl App {
         let Some(o) = self.objeto_selecionado() else { return };
         let Some(r) = self.regua_ret(&o) else { return };
         if geometria::raios(&o.forma, &o.ajustes).is_none() {
-            self.status = "Só retângulos têm cantos arredondáveis.".into();
+            self.status = tr!("Só retângulos têm cantos arredondáveis.").into();
             return;
         }
         let m = r.largura.min(r.altura).max(1.0);
@@ -955,19 +955,19 @@ impl App {
         let raios = if c.por_canto {
             let v: Vec<Option<f32>> = c.cantos.iter().map(|t| fr(t)).collect();
             if v.iter().any(Option::is_none) {
-                self.status = "Raio inválido: use números em pixels.".into();
+                self.status = tr!("Raio inválido: use números em pixels.").into();
                 return;
             }
             [v[0].unwrap(), v[1].unwrap(), v[2].unwrap(), v[3].unwrap()]
         } else {
             let Some(f) = fr(&c.raio) else {
-                self.status = "Raio inválido: use números em pixels.".into();
+                self.status = tr!("Raio inválido: use números em pixels.").into();
                 return;
             };
             [f; 4]
         };
         let (id, ajustes) = geometria::com_raios(&o.forma, raios);
-        self.mudar_selecionado("Cantos arredondados", |o, _| {
+        self.mudar_selecionado(tr!("Cantos arredondados"), |o, _| {
             o.forma = id.to_owned();
             o.ajustes = ajustes;
         });
@@ -991,11 +991,11 @@ impl App {
             ultimo = objetos.adicionar(novo).or(ultimo);
         }
         let Some(id) = ultimo else {
-            self.status = format!("Limite de {} objetos por aba.", modelo::MAX_OBJETOS);
+            self.status = trf!("Limite de {} objetos por aba.", modelo::MAX_OBJETOS);
             return;
         };
         self.objetos.selecionado = Some((aba_id, id));
-        self.gravar_objetos(&objetos, format!("Forma {verbo} (Ctrl+Z desfaz)."));
+        self.gravar_objetos(&objetos, trf!("Forma {verbo} (Ctrl+Z desfaz)."));
         // A próxima colagem anda mais um passo, como no Excel.
         if verbo == "colada" {
             if let Some(o) = self.objeto_selecionado() {
@@ -1013,18 +1013,18 @@ impl App {
         let Some((_, lidos)) = self.objetos_da_aba() else { return };
         let Some(o) = lidos.obter(id) else { return };
         let Some(nome) = o.macro_nome.clone() else { return };
-        let rotulo = format!("forma {}", geometria::nome(&o.forma));
+        let rotulo = trf!("forma {}", geometria::nome(&o.forma));
         let Some(macro_atual) = self.macro_catalogo.obter(&nome) else {
-            self.status = format!("Macro \"{nome}\" não encontrada na biblioteca.");
+            self.status = trf!("Macro \"{nome}\" não encontrada na biblioteca.");
             return;
         };
         let (codigo, nome) = (macro_atual.code.clone(), macro_atual.name.clone());
         let Some(resultado) = self.rodar_macro(historico_macros::GatilhoMacro::Botao { rotulo }, &nome, &codigo, Vec::new()) else { return };
         self.macro_saida = resultado.saida.join("\n");
         self.status = if let Some(erro) = resultado.erro {
-            format!("Erro ao executar {nome}: {erro}. Escritas revertidas.")
+            trf!("Erro ao executar {nome}: {erro}. Escritas revertidas.")
         } else {
-            format!("Macro {nome} executada pela forma (Ctrl+clique seleciona a forma).")
+            trf!("Macro {nome} executada pela forma (Ctrl+clique seleciona a forma).")
         };
         self.trocar_selecao(self.linha, self.coluna);
     }
@@ -1040,7 +1040,7 @@ impl App {
         let mut objetos = (*lidos).clone();
         let nome_forma = objetos.remover(id).map(|o| geometria::nome(&o.forma)).unwrap_or_default();
         self.desselecionar();
-        self.gravar_objetos(&objetos, format!("{nome_forma} excluída (Ctrl+Z desfaz)."))
+        self.gravar_objetos(&objetos, trf!("{nome_forma} excluída (Ctrl+Z desfaz)."))
     }
 
     /// Setas com objeto selecionado: move 1 px lógico (um Ctrl+Z por toque).
@@ -1126,7 +1126,7 @@ impl App {
             return true;
         }
         if o.inserir.take().is_some() {
-            self.status = "Inserção de forma cancelada.".into();
+            self.status = tr!("Inserção de forma cancelada.").into();
             return true;
         }
         if o.selecionado.is_some() {
@@ -1165,7 +1165,7 @@ impl App {
                     "retangulo-arredondado" => {
                         o.aparencia.preenchimento = Some("#70ad47".into());
                         o.aparencia.contorno = Some("#3c6e24".into());
-                        o.texto = Some("Etapa 1".into());
+                        o.texto = Some(tr!("Etapa 1").into());
                         o.macro_nome = Some("Relatorio".into());
                     }
                     "elipse" => {
@@ -1205,7 +1205,7 @@ impl App {
             "wordart" => {
                 // Quatro WordArts (um por estilo) abaixo das formas, com deformações
                 // diferentes; o último selecionado e a galeria aberta.
-                let modos = [("reto", 0.5, "Vendas 2026"), ("arco", 0.6, "Relatório"), ("onda", 0.7, "Metas"), ("inclinado", 0.5, "Ótimo!")];
+                let modos = [("reto", 0.5, tr!("Vendas 2026")), ("arco", 0.6, tr!("Relatório")), ("onda", 0.7, tr!("Metas")), ("inclinado", 0.5, tr!("Ótimo!"))];
                 for (i, (modo, k, texto)) in modos.into_iter().enumerate() {
                     self.objetos.selecionado = None;
                     self.linha = [12, 12, 15, 15][i];
@@ -1267,7 +1267,7 @@ impl App {
                 if let Some(id) = achar(self, "retangulo") {
                     let _ = self.evento_objetos(Evento::Selecionar(id));
                     let _ = self.evento_objetos(Evento::EditarTexto(id));
-                    let _ = self.evento_objetos(Evento::TextoDigitado("Canto".into()));
+                    let _ = self.evento_objetos(Evento::TextoDigitado(tr!("Canto").into()));
                     let _ = self.evento_objetos(Evento::TextoConfirmar);
                     let _ = self.evento_objetos(Evento::AlinharTextoH(modelo::AlinharH::Direita));
                     let _ = self.evento_objetos(Evento::AlinharTextoV(modelo::AlinharV::Baixo));
@@ -1276,7 +1276,7 @@ impl App {
                     let _ = self.evento_objetos(Evento::Selecionar(id));
                     let _ = self.evento_objetos(Evento::FormatarForma);
                     let _ = self.evento_objetos(Evento::EditarTexto(id));
-                    let _ = self.evento_objetos(Evento::TextoDigitado("Etapa 1 editando".into()));
+                    let _ = self.evento_objetos(Evento::TextoDigitado(tr!("Etapa 1 editando").into()));
                 }
             }
             _ => {}

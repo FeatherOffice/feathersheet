@@ -9,7 +9,7 @@ impl App {
     /// Métricas que o motor anotou (abrir, desfazer…) vão para o Console.
     pub(super) fn recolher_diario_motor(&mut self) {
         for linha in feathersheet_core::diario::recolher() {
-            self.monitor.registrar(Nivel::Info, "Motor", &linha);
+            self.monitor.registrar(Nivel::Info, tr!("Motor"), &linha);
         }
         // Diagnóstico da caneta (FEATHERSHEET_CANETA_DIAG=1): eventos crus
         // da camada e do XInput2. Também no terminal, para o usuário mandar.
@@ -17,7 +17,7 @@ impl App {
             if super::desenhar::diagnostico_no_terminal() {
                 println!("{linha}");
             }
-            self.monitor.registrar(Nivel::Info, "Caneta", &linha);
+            self.monitor.registrar(Nivel::Info, tr!("Caneta"), &linha);
         }
     }
 
@@ -28,15 +28,15 @@ impl App {
             .sum();
         let metricas = Metricas {
             cartoes: vec![
-                ("Abas".into(), self.workbook.len().to_string(), "No documento atual".into()),
-                ("Células ocupadas".into(), celulas.to_string(), "Dados e fórmulas".into()),
+                (tr!("Abas").into(), self.workbook.len().to_string(), tr!("No documento atual").into()),
+                (tr!("Células ocupadas").into(), celulas.to_string(), tr!("Dados e fórmulas").into()),
             ],
             linhas: vec![
-                ("Documento".into(), self.nome_documento()),
-                ("Estado".into(), if self.alterado { "Alterações não salvas" } else { "Salvo" }.into()),
-                ("Operação".into(), if self.carregando { "Importando planilha" } else { "Pronto" }.into()),
+                (tr!("Documento").into(), self.nome_documento()),
+                (tr!("Estado").into(), if self.alterado { tr!("Alterações não salvas") } else { tr!("Salvo") }.into()),
+                (tr!("Operação").into(), if self.carregando { tr!("Importando planilha") } else { tr!("Pronto") }.into()),
             ],
-            ocupado: self.carregando.then(|| "Importação em andamento".into()),
+            ocupado: self.carregando.then(|| tr!("Importação em andamento").into()),
         };
         self.monitor.view(metricas, Msg::MonitorEvento)
     }

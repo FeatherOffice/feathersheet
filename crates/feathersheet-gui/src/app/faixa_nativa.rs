@@ -86,8 +86,8 @@ impl App {
             }
         };
         let (icone, dica) = match alvo {
-            AlvoCor::Fundo => ("bucket", "Cor de preenchimento da célula"),
-            AlvoCor::Texto => ("font-color", "Cor do texto"),
+            AlvoCor::Fundo => ("bucket", tr!("Cor de preenchimento da célula")),
+            AlvoCor::Texto => ("font-color", tr!("Cor do texto")),
         };
         let amostra = container(Space::with_height(4.0))
             .width(20.0)
@@ -141,9 +141,9 @@ impl App {
         let duplo = self.workbook.aba(self.folha)
             .is_some_and(|a| sublinhado_de(&a.sheet, self.linha, self.coluna) == Sublinhado::Duplo);
         let (dica, icone, chave) = if duplo {
-            ("Sublinhado duplo", "underline-double", CHAVE_DUPLO)
+            (tr!("Sublinhado duplo"), "underline-double", CHAVE_DUPLO)
         } else {
-            ("Sublinhado (Ctrl+U)", "underline", "underline")
+            (tr!("Sublinhado (Ctrl+U)"), "underline", "underline")
         };
         row![
             self.faixa_icone(dica, icone, Some(Msg::AlternarEstilo(chave.into())), ativo),
@@ -152,7 +152,7 @@ impl App {
                     .padding([6, 1])
                     .style(estilo_botao_pequeno(self.edicao_menu == Some("sublinhado")))
                     .on_press(Msg::AlternarMenuEdicao("sublinhado")),
-                "Opções de sublinhado",
+                tr!("Opções de sublinhado"),
             ),
         ].spacing(0).align_y(Alignment::Center).into()
     }
@@ -168,7 +168,7 @@ impl App {
                 .padding([4, 6])
                 .style(estilo_botao_pequeno(self.bordas_menu_aberto || self.borda_desenho.modo.is_some()))
                 .on_press(Msg::AlternarMenuBordas),
-            "Bordas",
+            tr!("Bordas"),
         )
     }
 
@@ -176,9 +176,9 @@ impl App {
     /// Só os ícones ocupam a Ribbon; as descrições aparecem no tooltip.
     pub(super) fn faixa_vertical(&self, posicao: &'static str, ativo: bool) -> Element<'_, Msg> {
         let (icone, dica, valor) = match posicao {
-            "top" => ("align-top", "Alinhar texto no topo", "top"),
-            "bottom" => ("align-bottom", "Alinhar texto na base", "bottom"),
-            _ => ("align-middle", "Centralizar texto verticalmente", "middle"),
+            "top" => ("align-top", tr!("Alinhar texto no topo"), "top"),
+            "bottom" => ("align-bottom", tr!("Alinhar texto na base"), "bottom"),
+            _ => ("align-middle", tr!("Centralizar texto verticalmente"), "middle"),
         };
         self.faixa_icone(
             dica,
@@ -192,7 +192,7 @@ impl App {
     pub(super) fn faixa_inclinar_texto(&self, ativo: bool) -> Element<'_, Msg> {
         let icone = feather_ui::icones::icone("text-rotate", 16.);
         button(row![
-            icone, text("Inclinar").size(11),
+            icone, text(tr!("Inclinar")).size(11),
             feather_ui::icones::icone("chevron-down", 12.)
         ].spacing(3).align_y(Alignment::Center))
         .padding([3,5])
@@ -262,7 +262,7 @@ impl App {
         iced::widget::column![
             button(iced::widget::column![
                 feather_ui::icones::icone_colorido("clipboard", 25.0, "#d68126"),
-                text("Colar").size(11),
+                text(tr!("Colar")).size(11),
             ].spacing(3).align_x(Alignment::Center))
                 .width(Length::Fixed(68.0))
                 .padding([4, 8])
@@ -282,7 +282,7 @@ impl App {
         iced::widget::button(iced::widget::column![
             feather_ui::icones::icone("chart-bar", 23.0),
             iced::widget::row![
-                iced::widget::text("Gráfico").size(11),
+                iced::widget::text(tr!("Gráfico")).size(11),
                 feather_ui::icones::icone("chevron-down", 12.0),
             ].spacing(3).align_y(Alignment::Center),
         ].spacing(3).align_x(Alignment::Center))
@@ -298,9 +298,10 @@ impl App {
         &self, rotulo: &'static str, id: &'static str, opcoes: &'static [&'static str],
         selecionado: Option<&'static str>, largura: f32,
     ) -> Element<'_, Msg> {
+        // A lista mostra o texto traduzido; a mensagem leva a opção em português.
         ui::lista_suspensa(
-            rotulo, opcoes, selecionado,
-            move |opcao| Msg::FaixaOpcao(id, opcao), largura,
+            rotulo, crate::idioma::lista(opcoes), selecionado.map(|s| crate::idioma::tr(s)),
+            move |opcao| Msg::FaixaOpcao(id, crate::idioma::chave_de(opcoes, opcao).unwrap_or(opcao)), largura,
         )
     }
 
@@ -308,7 +309,7 @@ impl App {
         // Todos os grupos, não apenas Fonte: mesmo espaço para legenda.
         // O antigo grupo_faixa com Height::Fill deixava os títulos invadirem
         // a rolagem horizontal no rodapé (ex.: "Alinhamento").
-        ui::grupo_faixa_compacto(elementos, titulo)
+        ui::grupo_faixa_compacto(elementos, crate::idioma::tr(titulo))
     }
 
     pub(super) fn faixa_linha<'a>(&self, itens: Vec<Element<'a, Msg>>) -> Element<'a, Msg> {
@@ -360,7 +361,7 @@ impl App {
         row![
             button(row![
                 feather_ui::icones::icone_colorido("arrow-down", 17., "#21865c"),
-                text("Preencher").size(12),
+                text(tr!("Preencher")).size(12),
             ].spacing(5).align_y(Alignment::Center))
                 .padding([6, 4])
                 .style(estilo_botao_pequeno(false))
@@ -377,7 +378,7 @@ impl App {
         row![
             button(row![
                 feather_ui::icones::icone_colorido("eraser", 17., "#ca5555"),
-                text("Limpar").size(12),
+                text(tr!("Limpar")).size(12),
             ].spacing(5).align_y(Alignment::Center))
                 .padding([6, 4])
                 .style(estilo_botao_pequeno(false))
@@ -393,7 +394,7 @@ impl App {
     pub(super) fn faixa_localizar_grande(&self) -> Element<'_, Msg> {
         button(column![
             feather_ui::icones::icone("search", 25.),
-            text("Localizar e").size(11),
+            text(tr!("Localizar e")).size(11),
             text("selecionar").size(11),
         ].spacing(3).align_x(Alignment::Center))
             .padding([5, 8])
@@ -408,7 +409,7 @@ impl App {
         button(column![
             feather_ui::icones::icone_colorido("edit", 23., "#2179a7"),
             row![
-                text("Formatar").size(11),
+                text(tr!("Formatar")).size(11),
                 feather_ui::icones::icone("chevron-down", 12.),
             ].spacing(4).align_y(Alignment::Center),
         ].spacing(3).align_x(Alignment::Center))
@@ -436,7 +437,7 @@ impl App {
         column![
             button(column![
                 feather_ui::icones::icone("square", 23.),
-                text("Mesclar").size(11),
+                text(tr!("Mesclar")).size(11),
             ].spacing(3).align_x(Alignment::Center))
                 .padding([5, 8])
                 .style(estilo_botao_grande(mesclada))
@@ -456,9 +457,9 @@ impl App {
                 feather_ui::icones::icone_colorido("sort-ascending", 21., "#2179a7"),
                 feather_ui::icones::icone("filter", 20.),
             ].spacing(2).align_y(Alignment::Center),
-            text("Classificar e").size(11),
+            text(tr!("Classificar e")).size(11),
             row![
-                text("Filtrar").size(11),
+                text(tr!("Filtrar")).size(11),
                 feather_ui::icones::icone("chevron-down", 12.),
             ].spacing(4).align_y(Alignment::Center),
         ].spacing(2).align_x(Alignment::Center))
@@ -511,12 +512,12 @@ impl App {
         let indice = self.categoria_funcoes.min(CATEGORIAS.len() - 1);
         let funcoes = ui::lista_pesquisavel(
             &self.catalogos_funcoes[indice],
-            "Buscar função…",
+            tr!("Buscar função…"),
             Msg::InserirFuncao,
             190.0,
         );
         self.faixa_pilha(vec![
-            self.faixa_lista("Categoria", "categoria", CATEGORIAS.as_slice(),
+            self.faixa_lista(tr!("Categoria"), "categoria", CATEGORIAS.as_slice(),
                 Some(CATEGORIAS[indice]), 190.0),
             funcoes,
         ])
@@ -529,14 +530,14 @@ impl App {
     /// Entrada para comandos globais; busca somente os comandos já ligados ao Rust.
     pub(super) fn faixa_pesquisa(&self) -> Element<'_, Msg> {
         let largura = if self.tamanho_principal.width >= 1300.0 { 250.0 } else { 172.0 };
-        let campo = text_input("Pesquisar comandos...", &self.busca_comandos)
+        let campo = text_input(tr!("Pesquisar comandos..."), &self.busca_comandos)
             .on_input(Msg::BuscaComandos).width(Length::Fixed(largura))
             .size(12).padding([6, 9]);
         let mut lista = column![campo].spacing(2);
         if !self.busca_comandos.trim().is_empty() {
             let encontrados = self.resultados_faixa();
             if encontrados.is_empty() {
-                lista = lista.push(text("Nenhum comando disponível").size(10).color(COR_TEXTO_MUTED()));
+                lista = lista.push(text(tr!("Nenhum comando disponível")).size(10).color(COR_TEXTO_MUTED()));
             } else {
                 for (i, (nome, _)) in encontrados.into_iter().enumerate().take(5) {
                     lista = lista.push(
@@ -556,12 +557,14 @@ impl App {
         fn percorrer(app: &App, itens: &[menu_nativo::Item], busca: &str, saida: &mut Vec<(String, menu_nativo::Acao)>) {
             for item in itens {
                 if let Some(acao) = &item.acao {
+                    // Acha pelo texto mostrado (idioma atual) ou pelo português.
+                    let exibido = crate::idioma::tr(&item.rotulo);
                     if !item.rotulo.trim().is_empty() &&
-                        item.rotulo.to_lowercase().contains(busca) &&
+                        (exibido.to_lowercase().contains(busca) || item.rotulo.to_lowercase().contains(busca)) &&
                         app.evento_menu(acao).is_some() &&
-                        !saida.iter().any(|(nome, _)| nome == &item.rotulo)
+                        !saida.iter().any(|(nome, _)| nome == exibido)
                     {
-                        saida.push((item.rotulo.clone(), acao.clone()));
+                        saida.push((exibido.to_owned(), acao.clone()));
                     }
                 }
                 percorrer(app, &item.filhos, busca, saida);
@@ -586,6 +589,7 @@ impl App {
                 474., 159., 372., 430.,
             ],
             AbaFaixa::Desenhar => &feather_ui::tinta::LARGURAS_GRUPOS,
+            AbaFaixa::Layout => &[410., 130., 250., 120.],
             AbaFaixa::Formulas => &[500., 245., 330., 170.],
             AbaFaixa::Dados => &[285., 450., 330., 230., 300.],
             AbaFaixa::Revisao => &[440., 120.],
@@ -611,7 +615,7 @@ impl App {
                 .padding([4,4])
                 .style(estilo_botao_pequeno(self.faixa_grupo_aberto==Some(indice)))
                 .on_press(Msg::AlternarGrupoFaixa(indice)),
-            "Mais opções desta seção",
+            tr!("Mais opções desta seção"),
         )
     }
 
@@ -646,8 +650,8 @@ impl App {
                 self.faixa_botao_colar(),
                 self.faixa_pilha(vec![
                     self.faixa_linha(vec![
-                        self.faixa_icone("Recortar", "cut",Some(Msg::Recortar),false),
-                        self.faixa_icone("Copiar", "copy",Some(Msg::Copiar),false),
+                        self.faixa_icone(tr!("Recortar"), "cut",Some(Msg::Recortar),false),
+                        self.faixa_icone(tr!("Copiar"), "copy",Some(Msg::Copiar),false),
                     ]),
                     self.faixa_abrir_grupo(indice),
                 ]),
@@ -656,15 +660,15 @@ impl App {
                 let tamanho=estilo.font_size.unwrap_or(13.).round().clamp(6.,96.) as i32;
                 self.faixa_pilha(vec![
                     self.faixa_linha(vec![
-                        self.faixa_lista("Fonte","fonte",FONTES,Some(self.faixa_nome_fonte()),106.),
-                        self.faixa_lista("Tamanho","tamanho",TAMANHOS,
+                        self.faixa_lista(tr!("Fonte"),"fonte",FONTES,Some(self.faixa_nome_fonte()),106.),
+                        self.faixa_lista(tr!("Tamanho"),"tamanho",TAMANHOS,
                             TAMANHOS.iter().copied().find(|x|x.parse::<i32>().ok()==Some(tamanho)),55.),
-                        self.faixa_tamanho_acao("A+","Aumentar fonte",1),
-                        self.faixa_tamanho_acao("A−","Diminuir fonte",-1),
+                        self.faixa_tamanho_acao("A+",tr!("Aumentar fonte"),1),
+                        self.faixa_tamanho_acao("A−",tr!("Diminuir fonte"),-1),
                     ]),
                     self.faixa_linha(vec![
-                        self.faixa_icone("Negrito","bold",Some(Msg::AlternarEstilo("bold".into())),estilo.bold),
-                        self.faixa_icone("Itálico","italic",Some(Msg::AlternarEstilo("italic".into())),estilo.italic),
+                        self.faixa_icone(tr!("Negrito"),"bold",Some(Msg::AlternarEstilo("bold".into())),estilo.bold),
+                        self.faixa_icone(tr!("Itálico"),"italic",Some(Msg::AlternarEstilo("italic".into())),estilo.italic),
                         self.faixa_sublinhado(estilo.underline),
                         self.faixa_bordas(),
                         self.faixa_cor(AlvoCor::Fundo),
@@ -695,55 +699,55 @@ impl App {
                                     feather_ui::alinhamento::Horizontal::Justificado=>"justify",
                                 }.into())),
                         ),
-                        self.faixa_icone("Quebrar linha","text-wrap",
+                        self.faixa_icone(tr!("Quebrar linha"),"text-wrap",
                             Some(Msg::EstiloMenu("wrap".into(),Campo::Logico(!estilo.wrap))),estilo.wrap),
                     ]),
                     self.faixa_linha(vec![
                         self.faixa_vertical("top",estilo.valign==feathersheet_core::celulas::style::VAlign::Top),
                         self.faixa_vertical("middle",estilo.valign==feathersheet_core::celulas::style::VAlign::Middle),
                         self.faixa_vertical("bottom",estilo.valign==feathersheet_core::celulas::style::VAlign::Bottom),
-                        self.faixa_icone("Mesclar","square",Some(Msg::Mesclar),false),
-                        self.faixa_icone("Opções de mesclagem","chevron-down",
+                        self.faixa_icone(tr!("Mesclar"),"square",Some(Msg::Mesclar),false),
+                        self.faixa_icone(tr!("Opções de mesclagem"),"chevron-down",
                             Some(Msg::AlternarMenuEdicao("mesclar")),self.edicao_menu==Some("mesclar")),
                         self.faixa_abrir_grupo(indice),
                     ]),
                 ])
             }
             3 => self.faixa_pilha(vec![
-                self.faixa_lista("Formato","formato",FORMATOS,
+                self.faixa_lista(tr!("Formato"),"formato",FORMATOS,
                     Some(self.faixa_nome_formato()),126.),
                 self.faixa_linha(vec![
-                    self.faixa_numero_botao("R$","Moeda",
+                    self.faixa_numero_botao("R$",tr!("Moeda"),
                         Msg::EstiloMenu("format".into(),Campo::Texto("currency".into())),false),
-                    self.faixa_numero_botao("%","Percentual",
+                    self.faixa_numero_botao("%",tr!("Percentual"),
                         Msg::EstiloMenu("format".into(),Campo::Texto("percent".into())),false),
-                    self.faixa_icone("Mais decimais","decimal-increase",Some(Msg::Decimais(1)),false),
+                    self.faixa_icone(tr!("Mais decimais"),"decimal-increase",Some(Msg::Decimais(1)),false),
                     self.faixa_abrir_grupo(indice),
                 ]),
             ]),
             4 => self.faixa_linha(vec![
-                self.faixa_icone("Formatação condicional","palette",
+                self.faixa_icone(tr!("Formatação condicional"),"palette",
                     Some(Msg::CondicionalAbrir),self.condicional_menu_aberto),
-                self.faixa_icone("Estilos de tabela","table",
+                self.faixa_icone(tr!("Estilos de tabela"),"table",
                     Some(Msg::AlternarMenuTabelas),self.tabelas_menu_aberto),
-                self.faixa_icone("Estilos de célula","cell-styles",
+                self.faixa_icone(tr!("Estilos de célula"),"cell-styles",
                     Some(Msg::AlternarMenuEstilos),self.estilos_menu_aberto),
                 self.faixa_abrir_grupo(indice),
             ]),
             5 => self.faixa_linha(vec![
-                self.faixa_icone("Inserir linha","plus",
+                self.faixa_icone(tr!("Inserir linha"),"plus",
                     Some(Msg::InserirMenu(Estrutura::InserirLinha,false)),false),
-                self.faixa_icone("Excluir linha","trash",
+                self.faixa_icone(tr!("Excluir linha"),"trash",
                     Some(Msg::Estrutura(Estrutura::ExcluirLinha)),false),
-                self.faixa_icone("Formatar: altura, largura, ocultar","edit",
+                self.faixa_icone(tr!("Formatar: altura, largura, ocultar"),"edit",
                     Some(Msg::AlternarMenuEdicao("formatar")),self.edicao_menu==Some("formatar")),
                 self.faixa_abrir_grupo(indice),
             ]),
             _ => self.faixa_linha(vec![
                 self.faixa_icone("AutoSoma","sum",Some(Msg::AutoSoma),false),
-                self.faixa_icone("Classificar e filtrar","filter",
+                self.faixa_icone(tr!("Classificar e filtrar"),"filter",
                     Some(Msg::AlternarMenuEdicao("classificar")),false),
-                self.faixa_icone("Localizar","search",Some(Msg::BuscaAba(false)),false),
+                self.faixa_icone(tr!("Localizar"),"search",Some(Msg::BuscaAba(false)),false),
                 self.faixa_abrir_grupo(indice),
             ]),
         };

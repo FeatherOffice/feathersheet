@@ -319,6 +319,8 @@ static FUNCOES: &[(&str, FnImpl)] = &[
     ("TEXTSPLIT", fn_text::fn_textsplit),
     ("JOIN", fn_text::fn_join),
     ("COUNTUNIQUE", fn_stats::fn_countunique),
+    ("SUMBYCOLOR", super::fn_cor::fn_sumbycolor),
+    ("COUNTBYCOLOR", super::fn_cor::fn_countbycolor),
 
     ("REGEXMATCH", regex::fn_regexmatch),
     ("REGEXEXTRACT", regex::fn_regexextract),
@@ -754,19 +756,22 @@ static ALIASES: &[(&str, &str)] = &[
     ("COMBINAÇÃO", "COMBIN"),
     ("PERMUTAÇÃO", "PERMUT"),
     ("PERMUTAS", "PERMUTATIONA"),
-    ("DIST.NORM", "NORM.DIST"),
-    ("DISTNORM", "NORM.DIST"),
+    ("DIST.NORM", "NORMDIST"),
+    ("DISTNORM", "NORMDIST"),
+    ("DIST.NORM.N", "NORM.DIST"),
     ("DIST.NORMP", "NORMSDIST"),
     ("DISTNORMP", "NORMSDIST"),
     ("DIST.NORMP.N", "NORM.S.DIST"),
-    ("INV.NORM", "NORM.INV"),
-    ("INVNORM", "NORM.INV"),
+    ("INV.NORM", "NORMINV"),
+    ("INVNORM", "NORMINV"),
+    ("INV.NORM.N", "NORM.INV"),
     ("DIST.T", "T.DIST"),
     ("DISTT", "TDIST"),
     ("TESTE.T", "T.TEST"),
     ("TESTET", "T.TEST"),
-    ("DIST.QUI", "CHISQ.DIST"),
-    ("DISTQUI", "CHISQ.DIST"),
+    ("DIST.QUI", "CHIDIST"),
+    ("DISTQUI", "CHIDIST"),
+    ("DIST.QUIQUA", "CHISQ.DIST"),
     ("TESTE.QUI", "CHISQ.TEST"),
     ("TESTEQUI", "CHISQ.TEST"),
     ("CHITEST", "CHISQ.TEST"),
@@ -1000,6 +1005,25 @@ static ALIASES: &[(&str, &str)] = &[
     ("PRECOVENC", "PRICEMAT"),
     ("LUCROVENC", "YIELDMAT"),
     ("JUROSACUMV", "ACCRINTM"),
+    // Nomes do Excel em português que faltavam (16/10/2026): sem eles, a
+    // interface em português mostrava o nome em inglês.
+    ("TRUNCAR", "TRUNC"),
+    ("MULT", "PRODUCT"),
+    ("TETO", "CEILING"),
+    ("ARREDMULTB", "FLOOR"),
+    ("ORDEM.PORCENTUAL", "PERCENTRANK"),
+    ("DESVPAD.P", "STDEV.P"),
+    ("DESVPAD.A", "STDEV.S"),
+    ("VAR.A", "VAR.S"),
+    ("MODO.ÚNICO", "MODE.SNGL"),
+    ("MODO.UNICO", "MODE.SNGL"),
+    ("PERCENTIL.INC", "PERCENTILE.INC"),
+    ("QUARTIL.INC", "QUARTILE.INC"),
+    ("DIA.DA.SEMANA", "WEEKDAY"),
+    ("OUEXCL", "XOR"),
+    // Por cor (do FeatherSheet; o Excel não tem).
+    ("SOMAR.POR.COR", "SUMBYCOLOR"),
+    ("CONT.SE.COR", "COUNTBYCOLOR"),
 ];
 
 /// Funções que devolvem matriz — o derramamento depende desta lista.
@@ -1201,6 +1225,8 @@ mod testes {
         assert_eq!(canonical("MÉDIA"), Some("AVERAGE"));
         assert_eq!(canonical("MEDIA"), Some("AVERAGE"));
         assert_eq!(canonical("SUM"), None, "o nome canônico não é apelido de nada");
+        assert_eq!(canonical("DIST.QUI"), Some("CHIDIST"), "cauda direita, dois argumentos");
+        assert_eq!(canonical("MULT"), Some("PRODUCT"));
     }
 
     #[test]

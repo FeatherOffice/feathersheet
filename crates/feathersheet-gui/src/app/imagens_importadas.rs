@@ -186,8 +186,8 @@ pub(super) struct Arraste {
 fn salvar_posicao(sheet: &mut Sheet, id: &str, nova: Posicao) -> Result<bool, String> {
     let mut lista = itens(sheet)?;
     let item = lista.iter_mut().find(|v| v["id"].as_str() == Some(id))
-        .ok_or("A imagem selecionada não existe mais.")?;
-    let antiga = Posicao::ler(item).ok_or("A posição da imagem é inválida.")?;
+        .ok_or(tr!("A imagem selecionada não existe mais."))?;
+    let antiga = Posicao::ler(item).ok_or(tr!("A posição da imagem é inválida."))?;
     if antiga == nova {
         return Ok(false);
     }
@@ -198,7 +198,7 @@ fn salvar_posicao(sheet: &mut Sheet, id: &str, nova: Posicao) -> Result<bool, St
         item["position"][campo] = json!(numero);
     }
     let gravado = serde_json::to_string(&lista)
-        .map_err(|e| format!("Não consegui atualizar a imagem: {e}"))?;
+        .map_err(|e| trf!("Não consegui atualizar a imagem: {e}"))?;
     // Um único passo de desfazer, junto com o resto do histórico da aba.
     sheet.alterar_imagens(Some(gravado));
     Ok(true)
@@ -214,7 +214,7 @@ fn remover_imagem(sheet: &mut Sheet, id: &str) -> Result<bool, String> {
     }
     let gravado = if lista.is_empty() { None } else {
         Some(serde_json::to_string(&lista)
-            .map_err(|e| format!("Não consegui atualizar as imagens: {e}"))?)
+            .map_err(|e| trf!("Não consegui atualizar as imagens: {e}"))?)
     };
     sheet.alterar_imagens(gravado);
     Ok(true)
@@ -223,9 +223,9 @@ fn remover_imagem(sheet: &mut Sheet, id: &str) -> Result<bool, String> {
 fn itens(sheet: &Sheet) -> Result<Vec<Value>, String> {
     let Some(data) = &sheet.im else { return Ok(Vec::new()) };
     let lista: Vec<Value> = serde_json::from_str(data)
-        .map_err(|_| "Não foi possível ler as imagens desta aba.".to_string())?;
+        .map_err(|_| tr!("Não foi possível ler as imagens desta aba.").to_string())?;
     if lista.len() > LIMITE_IMAGENS {
-        return Err("O limite de 64 imagens por aba foi excedido.".into());
+        return Err(tr!("O limite de 64 imagens por aba foi excedido.").into());
     }
     Ok(lista)
 }
@@ -246,24 +246,24 @@ pub(super) fn importar(
     sheet: &mut Sheet, bytes: &[u8], nome: &str, linha: u32, coluna: u32,
 ) -> Result<String, String> {
     if bytes.is_empty() || bytes.len() > MAX_BYTES {
-        return Err("Selecione uma imagem PNG/JPEG de até 16 MiB.".into());
+        return Err(tr!("Selecione uma imagem PNG/JPEG de até 16 MiB.").into());
     }
-    let formato = image::guess_format(bytes).map_err(|_| "Imagem inválida.".to_string())?;
+    let formato = image::guess_format(bytes).map_err(|_| tr!("Imagem inválida.").to_string())?;
     let mime = match formato {
         image::ImageFormat::Png => "image/png",
         image::ImageFormat::Jpeg => "image/jpeg",
-        _ => return Err("Importe uma imagem PNG ou JPEG.".into()),
+        _ => return Err(tr!("Importe uma imagem PNG ou JPEG.").into()),
     };
     let (w, h) = image::ImageReader::with_format(Cursor::new(bytes), formato)
-        .into_dimensions().map_err(|e| format!("Cabeçalho de imagem inválido: {e}"))?;
+        .into_dimensions().map_err(|e| trf!("Cabeçalho de imagem inválido: {e}"))?;
     if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PIXELS {
-        return Err("A imagem excede 4 milhões de pixels.".into());
+        return Err(tr!("A imagem excede 4 milhões de pixels.").into());
     }
     // Confirma que o arquivo inteiro pode ser decodificado antes de modificar a aba.
-    image::load_from_memory(bytes).map_err(|e| format!("Imagem corrompida: {e}"))?;
+    image::load_from_memory(bytes).map_err(|e| trf!("Imagem corrompida: {e}"))?;
     let mut anteriores = itens(sheet)?;
     if anteriores.len() >= LIMITE_IMAGENS {
-        return Err("Limite de 64 imagens por aba atingido.".into());
+        return Err(tr!("Limite de 64 imagens por aba atingido.").into());
     }
     let escala = (MAX_LARGURA / f64::from(w)).min(MAX_ALTURA / f64::from(h)).min(1.);
     let numero = PROXIMO_ID.fetch_add(1, Ordering::Relaxed);
@@ -282,7 +282,7 @@ pub(super) fn importar(
         "aspectRatio": f64::from(w) / f64::from(h)
     }));
     let json = serde_json::to_string(&anteriores)
-        .map_err(|e| format!("Não consegui guardar a imagem: {e}"))?;
+        .map_err(|e| trf!("Não consegui guardar a imagem: {e}"))?;
     sheet.im = Some(json);
     Ok(id)
 }
@@ -291,9 +291,9 @@ pub(super) fn importar(
 /// imagem quando passa do limite de pixels da importação (ex.: print 4K).
 pub(super) fn rgba_para_png(largura: u32, altura: u32, rgba: Vec<u8>) -> Result<Vec<u8>, String> {
     let img = image::RgbaImage::from_raw(largura, altura, rgba)
-        .ok_or("Pixels da área de transferência inconsistentes.")?;
+        .ok_or(tr!("Pixels da área de transferência inconsistentes."))?;
     if largura == 0 || altura == 0 {
-        return Err("Imagem vazia na área de transferência.".into());
+        return Err(tr!("Imagem vazia na área de transferência.").into());
     }
     let pixels = u64::from(largura) * u64::from(altura);
     let img = if pixels > MAX_PIXELS {
@@ -304,7 +304,7 @@ pub(super) fn rgba_para_png(largura: u32, altura: u32, rgba: Vec<u8>) -> Result<
     let mut saida = Vec::new();
     image::DynamicImage::ImageRgba8(img)
         .write_to(&mut Cursor::new(&mut saida), image::ImageFormat::Png)
-        .map_err(|e| format!("Falha ao codificar PNG: {e}"))?;
+        .map_err(|e| trf!("Falha ao codificar PNG: {e}"))?;
     Ok(saida)
 }
 
@@ -323,7 +323,7 @@ pub(super) fn ultima_imagem(sheet: &Sheet) -> Result<Option<(String, Vec<u8>, St
             continue;
         };
         if let Some(bytes) = decodificar_src(src) {
-            let nome = item["name"].as_str().unwrap_or("Imagem").to_owned();
+            let nome = item["name"].as_str().unwrap_or(tr!("Imagem")).to_owned();
             return Ok(Some((id.to_owned(), bytes, nome)));
         }
     }
@@ -335,25 +335,25 @@ pub(super) fn ultima_imagem(sheet: &Sheet) -> Result<Option<(String, Vec<u8>, St
 /// Valida e serializa ANTES de atribuir, para evitar corrupção em caso de falha.
 pub(super) fn substituir_png(sheet: &mut Sheet, id: &str, png: &[u8]) -> Result<(), String> {
     if png.is_empty() || png.len() > MAX_BYTES {
-        return Err("PNG de efeito vazio ou maior que 16 MiB.".into());
+        return Err(tr!("PNG de efeito vazio ou maior que 16 MiB.").into());
     }
     let formato = image::guess_format(png)
-        .map_err(|_| "O efeito não gerou um PNG válido.".to_string())?;
+        .map_err(|_| tr!("O efeito não gerou um PNG válido.").to_string())?;
     if formato != image::ImageFormat::Png {
-        return Err("Somente PNG pode substituir imagem após efeitos.".into());
+        return Err(tr!("Somente PNG pode substituir imagem após efeitos.").into());
     }
     let (w, h) = image::ImageReader::with_format(Cursor::new(png), formato)
-        .into_dimensions().map_err(|e| format!("PNG inválido: {e}"))?;
+        .into_dimensions().map_err(|e| trf!("PNG inválido: {e}"))?;
     if w == 0 || h == 0 || u64::from(w) * u64::from(h) > MAX_PIXELS {
-        return Err("PNG excede 4 milhões de pixels.".into());
+        return Err(tr!("PNG excede 4 milhões de pixels.").into());
     }
     let mut lista = itens(sheet)?;
     let alvo = lista.iter_mut().find(|v| v["id"].as_str() == Some(id))
-        .ok_or("Imagem não encontrada nesta aba.")?;
+        .ok_or(tr!("Imagem não encontrada nesta aba."))?;
     // A imagem original pode ser JPEG: o efeito salvo tem MIME PNG.
     alvo["src"] = Value::String(format!("data:image/png;base64,{}", STANDARD.encode(png)));
     let nova = serde_json::to_string(&lista)
-        .map_err(|e| format!("Não foi possível salvar a imagem: {e}"))?;
+        .map_err(|e| trf!("Não foi possível salvar a imagem: {e}"))?;
     sheet.im = Some(nova);
     Ok(())
 }
@@ -515,8 +515,8 @@ impl App {
                 self.imagens_importadas.objetos.borrow_mut().remove(&drag.aba_id);
                 self.alterado = true;
                 self.status = match drag.gesto {
-                    Gesto::Mover => "Imagem movida na planilha.",
-                    Gesto::Redimensionar | Gesto::Alca(_) => "Imagem redimensionada.",
+                    Gesto::Mover => tr!("Imagem movida na planilha."),
+                    Gesto::Redimensionar | Gesto::Alca(_) => tr!("Imagem redimensionada."),
                 }.into();
             }
             Ok(false) => {}
@@ -534,7 +534,7 @@ impl App {
                 self.imagens_importadas.objetos.borrow_mut().remove(&aba_id);
                 self.imagens_importadas.handles.borrow_mut().remove(&id);
                 self.alterado = true;
-                self.status = "Imagem excluída (Ctrl+Z desfaz).".into();
+                self.status = tr!("Imagem excluída (Ctrl+Z desfaz).").into();
             }
             Ok(false) => {}
             Err(e) => self.status = e,

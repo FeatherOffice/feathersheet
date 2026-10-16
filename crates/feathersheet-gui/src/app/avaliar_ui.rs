@@ -29,7 +29,7 @@ impl App {
                 self.formulas_menu = None;
                 match Avaliacao::nova(&self.workbook, self.folha, self.linha, self.coluna) {
                     Some(a) => self.avaliar = Some(Estado { pilha: vec![a] }),
-                    None => self.status = format!("{} não tem fórmula para avaliar", cell_name(self.linha, self.coluna)),
+                    None => self.status = trf!("{} não tem fórmula para avaliar", cell_name(self.linha, self.coluna)),
                 }
             }
             Evento::Avaliar => {
@@ -111,29 +111,29 @@ impl App {
             passos = passos.push(text(p.clone()).size(12).font(fonte).color(COR_TEXTO_MUTED()));
         }
         let dica = if e.concluida {
-            "Avaliação concluída: este é o valor da célula. Reiniciar volta ao começo.".to_string()
+            tr!("Avaliação concluída: este é o valor da célula. Reiniciar volta ao começo.").to_string()
         } else if e.pode_entrar.is_some() {
-            "Avaliar calcula o trecho sublinhado; Entrar abre a fórmula da célula sublinhada.".to_string()
+            tr!("Avaliar calcula o trecho sublinhado; Entrar abre a fórmula da célula sublinhada.").to_string()
         } else {
-            "Avaliar calcula o trecho sublinhado.".to_string()
+            tr!("Avaliar calcula o trecho sublinhado.").to_string()
         };
         let corpo = column![
-            row![text("Referência:").size(12).color(COR_TEXTO_MUTED()), caminho].spacing(8).align_y(Alignment::Center),
+            row![text(tr!("Referência:")).size(12).color(COR_TEXTO_MUTED()), caminho].spacing(8).align_y(Alignment::Center),
             caixa,
             passos,
             row![feather_ui::icones::icone("info-circle", 15.), text(dica).size(11.5).color(COR_TEXTO_MUTED())]
                 .spacing(6).align_y(Alignment::Center),
         ].spacing(12);
-        Some(self.dialogo("Avaliar fórmula", corpo)
+        Some(self.dialogo(tr!("Avaliar fórmula"), corpo)
             .icone("math-function")
             .largura(600.0)
             .ao_fechar(Msg::Avaliar(Evento::Fechar))
-            .rodape_esquerda(super::dialogo_interno::dlg::botao_secundario("Entrar",
+            .rodape_esquerda(super::dialogo_interno::dlg::botao_secundario(tr!("Entrar"),
                 e.pode_entrar.is_some().then_some(Msg::Avaliar(Evento::Entrar))))
-            .rodape_esquerda(super::dialogo_interno::dlg::botao_secundario("Sair",
+            .rodape_esquerda(super::dialogo_interno::dlg::botao_secundario(tr!("Sair"),
                 (estado.pilha.len() > 1).then_some(Msg::Avaliar(Evento::Sair))))
-            .secundario("Reiniciar", Some(Msg::Avaliar(Evento::Reiniciar)))
-            .primario("Avaliar", (!e.concluida).then_some(Msg::Avaliar(Evento::Avaliar))))
+            .secundario(tr!("Reiniciar"), Some(Msg::Avaliar(Evento::Reiniciar)))
+            .primario(tr!("Avaliar"), (!e.concluida).then_some(Msg::Avaliar(Evento::Avaliar))))
     }
 
     pub(super) fn sobrepor_avaliar<'a>(&'a self, base: Element<'a, Msg>) -> Element<'a, Msg> {
@@ -149,9 +149,9 @@ impl App {
         let e = topo.estado(&self.workbook);
         let caminho: Vec<String> = estado.pilha.iter().map(|a| self.referencia_avaliada(a)).collect();
         let sublinhado = e.proximo.map(|(i, f)| e.texto.chars().skip(i).take(f - i).collect::<String>());
-        Some(format!("Diálogo aberto: Avaliar fórmula · {} · {}{}{}", caminho.join(" > "), e.texto,
-            sublinhado.map(|s| format!(" · sublinhado: {s}")).unwrap_or_default(),
-            if e.concluida { " · concluída" } else { "" }))
+        Some(trf!("Diálogo aberto: Avaliar fórmula · {} · {}{}{}", caminho.join(" > "), e.texto,
+            sublinhado.map(|s| trf!(" · sublinhado: {s}")).unwrap_or_default(),
+            if e.concluida { tr!(" · concluída") } else { "" }))
     }
 }
 

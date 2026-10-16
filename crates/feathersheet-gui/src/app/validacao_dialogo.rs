@@ -62,7 +62,7 @@ fn aba_configuracoes<'a>(f: &'a Formulario, erro: Option<&'a str>) -> Element<'a
     // Sem operador, o campo "Dados" fica como texto apagado, não como controle morto.
     let operadores = Formulario::operadores(f.criterio);
     let dados: Element<'a, Msg> = if !f.tem_operador() {
-        container(text("Não se aplica a este critério").size(12.5).color(COR_TEXTO_MUTED()))
+        container(text(tr!("Não se aplica a este critério")).size(12.5).color(COR_TEXTO_MUTED()))
             .padding([6, 8]).width(Length::Fill).into()
     } else {
         let atual = operadores.iter().find(|o| o.valor == f.operador).copied()
@@ -72,36 +72,36 @@ fn aba_configuracoes<'a>(f: &'a Formulario, erro: Option<&'a str>) -> Element<'a
     };
 
     let dica = match f.criterio {
-        Criterio::Lista => "Itens separados por ; ou , — ou uma origem: =A2:A9, =INDIRETO(B1)",
-        Criterio::Intervalo => "Origem (ex.: B2:B20, Dados!A2:A9, um nome ou INDIRETO(B1))",
-        Criterio::Caixa => "Valor marcado (padrão: VERDADEIRO)",
-        Criterio::Data => "Data no formato AAAA-MM-DD",
-        Criterio::Hora => "Hora no formato HH:MM",
-        Criterio::Numero => "Primeiro valor numérico",
-        Criterio::Texto => "Texto de comparação",
+        Criterio::Lista => tr!("Itens separados por ; ou , — ou uma origem: =A2:A9, =INDIRETO(B1)"),
+        Criterio::Intervalo => tr!("Origem (ex.: B2:B20, Dados!A2:A9, um nome ou INDIRETO(B1))"),
+        Criterio::Caixa => tr!("Valor marcado (padrão: VERDADEIRO)"),
+        Criterio::Data => tr!("Data no formato AAAA-MM-DD"),
+        Criterio::Hora => tr!("Hora no formato HH:MM"),
+        Criterio::Numero => tr!("Primeiro valor numérico"),
+        Criterio::Texto => tr!("Texto de comparação"),
     };
     let (rotulo_a, rotulo_b) = f.rotulos_valor();
 
     let mut campos = column![
-        campo_rotulado("Permitir", permitir),
-        campo_rotulado("Dados", dados),
+        campo_rotulado(tr!("Permitir"), permitir),
+        campo_rotulado(tr!("Dados"), dados),
     ].spacing(10);
     if f.usa_primeiro() {
         campos = campos.push(campo_rotulado(rotulo_a, campo_texto(dica, &f.primeiro, Msg::ValidacaoPrimeiro)));
     }
     if f.usa_segundo() {
         let dica_b = match f.criterio {
-            Criterio::Caixa => "Valor desmarcado (padrão: FALSO)",
-            Criterio::Hora => "Hora no formato HH:MM",
-            _ => "Limite superior",
+            Criterio::Caixa => tr!("Valor desmarcado (padrão: FALSO)"),
+            Criterio::Hora => tr!("Hora no formato HH:MM"),
+            _ => tr!("Limite superior"),
         };
         campos = campos.push(campo_rotulado(rotulo_b, campo_texto(dica_b, &f.segundo, Msg::ValidacaoSegundo)));
     }
     if f.criterio == Criterio::Intervalo {
-        campos = campos.push(text("Faixa desta ou de outra aba, nome definido ou INDIRETO(célula) para a lista depender de outra célula. As opções acompanham as mudanças.")
+        campos = campos.push(text(tr!("Faixa desta ou de outra aba, nome definido ou INDIRETO(célula) para a lista depender de outra célula. As opções acompanham as mudanças."))
             .size(11.5).color(COR_TEXTO_MUTED()));
     }
-    column![dlg::secao("Critério de validação"), campos, erro_formulario(erro)].spacing(10).into()
+    column![dlg::secao(tr!("Critério de validação")), campos, erro_formulario(erro)].spacing(10).into()
 }
 
 fn erro_formulario<'a>(erro: Option<&'a str>) -> Element<'a, Msg> {
@@ -117,21 +117,21 @@ fn erro_formulario<'a>(erro: Option<&'a str>) -> Element<'a, Msg> {
 /// Aba "Mensagem de entrada": título e texto do balão ao selecionar a célula.
 fn aba_mensagem_entrada<'a>(f: &'a Formulario, erro: Option<&'a str>) -> Element<'a, Msg> {
     column![
-        dlg::secao("Ao selecionar a célula, mostrar esta mensagem"),
-        campo_rotulado("Título", campo_texto("Até 32 caracteres (opcional)", &f.entrada_titulo,
+        dlg::secao(tr!("Ao selecionar a célula, mostrar esta mensagem")),
+        campo_rotulado(tr!("Título"), campo_texto(tr!("Até 32 caracteres (opcional)"), &f.entrada_titulo,
             |v| Msg::ValidacaoEv(Evento::EntradaTitulo(v)))),
-        campo_rotulado("Mensagem", campo_texto("Até 255 caracteres", &f.entrada_texto,
+        campo_rotulado(tr!("Mensagem"), campo_texto(tr!("Até 255 caracteres"), &f.entrada_texto,
             |v| Msg::ValidacaoEv(Evento::EntradaTexto(v)))),
-        text("Sem título e sem mensagem, nenhum balão aparece.").size(11.5).color(COR_TEXTO_MUTED()),
+        text(tr!("Sem título e sem mensagem, nenhum balão aparece.")).size(11.5).color(COR_TEXTO_MUTED()),
         erro_formulario(erro),
     ].spacing(10).into()
 }
 
 fn rotulo_estilo(estilo: QuandoValidacao) -> (&'static str, &'static str, &'static str) {
     match estilo {
-        QuandoValidacao::Recusar => ("Parar", "hand-stop", "Não aceita o valor inválido"),
-        QuandoValidacao::Avisar => ("Aviso", "alert-triangle", "Pergunta se deseja continuar"),
-        QuandoValidacao::Informar => ("Informações", "info-circle", "Só informa; o valor entra"),
+        QuandoValidacao::Recusar => (tr!("Parar"), "hand-stop", tr!("Não aceita o valor inválido")),
+        QuandoValidacao::Avisar => (tr!("Aviso"), "alert-triangle", tr!("Pergunta se deseja continuar")),
+        QuandoValidacao::Informar => (tr!("Informações"), "info-circle", tr!("Só informa; o valor entra")),
     }
 }
 
@@ -148,11 +148,11 @@ fn aba_alerta_erro<'a>(f: &'a Formulario, erro: Option<&'a str>) -> Element<'a, 
         ].spacing(8).align_y(Alignment::Center));
     }
     column![
-        dlg::secao("Ao digitar dados inválidos, mostrar este alerta"),
-        campo_rotulado("Estilo", estilos),
-        campo_rotulado("Título", campo_texto("Validação de dados", &f.erro_titulo,
+        dlg::secao(tr!("Ao digitar dados inválidos, mostrar este alerta")),
+        campo_rotulado(tr!("Estilo"), estilos),
+        campo_rotulado(tr!("Título"), campo_texto(tr!("Validação de dados"), &f.erro_titulo,
             |v| Msg::ValidacaoEv(Evento::ErroTitulo(v)))),
-        campo_rotulado("Mensagem de erro", campo_texto("Sem texto, mostra o motivo padrão", &f.mensagem,
+        campo_rotulado(tr!("Mensagem de erro"), campo_texto(tr!("Sem texto, mostra o motivo padrão"), &f.mensagem,
             Msg::ValidacaoMensagem)),
         erro_formulario(erro),
     ].spacing(10).into()
@@ -171,9 +171,9 @@ impl App {
             .padding([6, 12]).style(estilo_aba_faixa(self.validacao_aba == a))
             .on_press(Msg::ValidacaoAba(a));
         let abas = row![
-            aba("Configurações", AbaValidacao::Configuracoes),
-            aba("Mensagem de entrada", AbaValidacao::MensagemEntrada),
-            aba("Alerta de erro", AbaValidacao::AlertaErro),
+            aba(tr!("Configurações"), AbaValidacao::Configuracoes),
+            aba(tr!("Mensagem de entrada"), AbaValidacao::MensagemEntrada),
+            aba(tr!("Alerta de erro"), AbaValidacao::AlertaErro),
         ].spacing(4);
 
         let erro = self.validacao_erro.as_deref();
@@ -195,13 +195,13 @@ impl App {
         let corpo = column![abas, container(conteudo).padding([14, 14]).width(Length::Fill)
             .style(dlg::estilo_bloco)].spacing(12);
         // Sem regra aberta não há o que limpar: o botão fica desabilitado.
-        self.dialogo(if editando { "Editar validação de dados" } else { "Validação de dados" }, corpo)
+        self.dialogo(if editando { tr!("Editar validação de dados") } else { tr!("Validação de dados") }, corpo)
             .icone("checks")
-            .subtitulo(format!("Intervalo de destino: {alvo}"))
+            .subtitulo(trf!("Intervalo de destino: {alvo}"))
             .largura(560.0)
             .ao_fechar(Msg::ValidacaoFechar)
-            .rodape_esquerda(dlg::botao_secundario("Limpar tudo", editando.then_some(Msg::ValidacaoRemover)))
-            .secundario("Cancelar", Some(Msg::ValidacaoFechar))
+            .rodape_esquerda(dlg::botao_secundario(tr!("Limpar tudo"), editando.then_some(Msg::ValidacaoRemover)))
+            .secundario(tr!("Cancelar"), Some(Msg::ValidacaoFechar))
             .primario("OK", Some(Msg::ValidacaoSalvar))
             .sobre(base)
     }
@@ -217,7 +217,7 @@ impl App {
         };
         let mut texto_col = column![text(alerta.texto.clone()).size(13.5).line_height(1.4)].spacing(8);
         if alerta.estilo == EstiloAlerta::Aviso {
-            texto_col = texto_col.push(text("Continuar?").size(13.5));
+            texto_col = texto_col.push(text(tr!("Continuar?")).size(13.5));
         }
         let corpo = row![feather_ui::icones::icone(icone, 30.0), texto_col.width(Length::Fill)]
             .spacing(14).align_y(Alignment::Start);
@@ -227,15 +227,15 @@ impl App {
             .ao_fechar(Msg::ValidacaoEv(Evento::Responder(Resposta::Cancelar)));
         match alerta.estilo {
             EstiloAlerta::Parar => d
-                .secundario("Cancelar", r(Resposta::Cancelar))
-                .primario("Repetir", r(Resposta::Voltar)),
+                .secundario(tr!("Cancelar"), r(Resposta::Cancelar))
+                .primario(tr!("Repetir"), r(Resposta::Voltar)),
             EstiloAlerta::Aviso => d
-                .botao(dlg::botao_primario("Sim", r(Resposta::Aceitar)))
-                .botao(dlg::botao_secundario("Não", r(Resposta::Voltar)))
-                .botao(dlg::botao_secundario("Cancelar", r(Resposta::Cancelar))),
+                .botao(dlg::botao_primario(tr!("Sim"), r(Resposta::Aceitar)))
+                .botao(dlg::botao_secundario(tr!("Não"), r(Resposta::Voltar)))
+                .botao(dlg::botao_secundario(tr!("Cancelar"), r(Resposta::Cancelar))),
             EstiloAlerta::Informacoes => d
                 .botao(dlg::botao_primario("OK", r(Resposta::Aceitar)))
-                .botao(dlg::botao_secundario("Cancelar", r(Resposta::Cancelar))),
+                .botao(dlg::botao_secundario(tr!("Cancelar"), r(Resposta::Cancelar))),
         }
     }
 
@@ -245,7 +245,7 @@ impl App {
         row![
             button(row![
                 feather_ui::icones::icone("checks", 17.),
-                text("Validação de dados").size(12),
+                text(tr!("Validação de dados")).size(12),
             ].spacing(5).align_y(Alignment::Center))
                 .padding([6, 4])
                 .style(estilo_botao_pequeno(self.validacao_formulario.is_some()))
@@ -276,7 +276,7 @@ impl App {
             Evento::LimparCirculos => {
                 self.edicao_menu = None;
                 self.validacao_circulos = None;
-                self.status = "Círculos de validação removidos".into();
+                self.status = tr!("Círculos de validação removidos").into();
             }
         }
         Task::none()
@@ -317,7 +317,7 @@ impl App {
                 Task::none()
             }
             Resposta::Cancelar => {
-                self.status = "Entrada cancelada".into();
+                self.status = tr!("Entrada cancelada").into();
                 self.update(Msg::Cancelar)
             }
             Resposta::Aceitar => {
@@ -327,7 +327,7 @@ impl App {
                 self.validacao_aceita = false;
                 if gravou {
                     if let Some(celula) = celula {
-                        self.status = format!("{celula} atualizado (valor fora da validação aceito)");
+                        self.status = trf!("{celula} atualizado (valor fora da validação aceito)");
                     }
                     return crate::campo_fx::desfocar();
                 }
@@ -350,15 +350,15 @@ impl App {
             ranges: vec![Rect::new(1, 1, 7, 1)],
             regra: Regra::Numero { op: NumeroOp::Entre, a: 1.0, b: Some(10.0), inteiro: true },
             quando,
-            mensagem: Some("A nota deve ser um número inteiro de 1 a 10.".into()),
+            mensagem: Some(tr!("A nota deve ser um número inteiro de 1 a 10.").into()),
             mensagens: MensagensValidacao {
-                entrada_titulo: Some("Nota da avaliação".into()),
-                entrada_texto: Some("Digite um número inteiro de 1 a 10.".into()),
-                erro_titulo: Some("Nota inválida".into()),
+                entrada_titulo: Some(tr!("Nota da avaliação").into()),
+                entrada_texto: Some(tr!("Digite um número inteiro de 1 a 10.").into()),
+                erro_titulo: Some(tr!("Nota inválida").into()),
             },
         };
         self.workbook.editar(self.folha, |s| s.va = Some(serde_json::to_string(&vec![regra]).unwrap_or_default()));
-        for (r, v) in [(0, "Nota"), (1, "7"), (2, "12"), (3, "5"), (4, "0"), (5, "9"), (6, "8,5")] {
+        for (r, v) in [(0, tr!("Nota")), (1, "7"), (2, "12"), (3, "5"), (4, "0"), (5, "9"), (6, "8,5")] {
             self.workbook.escrever_celula(self.folha, r, 1, v.into());
         }
         self.trocar_selecao(2, 1);
@@ -404,10 +404,10 @@ impl App {
         let total = celulas.len();
         celulas.truncate(MAX_CIRCULOS);
         self.status = match total {
-            0 => "Nenhum dado inválido nesta aba".into(),
-            1 => "1 célula com dado inválido circulada".into(),
-            n if n > MAX_CIRCULOS => format!("{n} células inválidas; circuladas as primeiras {MAX_CIRCULOS}"),
-            n => format!("{n} células com dado inválido circuladas"),
+            0 => tr!("Nenhum dado inválido nesta aba").into(),
+            1 => tr!("1 célula com dado inválido circulada").into(),
+            n if n > MAX_CIRCULOS => trf!("{n} células inválidas; circuladas as primeiras {MAX_CIRCULOS}"),
+            n => trf!("{n} células com dado inválido circuladas"),
         };
         self.validacao_circulos = Some((self.folha, celulas));
     }

@@ -26,9 +26,9 @@ instalador do Windows substituem a versão anterior.
 
 ---
 
-## Novidades da v0.0.3
+## Novidades da v0.0.5
 
-![Janela "O que há de novo" da versão 0.0.3: 25 tipos de gráfico, dica do mouse, legenda clicável, elementos analíticos, recuperação automática, Ctrl+Z nos gráficos, Primeiros passos e Seus dados](docs/imagens/novidades-0.0.3.png)
+![Janela "O que há de novo" da versão 0.0.5: interface em inglês, aba Layout da Página, Formatar células refeito, .xlsx 3,6× mais rápido, somar e contar por cor e dica do mouse por tipo de gráfico](docs/imagens/novidades-0.0.5.png)
 
 A mesma janela abre sozinha na primeira vez depois de atualizar (e fica no
 menu Ajuda, em *O que há de novo*).
@@ -54,6 +54,44 @@ menu Ajuda, em *O que há de novo*).
 |---|---|
 | ![Painel Formatar gráfico com os elementos analíticos: tendência linear com equação e R², linha de média](docs/imagens/formatar-grafico.png) | ![Gráfico com a série Saídas desligada pela legenda, o item hachurado e a dica mostrando a porcentagem](docs/imagens/legenda-clicavel.png) |
 | **Formatar gráfico:** tendência (linear, exponencial, logarítmica, polinomial, potência, média móvel) com equação e R², barras de erro e linhas de máximo, mínimo e média | **Legenda clicável e dica do mouse:** clique num item para ocultar a série (fica hachurado); a dica mostra categoria, série, valor e porcentagem, e é personalizável |
+
+## Desempenho: a Planilha Pesada
+
+Para medir velocidade usamos um `.xlsx` gerado por script, com a cara de
+uma planilha de vendas grande:
+
+| Aba | Conteúdo | Fórmulas |
+|---|---|---|
+| **Dados** | 1.000.000 de linhas × 13 colunas: data, região, produto, quantidade, preço e 7 colunas calculadas (multiplicação, `SE` aninhado, `MÊS`, `PROCX` numa tabela de produtos e uma corrente em que cada linha soma a anterior) | 7.000.000 |
+| **Produtos** | 200 produtos com `SOMASES`, `CONT.SES` e ticket médio sobre o milhão de linhas | 600 |
+| **Resumo** | líquido e pedidos por região e mês (`SOMASES`/`CONT.SES` sobre 1 milhão de linhas), `SOMARPRODUTO`, `MÉDIASES` | 207 |
+| **Total** | **13 milhões de células** | **7.000.807** |
+
+O arquivo não traz os resultados guardados (`fullCalcOnLoad`): tudo é
+calculado ao abrir.
+
+| AMD Ryzen 7 5700G, 16 threads, 32 GB | v0.0.4 | v0.0.5 |
+|---|---|---|
+| Ler o `.xlsx` | 27,8 s | **7,4 s** |
+| Calcular as 7 milhões de fórmulas | 6,3 s | **2,4 s** |
+| Até a planilha pronta | ~34 s | **9,7 s** |
+
+A coluna da v0.0.4 vem do console do app (F12); a da v0.0.5, da bancada
+`medir_abrir_calcular` (o mesmo código de
+abrir e calcular, sem a janela).
+
+Para comparar, o **Microsoft Excel** abrindo o mesmo arquivo num notebook
+com Intel Core Ultra 7 155H e 64 GB levou **1 min 24,9 s** para carregar e
+terminou de calcular as fórmulas em **1 min 36,8 s** (cronometrado à mão).
+As máquinas são diferentes, então a comparação é uma referência, não uma
+medida exata.
+
+Para gerar o arquivo e testar na sua máquina (Python 3, sem bibliotecas
+externas; o segundo argumento, opcional, é o número de linhas):
+
+```sh
+python3 scripts/gerar_xlsx_pesado.py Planilha_Pesada.xlsx 1000000
+```
 
 ## Paridade com o Excel
 

@@ -37,8 +37,8 @@ const MENUS: [&str; 8] = [
 fn mensagem_visual<'a>(nome: &str) -> Element<'a, Msg> {
     container(column![
         text(nome.to_owned()).size(14),
-        text("Estrutura visual migrada do editor TypeScript.").size(12),
-        text("Os comandos dessa área serão conectados ao motor comum em outra etapa.")
+        text(tr!("Estrutura visual migrada do editor TypeScript.")).size(12),
+        text(tr!("Os comandos dessa área serão conectados ao motor comum em outra etapa."))
             .size(11),
     ].spacing(8))
         .padding(20).width(Length::Fill).height(Length::Fill)
@@ -51,11 +51,11 @@ fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
     let escuro = app.config.escuro;
     let mut itens = column![
         item_arvore(
-            "FeatherSheet (Pasta de trabalho)", "folder-open", 0.0,
+            tr!("FeatherSheet (Pasta de trabalho)"), "folder-open", 0.0,
             event(EventoVisual::Documento("pasta".into())),
             app.macro_visual.documento == "pasta",
         ),
-        grupo_arvore("Planilhas", "table", escuro),
+        grupo_arvore(tr!("Planilhas"), "table", escuro),
     ].spacing(1).padding(4);
     for nome in app.workbook.nomes().iter().take(48) {
         let id = format!("planilha:{nome}");
@@ -66,15 +66,15 @@ fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
         ));
     }
     itens = itens.push(item_arvore(
-        "Esta pasta de trabalho", "window", 21.0,
+        tr!("Esta pasta de trabalho"), "window", 21.0,
         event(EventoVisual::Documento("pasta".into())),
         app.macro_visual.documento == "pasta",
     ));
-    itens = itens.push(grupo_arvore("Módulos", "file-code", escuro));
+    itens = itens.push(grupo_arvore(tr!("Módulos"), "file-code", escuro));
     let modulo_atual = format!("modulo:{}", app.macro_nome);
     if app.macro_catalogo.macros.is_empty() {
         itens = itens.push(item_arvore(
-            &format!("{} (rascunho)", app.macro_nome), "file-code", 21.0,
+            &trf!("{} (rascunho)", app.macro_nome), "file-code", 21.0,
             event(EventoVisual::Documento(modulo_atual.clone())),
             app.macro_visual.documento == modulo_atual,
         ));
@@ -82,7 +82,7 @@ fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
         for modulo in app.macro_catalogo.macros.iter().take(60) {
             let id = format!("modulo:{}", modulo.name);
             let rotulo = format!("{}{}", modulo.name,
-                if modulo.auto { " (automática)" } else { "" });
+                if modulo.auto { tr!(" (automática)") } else { "" });
             itens = itens.push(item_arvore(
                 &rotulo, if modulo.auto { "bolt" } else { "file-code" }, 21.0,
                 event(EventoVisual::Documento(id.clone())),
@@ -91,20 +91,20 @@ fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
         }
         if app.macro_catalogo.obter(&app.macro_nome).is_none() {
             itens = itens.push(item_arvore(
-                &format!("{} (rascunho)", app.macro_nome), "file-code", 21.0,
+                &trf!("{} (rascunho)", app.macro_nome), "file-code", 21.0,
                 event(EventoVisual::Documento(modulo_atual.clone())),
                 app.macro_visual.documento == modulo_atual,
             ));
         }
     }
-    itens = itens.push(grupo_arvore("Componentes", "forms", escuro));
+    itens = itens.push(grupo_arvore(tr!("Componentes"), "forms", escuro));
     itens = itens.push(item_arvore(
-        "Componente1 (prévia)", "forms", 21.0,
+        tr!("Componente1 (prévia)"), "forms", 21.0,
         event(EventoVisual::Documento("componente:previsao".into())),
         app.macro_visual.documento == "componente:previsao",
     ));
     let cabecalho = row![
-        text("Explorador de projeto").size(13),
+        text(tr!("Explorador de projeto")).size(13),
         Space::with_width(Length::Fill),
         botao_icone_simples("search", Some(Msg::MacroVisual(EventoVisual::Codigo(
             EventoCodigo::FocarProjeto)))),
@@ -128,23 +128,23 @@ fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
 fn propriedades<'a>(app: &'a App) -> Element<'a, Msg> {
     let escuro = app.config.escuro;
     let v = &app.macro_visual;
-    let tipo = if v.documento.starts_with("modulo:") { "Módulo JavaScript" }
-        else if v.documento.starts_with("planilha:") { "Planilha" }
-        else if v.documento.starts_with("componente:") { "Formulário" }
-        else { "Pasta de trabalho" };
+    let tipo = if v.documento.starts_with("modulo:") { tr!("Módulo JavaScript") }
+        else if v.documento.starts_with("planilha:") { tr!("Planilha") }
+        else if v.documento.starts_with("componente:") { tr!("Formulário") }
+        else { tr!("Pasta de trabalho") };
     let nome = v.documento.split_once(':').map_or("Esta pasta de trabalho", |(_, n)| n);
     let linhas = app.macro_codigo.text().lines().count();
     let tem_auto = app.macro_catalogo.obter(nome).is_some_and(|m| m.auto);
     let mut pares = column![].spacing(1).padding(5);
     if v.propriedades_categoria {
-        pares = pares.push(grupo_arvore("Geral", "list-details", escuro));
+        pares = pares.push(grupo_arvore(tr!("Geral"), "list-details", escuro));
     }
     let dados = [
         ("(Nome)", nome.to_owned()),
-        ("Tipo", tipo.to_owned()),
-        ("Executar ao abrir", if tem_auto { "Sim (TS)" } else { "Não" }.to_owned()),
-        ("Linhas", if tipo == "Módulo JavaScript" { linhas.to_string() } else { "—".into() }),
-        ("Linguagem", if tipo == "Módulo JavaScript" { "JavaScript" } else { "—" }.to_owned()),
+        (tr!("Tipo"), tipo.to_owned()),
+        (tr!("Executar ao abrir"), if tem_auto { tr!("Sim (TS)") } else { tr!("Não") }.to_owned()),
+        (tr!("Linhas"), if tipo == "Módulo JavaScript" { linhas.to_string() } else { "—".into() }),
+        (tr!("Linguagem"), if tipo == "Módulo JavaScript" { "JavaScript" } else { "—" }.to_owned()),
     ];
     for (chave, valor) in dados {
         pares = pares.push(row![
@@ -155,14 +155,14 @@ fn propriedades<'a>(app: &'a App) -> Element<'a, Msg> {
         ].spacing(0));
     }
     let barras = row![
-        botao_icone("Alfabética", "sort-ascending", event(EventoVisual::PropriedadesCategoria(false)),
+        botao_icone(tr!("Alfabética"), "sort-ascending", event(EventoVisual::PropriedadesCategoria(false)),
             !v.propriedades_categoria),
-        botao_icone("Por categoria", "list-details", event(EventoVisual::PropriedadesCategoria(true)),
+        botao_icone(tr!("Por categoria"), "list-details", event(EventoVisual::PropriedadesCategoria(true)),
             v.propriedades_categoria),
     ].spacing(4).padding(5);
     container(column![
         container(row![
-            text("Propriedades").size(13),
+            text(tr!("Propriedades")).size(13),
             Space::with_width(Length::Fill),
             feather_ui::icones::icone("list-details", 15.0),
         ].align_y(Alignment::Center)).padding([11, 12])
@@ -170,8 +170,8 @@ fn propriedades<'a>(app: &'a App) -> Element<'a, Msg> {
         barras,
         scrollable(pares).height(Length::Fill),
         row![
-            botao_icone("Renomear", "edit", None, false),
-            botao_icone("Excluir", "trash", if v.documento.starts_with("modulo:") {
+            botao_icone(tr!("Renomear"), "edit", None, false),
+            botao_icone(tr!("Excluir"), "trash", if v.documento.starts_with("modulo:") {
                 Some(Msg::MacroExcluirModulo)
             } else { None }, false),
         ].spacing(5).padding([6, 7]),
@@ -192,7 +192,7 @@ fn abas_documento<'a>(app: &'a App) -> Element<'a, Msg> {
     let atual = &app.macro_visual.documento;
     let mut abas = row![].spacing(3).width(Length::Shrink);
     let (nome_atual, icone_atual) = if atual == "pasta" {
-        ("Esta pasta de trabalho".to_string(), "window")
+        (tr!("Esta pasta de trabalho").to_string(), "window")
     } else if let Some(nome) = atual.strip_prefix("planilha:") {
         (nome.to_owned(), "table")
     } else if atual.starts_with("componente:") {
@@ -212,7 +212,7 @@ fn abas_documento<'a>(app: &'a App) -> Element<'a, Msg> {
     }
     if atual != "componente:previsao" {
         abas = abas.push(botao_aba(
-            "Formulário (prévia)", "forms",
+            tr!("Formulário (prévia)"), "forms",
             event(EventoVisual::Documento("componente:previsao".into())), false,
         ));
     }
@@ -233,14 +233,14 @@ fn evento_planilha<'a>(app: &'a App) -> Element<'a, Msg> {
     let seletor = if codigo { "SelectionChange" }
         else { "Open / BeforeClose" };
     container(column![
-        titulo("CÓDIGO DE EVENTOS  ·  ESTRUTURA TS", app.config.escuro),
+        titulo(tr!("CÓDIGO DE EVENTOS  ·  ESTRUTURA TS"), app.config.escuro),
         row![
             botao_campo("(Geral)"),
             botao_campo(seletor),
             Space::with_width(Length::Fill),
-            botao_icone("Eventos", "bolt", None, false),
+            botao_icone(tr!("Eventos"), "bolt", None, false),
         ].padding(7),
-        mensagem_visual("Eventos da planilha e da pasta"),
+        mensagem_visual(tr!("Eventos da planilha e da pasta")),
     ]).width(Length::Fill).height(Length::Fill)
         .style(estilo_area(app.config.escuro)).into()
 }
@@ -249,38 +249,38 @@ fn aba_componente<'a>(app: &'a App) -> Element<'a, Msg> {
     let escuro = app.config.escuro;
     let active = app.macro_visual.componente_aba;
     let tabs = row![
-        botao_icone("Desenho", "layout-grid", event(EventoVisual::ComponenteAba(0)), active == 0),
+        botao_icone(tr!("Desenho"), "layout-grid", event(EventoVisual::ComponenteAba(0)), active == 0),
         botao_icone("HTML", "code", event(EventoVisual::ComponenteAba(1)), active == 1),
         botao_icone("CSS", "palette", event(EventoVisual::ComponenteAba(2)), active == 2),
         Space::with_width(Length::Fill),
-        botao_icone("Prévia", "eye", None, false),
-        botao_icone("Soltar do desenho", "arrows-maximize", None, false),
+        botao_icone(tr!("Prévia"), "eye", None, false),
+        botao_icone(tr!("Soltar do desenho"), "arrows-maximize", None, false),
     ].spacing(4).padding([4, 7]);
     let corpo: Element<'a, Msg> = if active == 0 {
         let toolbox = column![
-            titulo("CAIXA DE FERRAMENTAS", escuro),
-            text("Controles do formulário").size(11).color(cor_secundaria(escuro)),
-            botao_icone("Selecionar", "pointer", None, false),
-            botao_icone("Rótulo", "text-size", None, false),
-            botao_icone("Campo de texto", "input", None, false),
-            botao_icone("Campo numérico", "sum", None, false),
-            botao_icone("Senha", "lock", None, false),
-            botao_icone("Caixa de seleção", "checkbox", None, false),
-            botao_icone("Opção", "circle-dot", None, false),
-            botao_icone("Lista suspensa", "list-select", None, false),
-            botao_icone("Botão", "square", None, false),
+            titulo(tr!("CAIXA DE FERRAMENTAS"), escuro),
+            text(tr!("Controles do formulário")).size(11).color(cor_secundaria(escuro)),
+            botao_icone(tr!("Selecionar"), "pointer", None, false),
+            botao_icone(tr!("Rótulo"), "text-size", None, false),
+            botao_icone(tr!("Campo de texto"), "input", None, false),
+            botao_icone(tr!("Campo numérico"), "sum", None, false),
+            botao_icone(tr!("Senha"), "lock", None, false),
+            botao_icone(tr!("Caixa de seleção"), "checkbox", None, false),
+            botao_icone(tr!("Opção"), "circle-dot", None, false),
+            botao_icone(tr!("Lista suspensa"), "list-select", None, false),
+            botao_icone(tr!("Botão"), "square", None, false),
         ].spacing(5).padding(8);
         let formulario = container(column![
-            titulo("Formulário1  ·  desenho", escuro),
-            text("Título do formulário").size(17),
-            text("Nome").size(12).color(cor_secundaria(escuro)),
-            botao("Campo de texto", None, false),
+            titulo(tr!("Formulário1  ·  desenho"), escuro),
+            text(tr!("Título do formulário")).size(17),
+            text(tr!("Nome")).size(12).color(cor_secundaria(escuro)),
+            botao(tr!("Campo de texto"), None, false),
             row![
-                botao_icone("Confirmar", "circle-check", None, true),
-                botao_icone("Cancelar", "x", None, false),
+                botao_icone(tr!("Confirmar"), "circle-check", None, true),
+                botao_icone(tr!("Cancelar"), "x", None, false),
             ].spacing(6),
             Space::with_height(Length::Fill),
-            text("Prévia visual; arrastar e configurar controles virá depois.")
+            text(tr!("Prévia visual; arrastar e configurar controles virá depois."))
                 .size(11).color(cor_secundaria(escuro)),
         ].spacing(10).padding(24))
         .width(Length::Fill).height(Length::Fill)
@@ -291,15 +291,15 @@ fn aba_componente<'a>(app: &'a App) -> Element<'a, Msg> {
             container(formulario).padding(18).width(Length::Fill).height(Length::Fill),
         ].height(Length::Fill).into()
     } else {
-        let linguagem = if active == 1 { "HTML — editor do componente" } else { "CSS — estilo do componente" };
+        let linguagem = if active == 1 { tr!("HTML — editor do componente") } else { tr!("CSS — estilo do componente") };
         row![
             mensagem_visual(linguagem),
             container(column![
-                titulo("PRÉVIA DO FORMULÁRIO", escuro),
-                text("Formulário1").size(14),
-                text("Nome").size(11),
-                botao("Campo de texto", None, false),
-                botao("Confirmar", None, true),
+                titulo(tr!("PRÉVIA DO FORMULÁRIO"), escuro),
+                text(tr!("Formulário1")).size(14),
+                text(tr!("Nome")).size(11),
+                botao(tr!("Campo de texto"), None, false),
+                botao(tr!("Confirmar"), None, true),
             ].spacing(8).padding(12))
               .width(Length::Fixed(228.0)).height(Length::Fill).style(estilo_area(escuro)),
         ].height(Length::Fill).into()

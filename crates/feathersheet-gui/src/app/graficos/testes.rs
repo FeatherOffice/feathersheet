@@ -768,7 +768,7 @@ fn boletim_configurar_series_copiar_e_pizza_por_situacao() {
         let feather_charts::formatado::FormaAlvo::Retangulo { x, y, largura, altura } = alvo.forma else { panic!("coluna") };
         let _ = a.evento_grafico(Evento::Pairar("g1".into(), iced::Point::new(x + largura / 2.0, y + altura / 2.0)));
         let dica = a.graficos.interacao.pairar.as_ref().and_then(|p| p.dica.clone()).expect("dica");
-        assert_eq!((dica.titulo.as_str(), dica.serie.as_str(), dica.valor.as_str()), ("Fev", "Vendas", "30"));
+        assert_eq!((dica.titulo.as_str(), dica.linhas.join("|").as_str()), ("Fev", "Vendas: 30"));
         // Dica personalizada: sem a série, com prefixo e porcentagem da categoria.
         let mut e = feather_charts::estilo::EstiloGrafico::default();
         e.dica.serie = Some(false);
@@ -789,7 +789,7 @@ fn boletim_configurar_series_copiar_e_pizza_por_situacao() {
         let feather_charts::formatado::FormaAlvo::Retangulo { x, y, largura, altura } = alvo2.forma else { panic!("coluna") };
         let _ = a.evento_grafico(Evento::Pairar("g1".into(), iced::Point::new(x + largura / 2.0, y + altura / 2.0)));
         let dica = a.graficos.interacao.pairar.as_ref().and_then(|p| p.dica.clone()).expect("dica");
-        assert_eq!((dica.serie.as_str(), dica.valor.as_str()), ("", "R$ 30 (60,0%)"));
+        assert_eq!(dica.linhas, ["R$ 30 (60,0%)"]);
         a.workbook.aba_mut(0).unwrap().sheet.g = Some(g.to_string());
         assert!(a.dica_do_grafico("g1", 480.0, 300.0).is_some());
         let _ = a.evento_grafico(Evento::SairDoGrafico("g1".into()));
@@ -833,7 +833,7 @@ fn boletim_configurar_series_copiar_e_pizza_por_situacao() {
         let p = a.graficos.interacao.pairar.as_ref().expect("mouse sobre o gráfico");
         let d = p.dica.as_ref().expect("dica");
         assert_eq!(d.titulo, "Junho");
-        assert!(d.valor.starts_with("R$ "), "{}", d.valor);
+        assert!(d.linhas[0].contains(": R$ "), "{:?}", d.linhas);
     }
 
     /// Arrastar e redimensionar o gráfico: cada gesto é um passo de Ctrl+Z.

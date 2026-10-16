@@ -79,6 +79,44 @@ impl DataTable {
         out
     }
 
+    /// Carga de arquivo: a coluna inteira de números de uma vez, nos buffers
+    /// contíguos que o `.fshz` traz (valores + máscara de presença), sem
+    /// passar célula a célula pelo [`Self::set_cell_value`]. A coluna de
+    /// texto da mesma posição, se existir, fica como está — uma célula nunca
+    /// está nas duas.
+    pub fn carregar_coluna_num(&mut self, col: u32, values: &[f64], bitmap: &[u8], linhas: u32) {
+        let linhas = (linhas as usize).min(values.len()).min(bitmap.len() * 8);
+        if linhas == 0 {
+            return;
+        }
+        let entry = self.get_or_create_column(col);
+        let fc = entry.float_col.get_or_insert_with(ChunkedFloatColumn::new);
+        fc.load_flat(values, bitmap, linhas);
+        let max_row = fc.max_row;
+        if max_row >= 0 {
+            self.tracked_max_row = self.tracked_max_row.max(max_row as u32);
+            self.tracked_max_col = self.tracked_max_col.max(col);
+        }
+    }
+
+    /// Carga de arquivo: a coluna inteira de texto/booleano de uma vez, com
+    /// os ids **já no pool da aba** (quem chama traduz o dicionário local do
+    /// arquivo uma vez por texto distinto, não uma vez por célula).
+    pub fn carregar_coluna_txt(&mut self, col: u32, ids: &[i32], bitmap: &[u8], linhas: u32) {
+        let linhas = (linhas as usize).min(ids.len()).min(bitmap.len() * 8);
+        if linhas == 0 {
+            return;
+        }
+        let entry = self.get_or_create_column(col);
+        let tc = entry.text_col.get_or_insert_with(ChunkedInt32Column::new);
+        tc.load_flat(ids, bitmap, linhas);
+        let max_row = tc.max_row;
+        if max_row >= 0 {
+            self.tracked_max_row = self.tracked_max_row.max(max_row as u32);
+            self.tracked_max_col = self.tracked_max_col.max(col);
+        }
+    }
+
     /// Quantidade de células com dado. Custa uma volta pelas colunas — não é
     /// campo guardado, igual no TypeScript.
     pub fn size(&self) -> u64 {

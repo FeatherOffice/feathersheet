@@ -75,12 +75,12 @@ impl App {
         let estado = &self.borda_desenho;
         let mut coluna = iced::widget::column![
             container(iced::widget::horizontal_rule(1)).padding([4, 0]),
-            container(text("Desenhar bordas").size(12).color(COR_TEXTO_MUTED())).padding([5, 10]),
+            container(text(tr!("Desenhar bordas")).size(12).color(COR_TEXTO_MUTED())).padding([5, 10]),
         ].spacing(1);
         for (modo, icone, dica) in [
-            (ModoBorda::Contorno, "pencil", "Desenhar borda"),
-            (ModoBorda::Grade, "layout-grid", "Desenhar grade de borda"),
-            (ModoBorda::Apagar, "eraser", "Apagar borda"),
+            (ModoBorda::Contorno, "pencil", tr!("Desenhar borda")),
+            (ModoBorda::Grade, "layout-grid", tr!("Desenhar grade de borda")),
+            (ModoBorda::Apagar, "eraser", tr!("Apagar borda")),
         ] {
             let ativo = estado.modo == Some(modo);
             coluna = coluna.push(
@@ -122,10 +122,10 @@ impl App {
             cores = cores.push(feather_ui::formatacao::dica(
                 button(amostra).padding(2).style(estilo_botao_pequeno(escolhida))
                     .on_press(Msg::BordaDesenho(Evento::Cor(cor))),
-                nome,
+                tr!(nome),
             ));
         }
-        coluna = coluna.push(container(text("Cor da linha").size(11.5).color(COR_TEXTO_MUTED())).padding([4, 10]));
+        coluna = coluna.push(container(text(tr!("Cor da linha")).size(11.5).color(COR_TEXTO_MUTED())).padding([4, 10]));
         coluna = coluna.push(container(cores).padding([0, 8]));
         let estilo_atual = estado.caneta.estilo.as_deref().unwrap_or("Fina");
         let mut estilos = row![].spacing(4).align_y(Alignment::Center);
@@ -137,14 +137,14 @@ impl App {
                 estilo,
             ));
         }
-        coluna = coluna.push(container(text("Estilo da linha").size(11.5).color(COR_TEXTO_MUTED())).padding([6, 10]));
+        coluna = coluna.push(container(text(tr!("Estilo da linha")).size(11.5).color(COR_TEXTO_MUTED())).padding([6, 10]));
         coluna = coluna.push(container(estilos).padding([0, 8]));
         coluna.into()
     }
 
     fn menu_bordas(&self) -> Element<'_, Msg> {
         let mut itens = iced::widget::column![
-            container(text("Bordas").size(12).color(COR_TEXTO_MUTED()))
+            container(text(tr!("Bordas")).size(12).color(COR_TEXTO_MUTED()))
                 .padding([7, 10]),
         ]
         .spacing(1);
@@ -153,7 +153,7 @@ impl App {
             itens = itens.push(
                 button(row![
                     icone_borda(opcao, 20.0),
-                    text(opcao).size(12.5),
+                    text(tr!(opcao)).size(12.5),
                 ]
                 .spacing(11)
                 .align_y(Alignment::Center))

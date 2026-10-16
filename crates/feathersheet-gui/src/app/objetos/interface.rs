@@ -31,6 +31,8 @@ pub(in crate::app) const ID_TEXTO: &str = "feathersheet.objeto.texto";
 /// Índice do submenu "Trazer para frente ▸" no menu de contexto da forma.
 pub(in crate::app) const SUB_FRENTE: usize = 7;
 /// Largura estimada da barra flutuante (para não sair da janela).
+/// Altura da barra flutuante (botões de 16 px com folga).
+const ALTURA_BARRA: f32 = 38.0;
 const LARGURA_BARRA: f32 = 380.0;
 /// Menu Formas: miniaturas por fileira, lado da miniatura e largura.
 const POR_FILEIRA: usize = 9;
@@ -139,11 +141,19 @@ impl App {
             return base;
         }
         let regua = ReguaAba(&aba.sheet);
-        let itens: Vec<ItemTela> = lidos.objetos.iter().map(|o| ItemTela::de(o, &regua)).collect();
+        let mut itens: Vec<ItemTela> = lidos.objetos.iter().map(|o| ItemTela::de(o, &regua)).collect();
+        // Texto que começa com "=" é fórmula, como no Excel: a forma mostra o
+        // resultado (=A2 mostra A2 como a grade mostra) e acompanha a célula.
+        for it in &mut itens {
+            if let Some(corpo) = it.texto.as_deref().and_then(|t| t.strip_prefix('=')).filter(|c| !c.trim().is_empty()) {
+                it.texto = Some(self.texto_de_formula_da_forma(corpo));
+            }
+        }
         let selecionado = self.objetos.selecionado.filter(|(a, id)| *a == aba_id && lidos.obter(*id).is_some()).map(|(_, id)| id);
         let editando = self.objetos.texto.as_ref().map(|(id, _)| *id).filter(|id| selecionado == Some(*id));
         let camada = Camada { itens, graficos, selecionado, inserir: self.objetos.inserir, vista, travar: self.objetos.travar, editando };
         let tela = selecionado.and_then(|id| camada.itens.iter().find(|i| i.id == id)).map(|it| camada.ret_tela(it.ret));
+        let giro = selecionado.and_then(|id| camada.itens.iter().find(|i| i.id == id)).map_or(0.0, |i| i.giro);
         let item_editado = editando.and_then(|id| camada.itens.iter().find(|i| i.id == id)).cloned();
         let mut camadas: Vec<Element<'a, Msg>> =
             vec![base, cv::Canvas::new(camada).width(Length::Fill).height(Length::Fill).into()];
@@ -166,7 +176,7 @@ impl App {
                     };
                     let largura = (r.width - 2.0 * margem).max(40.0);
                     let cor = cor_texto(&it);
-                    let campo = text_input("Digite o texto", t)
+                    let campo = text_input(tr!("Digite o texto"), t)
                         .id(text_input::Id::new(ID_TEXTO))
                         .on_input(|t| ev(Evento::TextoDigitado(t)))
                         .on_submit(ev(Evento::TextoConfirmar))
@@ -185,9 +195,14 @@ impl App {
                     camadas.push(column![Space::with_height(y.max(min_y)), row![Space::with_width((r.x + margem).max(min_x)), campo]].into());
                 }
                 _ => {
-                    let raio = r.width.hypot(r.height) / 2.0;
-                    let topo = r.center_y() - raio;
-                    let y = if topo - 52.0 > min_y { topo - 52.0 } else { r.center_y() + raio + 10.0 };
+                    // A caixa da forma girada (não o círculo que a envolve
+                    // em qualquer giro): a barra fica logo acima da alça de
+                    // giro, sem o vão de antes.
+                    let (s, c) = giro.to_radians().sin_cos();
+                    let meia = (r.width * s.abs() + r.height * c.abs()) / 2.0;
+                    let topo = r.center_y() - meia;
+                    let acima = topo - super::camada::DIST_GIRO - 8.0 - ALTURA_BARRA;
+                    let y = if acima > min_y { acima } else { r.center_y() + meia + 10.0 };
                     let x = r.x.clamp(min_x, (self.tamanho_principal.width - LARGURA_BARRA).max(min_x));
                     camadas.push(
                         column![Space::with_height(y.max(min_y)), row![Space::with_width(x), self.barra_objeto(o)]].into(),
@@ -196,6 +211,21 @@ impl App {
             }
         }
         stack(camadas).width(Length::Fill).height(Length::Fill).into()
+    }
+
+    /// O resultado da fórmula do texto de uma forma, já formatado.
+    fn texto_de_formula_da_forma(&self, corpo: &str) -> String {
+        use feathersheet_core::{formula::ast::Node, planilha::bloco::texto_formatado};
+        let Ok(no) = feathersheet_core::formula::parser::parse_formula(corpo) else {
+            return "#NOME?".into();
+        };
+        if let Node::Ref { row, col, sheet } = &no {
+            let indice = sheet.as_deref().map_or(Some(self.folha), |n| self.workbook.indice_por_nome(n));
+            let Some(indice) = indice else { return "#REF!".into() };
+            let estilo = self.workbook.aba(indice).and_then(|a| a.sheet.get_style(*row, *col));
+            return texto_formatado(&self.workbook.valor(indice, *row, *col), estilo);
+        }
+        texto_formatado(&self.workbook.avaliar_em(self.folha, 0, 0, &no), None)
     }
 
     /// Barra flutuante do objeto selecionado.
@@ -237,20 +267,20 @@ impl App {
                     .padding(6)
                     .style(estilo_botao_pequeno(self.objetos.menu == Some(ModoMenu::WordArt)))
                     .on_press(ev(Evento::AlternarMenu(ModoMenu::WordArt))),
-                "Estilo e deformação do WordArt",
+                tr!("Estilo e deformação do WordArt"),
             ));
         }
         if !linha {
             barra = barra.push(dica(
                 com_seta("bucket", amostra(o.aparencia.preenchimento.as_deref()), Painel::Preenchimento),
-                if wordart { "Cor das letras" } else { "Preenchimento da forma" },
+                if wordart { tr!("Cor das letras") } else { tr!("Preenchimento da forma") },
             ));
         }
         barra = barra
             .push(dica(com_seta("pencil", amostra(o.aparencia.contorno.as_deref()), Painel::Contorno),
-                if icone { "Cor do ícone, espessura do traço e transparência" } else if wordart { "Contorno das letras: cor, espessura e transparência" } else { "Contorno: cor, espessura e transparência" }))
-            .push(dica(so_icone("arrow-up", ev(Evento::Ordem(Ordem::Frente))), "Trazer para a frente"))
-            .push(dica(so_icone("arrow-down", ev(Evento::Ordem(Ordem::Tras))), "Enviar para trás"));
+                if icone { tr!("Cor do ícone, espessura do traço e transparência") } else if wordart { tr!("Contorno das letras: cor, espessura e transparência") } else { tr!("Contorno: cor, espessura e transparência") }))
+            .push(dica(so_icone("arrow-up", ev(Evento::Ordem(Ordem::Frente))), tr!("Trazer para a frente")))
+            .push(dica(so_icone("arrow-down", ev(Evento::Ordem(Ordem::Tras))), tr!("Enviar para trás")));
         if !icone && geometria::raios(&o.forma, &o.ajustes).is_some() {
             let cantos = row![
                 feather_ui::icones::icone("square", 16.0),
@@ -259,11 +289,11 @@ impl App {
             ]
             .spacing(4)
             .align_y(Alignment::Center);
-            barra = barra.push(dica(container(cantos).padding([0, 4]), "Arredondar cantos (raio em px, Enter aplica; por canto na aba Editar forma)"));
+            barra = barra.push(dica(container(cantos).padding([0, 4]), tr!("Arredondar cantos (raio em px, Enter aplica; por canto na aba Editar forma)")));
         }
         barra = barra
-            .push(dica(so_icone("palette", ev(Evento::FormatarForma)), "Editar forma (abre a aba da faixa)"))
-            .push(dica(so_icone("trash", ev(Evento::Apagar)), "Excluir forma (Delete)"));
+            .push(dica(so_icone("palette", ev(Evento::FormatarForma)), tr!("Editar forma (abre a aba da faixa)")))
+            .push(dica(so_icone("trash", ev(Evento::Apagar)), tr!("Excluir forma (Delete)")));
         opaque(container(barra).padding(3).style(estilo_popup_menu))
     }
 
@@ -297,8 +327,8 @@ impl App {
             cores = cores.push(row(fileira.iter().map(|&c| amostra(c))).spacing(6));
         }
         let (titulo, sem, msg_sem) = match painel {
-            Painel::Preenchimento => ("Preenchimento", "Sem preenchimento", Evento::Preenchimento(None)),
-            Painel::Contorno => ("Contorno", "Sem contorno", Evento::Contorno(None)),
+            Painel::Preenchimento => (tr!("Preenchimento"), tr!("Sem preenchimento"), Evento::Preenchimento(None)),
+            Painel::Contorno => (tr!("Contorno"), tr!("Sem contorno"), Evento::Contorno(None)),
         };
         let rotulo = |t: &'static str| text(t).size(10.5).color(COR_TEXTO_MUTED());
         let mut corpo = column![
@@ -310,7 +340,7 @@ impl App {
                 .padding([5, 8])
                 .style(estilo_item_menu(atual.is_none(), true))
                 .on_press(ev(msg_sem)),
-            button(row![feather_ui::icones::icone("palette", 14.0), text("Mais cores…").size(12)].spacing(6).align_y(Alignment::Center))
+            button(row![feather_ui::icones::icone("palette", 14.0), text(tr!("Mais cores…")).size(12)].spacing(6).align_y(Alignment::Center))
                 .width(Length::Fill)
                 .padding([5, 8])
                 .style(estilo_item_menu(self.objetos.mais_cores, true))
@@ -327,7 +357,7 @@ impl App {
                 });
                 grossuras = grossuras.push(
                     button(
-                        row![container(traco).width(66.0).center_y(14.0), text(format!("{} px", decimal(e))).size(12)]
+                        row![container(traco).width(66.0).center_y(14.0), text(trf!("{} px", decimal(e))).size(12)]
                             .spacing(8)
                             .align_y(Alignment::Center),
                     )
@@ -348,7 +378,7 @@ impl App {
                 .into()
         }))
         .spacing(4);
-        corpo = corpo.push(rotulo("TRANSPARÊNCIA")).push(transparencias);
+        corpo = corpo.push(rotulo(tr!("TRANSPARÊNCIA"))).push(transparencias);
         let painel_cores = container(corpo.padding(12).width(Length::Fixed(LARGURA_PAINEL))).style(estilo_popup_menu);
         if !self.objetos.mais_cores {
             return painel_cores.into();
@@ -390,24 +420,24 @@ impl App {
         }
         grade = grade.push(Space::with_height((fileiras - ultima) as f32 * ALTURA_FILEIRA_ICONES));
         let resumo = if busca.trim().is_empty() {
-            format!("Mais usados primeiro — role para ver todos os {} ícones", achados.len())
+            trf!("Mais usados primeiro — role para ver todos os {} ícones", achados.len())
         } else if achados.is_empty() {
-            "Nenhum ícone encontrado. Tente outra palavra (casa, seta, gráfico, user, chart).".to_owned()
+            tr!("Nenhum ícone encontrado. Tente outra palavra (casa, seta, gráfico, user, chart).").to_owned()
         } else {
-            format!("{} resultado(s)", achados.len())
+            trf!("{} resultado(s)", achados.len())
         };
         let cabecalho = row![
-            text("Ícones").size(14),
+            text(tr!("Ícones")).size(14),
             Space::with_width(Length::Fill),
             dica(
                 button(feather_ui::icones::icone("x", 14.0)).padding(4).style(estilo_botao_pequeno(false)).on_press(ev(Evento::FecharMenu)),
-                "Fechar (Esc)",
+                tr!("Fechar (Esc)"),
             ),
         ]
         .align_y(Alignment::Center);
         let corpo = column![
             cabecalho,
-            text_input("Buscar ícone… (casa, seta, relógio, chart)", busca)
+            text_input(tr!("Buscar ícone… (casa, seta, relógio, chart)"), busca)
                 .id(text_input::Id::new(ID_BUSCA_ICONES))
                 .on_input(|t| ev(Evento::BuscaIcones(t)))
                 .size(13)
@@ -417,7 +447,7 @@ impl App {
                 .id(scrollable::Id::new(ID_GRADE_ICONES))
                 .on_scroll(|v| ev(Evento::RolarIcones(v.absolute_offset().y)))
                 .height(Length::Fixed(altura_grade)),
-            text("Um clique insere o ícone perto da célula ativa. Ícones Tabler (licença MIT).").size(11).color(COR_TEXTO_MUTED()),
+            text(tr!("Um clique insere o ícone perto da célula ativa. Ícones Tabler (licença MIT).")).size(11).color(COR_TEXTO_MUTED()),
         ]
         .spacing(8);
         container(corpo.padding(12).width(Length::Fixed(LARGURA_MENU_ICONES))).style(estilo_popup_menu).into()
@@ -445,11 +475,11 @@ impl App {
                 Space::with_width(Length::Fill),
                 dica(
                     button(feather_ui::icones::icone("x", 14.0)).padding(4).style(estilo_botao_pequeno(false)).on_press(ev(Evento::FecharMenu)),
-                    "Fechar (Esc)",
+                    tr!("Fechar (Esc)"),
                 ),
             ]
             .align_y(Alignment::Center),
-            rotulo(if selecionado.is_some() { "ESTILO DO WORDART SELECIONADO" } else { "ESTILOS (UM CLIQUE INSERE PERTO DA CÉLULA ATIVA)" }),
+            rotulo(if selecionado.is_some() { tr!("ESTILO DO WORDART SELECIONADO") } else { tr!("ESTILOS (UM CLIQUE INSERE PERTO DA CÉLULA ATIVA)") }),
             estilos,
         ]
         .spacing(8);
@@ -471,22 +501,22 @@ impl App {
                 dica(b, texto)
             };
             let ajustes = row![
-                text("Intensidade").size(12),
-                passo("minus", k - 0.1, "Menos deformação"),
+                text(tr!("Intensidade")).size(12),
+                passo("minus", k - 0.1, tr!("Menos deformação")),
                 text(format!("{:.0}%", k * 100.0)).size(12).width(Length::Fixed(40.0)).align_x(iced::alignment::Horizontal::Center),
-                passo("plus", k + 0.1, "Mais deformação"),
+                passo("plus", k + 0.1, tr!("Mais deformação")),
                 Space::with_width(Length::Fill),
-                button(text("Sombra").size(12)).padding([5, 10]).style(estilo_botao_pequeno(tem_sombra)).on_press(ev(Evento::SombraWordArt(!tem_sombra))),
+                button(text(tr!("Sombra")).size(12)).padding([5, 10]).style(estilo_botao_pequeno(tem_sombra)).on_press(ev(Evento::SombraWordArt(!tem_sombra))),
             ]
             .spacing(6)
             .align_y(Alignment::Center);
-            corpo = corpo.push(rotulo("DEFORMAÇÃO")).push(deformacoes).push(ajustes);
+            corpo = corpo.push(rotulo(tr!("DEFORMAÇÃO"))).push(deformacoes).push(ajustes);
         }
         corpo = corpo.push(
             text(if selecionado.is_some() {
-                "F2 ou duplo clique edita o texto. Cor e contorno das letras pela barra do objeto."
+                tr!("F2 ou duplo clique edita o texto. Cor e contorno das letras pela barra do objeto.")
             } else {
-                "Selecione um WordArt para mudar a deformação, a intensidade e a sombra."
+                tr!("Selecione um WordArt para mudar a deformação, a intensidade e a sombra.")
             })
             .size(11)
             .color(COR_TEXTO_MUTED()),
@@ -498,8 +528,8 @@ impl App {
     fn menu_formas(&self, alto: f32) -> Element<'_, Msg> {
         let modo = self.objetos.menu.unwrap_or(ModoMenu::Inserir);
         let (titulo, ajuda) = match modo {
-            ModoMenu::Inserir => ("Formas", "Escolha e arraste na planilha. Um clique cria no tamanho padrão."),
-            ModoMenu::Trocar | ModoMenu::Icones | ModoMenu::WordArt => ("Trocar forma", "A forma selecionada muda de desenho e mantém posição, cores e texto."),
+            ModoMenu::Inserir => (tr!("Formas"), tr!("Escolha e arraste na planilha. Um clique cria no tamanho padrão.")),
+            ModoMenu::Trocar | ModoMenu::Icones | ModoMenu::WordArt => (tr!("Trocar forma"), tr!("A forma selecionada muda de desenho e mantém posição, cores e texto.")),
         };
         let atual: Option<String> = match modo {
             ModoMenu::Inserir => self.objetos.inserir.map(str::to_owned),
@@ -531,7 +561,7 @@ impl App {
             Space::with_width(Length::Fill),
             dica(
                 button(feather_ui::icones::icone("x", 14.0)).padding(4).style(estilo_botao_pequeno(false)).on_press(ev(Evento::FecharMenu)),
-                "Fechar (Esc)",
+                tr!("Fechar (Esc)"),
             ),
         ]
         .align_y(Alignment::Center);
@@ -549,32 +579,32 @@ impl App {
         let e = |x: Evento| ev(Evento::DoContexto(Box::new(x)));
         let pode_colar = !self.objetos.area.is_empty();
         vec![
-            ItemMenu::acao("Recortar", "cut", e(Evento::Recortar)).com_atalho("Ctrl+X"),
-            ItemMenu::acao("Copiar", "copy", e(Evento::Copiar)).com_atalho("Ctrl+C"),
-            ItemMenu::talvez("Colar", "clipboard", pode_colar.then(|| e(Evento::Colar)), "Copie ou recorte uma forma antes")
+            ItemMenu::acao(tr!("Recortar"), "cut", e(Evento::Recortar)).com_atalho("Ctrl+X"),
+            ItemMenu::acao(tr!("Copiar"), "copy", e(Evento::Copiar)).com_atalho("Ctrl+C"),
+            ItemMenu::talvez(tr!("Colar"), "clipboard", pode_colar.then(|| e(Evento::Colar)), tr!("Copie ou recorte uma forma antes"))
                 .com_atalho("Ctrl+V"),
-            ItemMenu::acao("Duplicar", "plus", e(Evento::Duplicar)).com_atalho("Ctrl+D"),
+            ItemMenu::acao(tr!("Duplicar"), "plus", e(Evento::Duplicar)).com_atalho("Ctrl+D"),
             ItemMenu::Separador,
-            ItemMenu::acao("Editar texto", "text-size", e(Evento::EditarTexto(o.id))).com_atalho("F2"),
-            ItemMenu::acao("Trocar forma…", "shapes", e(Evento::AlternarMenu(ModoMenu::Trocar))),
+            ItemMenu::acao(tr!("Editar texto"), "text-size", e(Evento::EditarTexto(o.id))).com_atalho("F2"),
+            ItemMenu::acao(tr!("Trocar forma…"), "shapes", e(Evento::AlternarMenu(ModoMenu::Trocar))),
             // SUB_FRENTE
-            ItemMenu::sub("Trazer para frente", "arrow-up", vec![
-                ItemMenu::acao("Trazer para frente", "arrow-up", e(Evento::Ordem(Ordem::Frente))),
-                ItemMenu::acao("Avançar um nível", "chevron-up", e(Evento::Ordem(Ordem::Avancar))),
+            ItemMenu::sub(tr!("Trazer para frente"), "arrow-up", vec![
+                ItemMenu::acao(tr!("Trazer para frente"), "arrow-up", e(Evento::Ordem(Ordem::Frente))),
+                ItemMenu::acao(tr!("Avançar um nível"), "chevron-up", e(Evento::Ordem(Ordem::Avancar))),
             ]),
-            ItemMenu::sub("Enviar para trás", "arrow-down", vec![
-                ItemMenu::acao("Enviar para trás", "arrow-down", e(Evento::Ordem(Ordem::Tras))),
-                ItemMenu::acao("Recuar um nível", "chevron-down", e(Evento::Ordem(Ordem::Recuar))),
+            ItemMenu::sub(tr!("Enviar para trás"), "arrow-down", vec![
+                ItemMenu::acao(tr!("Enviar para trás"), "arrow-down", e(Evento::Ordem(Ordem::Tras))),
+                ItemMenu::acao(tr!("Recuar um nível"), "chevron-down", e(Evento::Ordem(Ordem::Recuar))),
             ]),
-            ItemMenu::em_breve("Agrupar", "object", "Em breve: agrupar várias formas selecionadas"),
+            ItemMenu::em_breve(tr!("Agrupar"), "object", tr!("Em breve: agrupar várias formas selecionadas")),
             ItemMenu::Separador,
-            ItemMenu::acao("Atribuir macro…", "code", e(Evento::AtribuirMacro)),
-            ItemMenu::em_breve("Hiperlink…", "link", "Em breve: link na forma"),
+            ItemMenu::acao(tr!("Atribuir macro…"), "code", e(Evento::AtribuirMacro)),
+            ItemMenu::em_breve(tr!("Hiperlink…"), "link", tr!("Em breve: link na forma")),
             ItemMenu::Separador,
-            ItemMenu::acao("Formatar forma…", "palette", e(Evento::FormatarForma)),
-            ItemMenu::acao("Tamanho e posição…", "arrow-autofit-width", e(Evento::FormatarForma)),
+            ItemMenu::acao(tr!("Formatar forma…"), "palette", e(Evento::FormatarForma)),
+            ItemMenu::acao(tr!("Tamanho e posição…"), "arrow-autofit-width", e(Evento::FormatarForma)),
             ItemMenu::Separador,
-            ItemMenu::acao("Excluir", "trash", e(Evento::Apagar)).com_atalho("Delete"),
+            ItemMenu::acao(tr!("Excluir"), "trash", e(Evento::Apagar)).com_atalho(tr!("Delete")),
         ]
     }
 
@@ -582,22 +612,22 @@ impl App {
     fn itens_menu_faixa(m: MenuFaixa) -> Vec<ItemMenu> {
         match m {
             MenuFaixa::Frente => vec![
-                ItemMenu::acao("Trazer para frente", "arrow-up", ev(Evento::Ordem(Ordem::Frente))),
-                ItemMenu::acao("Avançar um nível", "chevron-up", ev(Evento::Ordem(Ordem::Avancar))),
+                ItemMenu::acao(tr!("Trazer para frente"), "arrow-up", ev(Evento::Ordem(Ordem::Frente))),
+                ItemMenu::acao(tr!("Avançar um nível"), "chevron-up", ev(Evento::Ordem(Ordem::Avancar))),
             ],
             MenuFaixa::Tras => vec![
-                ItemMenu::acao("Enviar para trás", "arrow-down", ev(Evento::Ordem(Ordem::Tras))),
-                ItemMenu::acao("Recuar um nível", "chevron-down", ev(Evento::Ordem(Ordem::Recuar))),
+                ItemMenu::acao(tr!("Enviar para trás"), "arrow-down", ev(Evento::Ordem(Ordem::Tras))),
+                ItemMenu::acao(tr!("Recuar um nível"), "chevron-down", ev(Evento::Ordem(Ordem::Recuar))),
             ],
             MenuFaixa::Girar => vec![
-                ItemMenu::acao("Girar 90° à direita", "arrow-forward-up", ev(Evento::Girar(Giro::Direita90))),
-                ItemMenu::acao("Girar 90° à esquerda", "arrow-back-up", ev(Evento::Girar(Giro::Esquerda90))),
-                ItemMenu::acao("Espelhar horizontalmente", "arrows-horizontal", ev(Evento::Girar(Giro::EspelharH))),
-                ItemMenu::acao("Espelhar verticalmente", "arrows-vertical", ev(Evento::Girar(Giro::EspelharV))),
+                ItemMenu::acao(tr!("Girar 90° à direita"), "arrow-forward-up", ev(Evento::Girar(Giro::Direita90))),
+                ItemMenu::acao(tr!("Girar 90° à esquerda"), "arrow-back-up", ev(Evento::Girar(Giro::Esquerda90))),
+                ItemMenu::acao(tr!("Espelhar horizontalmente"), "arrows-horizontal", ev(Evento::Girar(Giro::EspelharH))),
+                ItemMenu::acao(tr!("Espelhar verticalmente"), "arrows-vertical", ev(Evento::Girar(Giro::EspelharV))),
             ],
             MenuFaixa::Alinhar => vec![
-                ItemMenu::acao("Encostar no canto da célula", "layout-grid", ev(Evento::Alinhar(Alinhar::CantoDaCelula))),
-                ItemMenu::acao("Ajustar às bordas das células", "arrows-maximize", ev(Evento::Alinhar(Alinhar::AjustarAsCelulas))),
+                ItemMenu::acao(tr!("Encostar no canto da célula"), "layout-grid", ev(Evento::Alinhar(Alinhar::CantoDaCelula))),
+                ItemMenu::acao(tr!("Ajustar às bordas das células"), "arrows-maximize", ev(Evento::Alinhar(Alinhar::AjustarAsCelulas))),
             ],
         }
     }
@@ -618,22 +648,22 @@ impl App {
             .on_press(ev(Evento::MacroEscolher(nome)))
             .into()
         };
-        let mut lista = column![item(None, "Nenhuma".into())].spacing(2);
+        let mut lista = column![item(None, tr!("Nenhuma").into())].spacing(2);
         for m in &self.macro_catalogo.macros {
             lista = lista.push(item(Some(m.name.clone()), m.name.clone()));
         }
         if self.macro_catalogo.macros.is_empty() {
-            lista = lista.push(text("Ainda não há macros. Crie uma no editor de macros (Alt+F11).").size(12).color(COR_TEXTO_MUTED()));
+            lista = lista.push(text(tr!("Ainda não há macros. Crie uma no editor de macros (Alt+F11).")).size(12).color(COR_TEXTO_MUTED()));
         }
         let conteudo = column![
-            text("Atribuir macro").size(19),
-            text("Com macro, o clique na forma a executa; Ctrl+clique ou botão direito seleciona a forma.")
+            text(tr!("Atribuir macro")).size(19),
+            text(tr!("Com macro, o clique na forma a executa; Ctrl+clique ou botão direito seleciona a forma."))
                 .size(12)
                 .color(COR_TEXTO_MUTED()),
             scrollable(lista).height(Length::Fixed(240.0)),
             row![
                 Space::with_width(Length::Fill),
-                button(text("Cancelar").size(13)).style(estilo_botao_secundario).on_press(ev(Evento::MacroCancelar)),
+                button(text(tr!("Cancelar")).size(13)).style(estilo_botao_secundario).on_press(ev(Evento::MacroCancelar)),
                 button(text("OK").size(13)).style(estilo_botao_primario).on_press(ev(Evento::MacroConfirmar)),
             ]
             .spacing(10),
@@ -704,17 +734,17 @@ impl App {
             let g = |e: crate::app::graficos::Evento| Msg::Grafico(e);
             use crate::app::graficos::Evento as G;
             let mut itens = vec![
-                ItemMenu::acao("Editar gráfico…", "chart-bar", g(G::Editar(id.clone()))),
+                ItemMenu::acao(tr!("Editar gráfico…"), "chart-bar", g(G::Editar(id.clone()))),
                 ItemMenu::Separador,
-                ItemMenu::acao("Copiar", "copy", g(G::Copiar(id.clone()))).com_atalho("Ctrl+C"),
+                ItemMenu::acao(tr!("Copiar"), "copy", g(G::Copiar(id.clone()))).com_atalho("Ctrl+C"),
             ];
             if self.grafico_copiado() {
-                itens.push(ItemMenu::acao("Colar", "clipboard", g(G::Colar)).com_atalho("Ctrl+V"));
+                itens.push(ItemMenu::acao(tr!("Colar"), "clipboard", g(G::Colar)).com_atalho("Ctrl+V"));
             }
             itens.extend([
-                ItemMenu::acao("Duplicar", "copy-plus", g(G::Duplicar(id.clone()))).com_atalho("Ctrl+D"),
+                ItemMenu::acao(tr!("Duplicar"), "copy-plus", g(G::Duplicar(id.clone()))).com_atalho("Ctrl+D"),
                 ItemMenu::Separador,
-                ItemMenu::acao("Excluir", "trash", g(G::Remover(id))).com_atalho("Delete"),
+                ItemMenu::acao(tr!("Excluir"), "trash", g(G::Remover(id))).com_atalho(tr!("Delete")),
             ]);
             base = menu_contexto::sobrepor(base, &itens, None, |_| g(G::FecharContexto), g(G::FecharContexto), (x, y), janela);
         }
@@ -734,7 +764,7 @@ impl App {
     /// A aba contextual "Editar forma" na fileira de abas (destacada).
     pub(in crate::app) fn aba_editar_forma(&self) -> Element<'_, Msg> {
         let ativa = self.faixa_ativa == AbaFaixa::EditarForma;
-        let titulo = text("Editar forma").size(13).wrapping(text::Wrapping::None).font(iced::Font {
+        let titulo = text(tr!("Editar forma")).size(13).wrapping(text::Wrapping::None).font(iced::Font {
             weight: if ativa { iced::font::Weight::Semibold } else { iced::font::Weight::Normal },
             ..iced::Font::DEFAULT
         });
@@ -764,8 +794,8 @@ impl App {
     pub(in crate::app) fn grupos_editar_forma(&self) -> Vec<Element<'_, Msg>> {
         let Some(o) = self.objeto_selecionado() else {
             return vec![self.faixa_grupo(
-                "Editar forma",
-                container(text("Selecione uma forma na planilha para editá-la.").size(12).color(COR_TEXTO_MUTED()))
+                tr!("Editar forma"),
+                container(text(tr!("Selecione uma forma na planilha para editá-la.")).size(12).color(COR_TEXTO_MUTED()))
                     .padding([0, 8])
                     .into(),
             )];
@@ -778,19 +808,19 @@ impl App {
         let px = || text("px").size(11).color(COR_TEXTO_MUTED());
 
         let preenchimento = if linha {
-            dica(self.faixa_grande_seta("Preenchimento", "bucket", None, false), "Linhas não têm preenchimento")
+            dica(self.faixa_grande_seta(tr!("Preenchimento"), "bucket", None, false), tr!("Linhas não têm preenchimento"))
         } else {
-            self.faixa_grande_seta("Preenchimento", "bucket", Some(ev(Evento::AbrirPainel(Painel::Preenchimento))),
+            self.faixa_grande_seta(tr!("Preenchimento"), "bucket", Some(ev(Evento::AbrirPainel(Painel::Preenchimento))),
                 self.objetos.painel == Some(Painel::Preenchimento))
         };
         let raio: Element<'_, Msg> = if c.por_canto {
             let canto = |i: usize| campo_num(&c.cantos[i], 46.0, cantos, move |t| ev(Evento::CampoCanto(i, t)), ev(Evento::AplicarRaio));
             dica(
                 column![row![canto(0), canto(1)].spacing(4), row![canto(3), canto(2)].spacing(4)].spacing(3),
-                "Raio de cada canto em px (como na forma: em cima à esquerda e à direita, embaixo à esquerda e à direita)",
+                tr!("Raio de cada canto em px (como na forma: em cima à esquerda e à direita, embaixo à esquerda e à direita)"),
             )
         } else {
-            row![rotulo("Raio"), campo_num(&c.raio, 56.0, cantos, |t| ev(Evento::CampoRaio(t)), ev(Evento::AplicarRaio)), px()]
+            row![rotulo(tr!("Raio")), campo_num(&c.raio, 56.0, cantos, |t| ev(Evento::CampoRaio(t)), ev(Evento::AplicarRaio)), px()]
                 .spacing(4)
                 .align_y(Alignment::Center)
                 .into()
@@ -798,72 +828,72 @@ impl App {
         let grupo_cantos = column![
             raio,
             row![
-                self.faixa_pequeno("Por canto", "layout-grid", cantos.then(|| ev(Evento::PorCanto(!c.por_canto))), c.por_canto),
-                self.faixa_pequeno("Aplicar", "check", cantos.then(|| ev(Evento::AplicarRaio)), false),
+                self.faixa_pequeno(tr!("Por canto"), "layout-grid", cantos.then(|| ev(Evento::PorCanto(!c.por_canto))), c.por_canto),
+                self.faixa_pequeno(tr!("Aplicar"), "check", cantos.then(|| ev(Evento::AplicarRaio)), false),
             ]
             .spacing(3),
         ]
         .spacing(4);
         let grupo_cantos: Element<'_, Msg> =
-            if cantos { grupo_cantos.into() } else { dica(grupo_cantos, "Só retângulos têm cantos arredondáveis") };
+            if cantos { grupo_cantos.into() } else { dica(grupo_cantos, tr!("Só retângulos têm cantos arredondáveis")) };
 
         vec![
-            self.faixa_grupo("Inserir formas", self.faixa_linha(vec![
-                self.faixa_grande_seta("Formas", "shapes", Some(ev(Evento::AlternarMenu(ModoMenu::Inserir))),
+            self.faixa_grupo(tr!("Inserir formas"), self.faixa_linha(vec![
+                self.faixa_grande_seta(tr!("Formas"), "shapes", Some(ev(Evento::AlternarMenu(ModoMenu::Inserir))),
                     self.objetos.menu == Some(ModoMenu::Inserir)),
                 self.faixa_pilha(vec![
-                    self.faixa_pequeno("Trocar forma", "shapes", Some(ev(Evento::AlternarMenu(ModoMenu::Trocar))),
+                    self.faixa_pequeno(tr!("Trocar forma"), "shapes", Some(ev(Evento::AlternarMenu(ModoMenu::Trocar))),
                         self.objetos.menu == Some(ModoMenu::Trocar)),
-                    self.faixa_pequeno("Editar texto", "text-size", Some(ev(Evento::EditarTexto(o.id))), self.objetos.texto.is_some()),
+                    self.faixa_pequeno(tr!("Editar texto"), "text-size", Some(ev(Evento::EditarTexto(o.id))), self.objetos.texto.is_some()),
                 ]),
             ])),
-            self.faixa_grupo("Texto", {
+            self.faixa_grupo(tr!("Texto"), {
                 let (h, v) = (o.alinhar.h, o.alinhar.v);
                 let sem_texto = linha || o.tipo == modelo::TipoObjeto::Icone;
                 let ativo = |m: Msg| (!sem_texto).then_some(m);
                 let grupo = self.faixa_linha(vec![
                     self.faixa_pilha(vec![
-                        self.faixa_pequeno("Topo", "layout-align-top", ativo(ev(Evento::AlinharTextoV(modelo::AlinharV::Topo))), v == modelo::AlinharV::Topo),
-                        self.faixa_pequeno("Meio", "layout-align-middle", ativo(ev(Evento::AlinharTextoV(modelo::AlinharV::Meio))), v == modelo::AlinharV::Meio),
-                        self.faixa_pequeno("Baixo", "layout-align-bottom", ativo(ev(Evento::AlinharTextoV(modelo::AlinharV::Baixo))), v == modelo::AlinharV::Baixo),
+                        self.faixa_pequeno(tr!("Topo"), "layout-align-top", ativo(ev(Evento::AlinharTextoV(modelo::AlinharV::Topo))), v == modelo::AlinharV::Topo),
+                        self.faixa_pequeno(tr!("Meio"), "layout-align-middle", ativo(ev(Evento::AlinharTextoV(modelo::AlinharV::Meio))), v == modelo::AlinharV::Meio),
+                        self.faixa_pequeno(tr!("Baixo"), "layout-align-bottom", ativo(ev(Evento::AlinharTextoV(modelo::AlinharV::Baixo))), v == modelo::AlinharV::Baixo),
                     ]),
                     self.faixa_pilha(vec![
-                        self.faixa_pequeno("Esquerda", "align-left", ativo(ev(Evento::AlinharTextoH(modelo::AlinharH::Esquerda))), h == modelo::AlinharH::Esquerda),
-                        self.faixa_pequeno("Centro", "align-center", ativo(ev(Evento::AlinharTextoH(modelo::AlinharH::Centro))), h == modelo::AlinharH::Centro),
-                        self.faixa_pequeno("Direita", "align-right", ativo(ev(Evento::AlinharTextoH(modelo::AlinharH::Direita))), h == modelo::AlinharH::Direita),
+                        self.faixa_pequeno(tr!("Esquerda"), "align-left", ativo(ev(Evento::AlinharTextoH(modelo::AlinharH::Esquerda))), h == modelo::AlinharH::Esquerda),
+                        self.faixa_pequeno(tr!("Centro"), "align-center", ativo(ev(Evento::AlinharTextoH(modelo::AlinharH::Centro))), h == modelo::AlinharH::Centro),
+                        self.faixa_pequeno(tr!("Direita"), "align-right", ativo(ev(Evento::AlinharTextoH(modelo::AlinharH::Direita))), h == modelo::AlinharH::Direita),
                     ]),
                 ]);
-                if sem_texto { dica(grupo, "Linhas e ícones não têm texto") } else { grupo }
+                if sem_texto { dica(grupo, tr!("Linhas e ícones não têm texto")) } else { grupo }
             }),
-            self.faixa_grupo("Estilos de forma", self.faixa_linha(vec![
+            self.faixa_grupo(tr!("Estilos de forma"), self.faixa_linha(vec![
                 preenchimento,
-                self.faixa_grande_seta("Contorno", "pencil", Some(ev(Evento::AbrirPainel(Painel::Contorno))),
+                self.faixa_grande_seta(tr!("Contorno"), "pencil", Some(ev(Evento::AbrirPainel(Painel::Contorno))),
                     self.objetos.painel == Some(Painel::Contorno)),
-                dica(self.faixa_grande("Efeitos", "wand", None, false), "Em breve: sombra, brilho e reflexo"),
+                dica(self.faixa_grande(tr!("Efeitos"), "wand", None, false), tr!("Em breve: sombra, brilho e reflexo")),
             ])),
-            self.faixa_grupo("Organizar", self.faixa_linha(vec![
+            self.faixa_grupo(tr!("Organizar"), self.faixa_linha(vec![
                 self.faixa_pilha(vec![
-                    self.faixa_pequeno("Trazer para frente", "arrow-up", Some(ev(Evento::MenuFaixa(MenuFaixa::Frente))), aberto(MenuFaixa::Frente)),
-                    self.faixa_pequeno("Enviar para trás", "arrow-down", Some(ev(Evento::MenuFaixa(MenuFaixa::Tras))), aberto(MenuFaixa::Tras)),
-                    dica(self.faixa_pequeno("Agrupar", "object", None, false), "Em breve: agrupar várias formas selecionadas"),
+                    self.faixa_pequeno(tr!("Trazer para frente"), "arrow-up", Some(ev(Evento::MenuFaixa(MenuFaixa::Frente))), aberto(MenuFaixa::Frente)),
+                    self.faixa_pequeno(tr!("Enviar para trás"), "arrow-down", Some(ev(Evento::MenuFaixa(MenuFaixa::Tras))), aberto(MenuFaixa::Tras)),
+                    dica(self.faixa_pequeno(tr!("Agrupar"), "object", None, false), tr!("Em breve: agrupar várias formas selecionadas")),
                 ]),
                 self.faixa_pilha(vec![
-                    self.faixa_pequeno("Alinhar", "layout-grid", Some(ev(Evento::MenuFaixa(MenuFaixa::Alinhar))), aberto(MenuFaixa::Alinhar)),
-                    self.faixa_pequeno("Girar", "refresh", Some(ev(Evento::MenuFaixa(MenuFaixa::Girar))), aberto(MenuFaixa::Girar)),
+                    self.faixa_pequeno(tr!("Alinhar"), "layout-grid", Some(ev(Evento::MenuFaixa(MenuFaixa::Alinhar))), aberto(MenuFaixa::Alinhar)),
+                    self.faixa_pequeno(tr!("Girar"), "refresh", Some(ev(Evento::MenuFaixa(MenuFaixa::Girar))), aberto(MenuFaixa::Girar)),
                 ]),
             ])),
-            self.faixa_grupo("Arredondar cantos", grupo_cantos),
-            self.faixa_grupo("Tamanho", column![
-                row![rotulo("Largura"), campo_num(&c.largura, 64.0, true, |t| ev(Evento::CampoLargura(t)), ev(Evento::AplicarTamanho)), px()]
+            self.faixa_grupo(tr!("Arredondar cantos"), grupo_cantos),
+            self.faixa_grupo(tr!("Tamanho"), column![
+                row![rotulo(tr!("Largura")), campo_num(&c.largura, 64.0, true, |t| ev(Evento::CampoLargura(t)), ev(Evento::AplicarTamanho)), px()]
                     .spacing(4).align_y(Alignment::Center),
-                row![rotulo("Altura"), campo_num(&c.altura, 64.0, true, |t| ev(Evento::CampoAltura(t)), ev(Evento::AplicarTamanho)), px()]
+                row![rotulo(tr!("Altura")), campo_num(&c.altura, 64.0, true, |t| ev(Evento::CampoAltura(t)), ev(Evento::AplicarTamanho)), px()]
                     .spacing(4).align_y(Alignment::Center),
                 row![
-                    self.faixa_pequeno("Travar proporção", "lock", Some(ev(Evento::TravarProporcao(!self.objetos.travar))), self.objetos.travar),
-                    self.faixa_pequeno("Aplicar", "check", Some(ev(Evento::AplicarTamanho)), false),
+                    self.faixa_pequeno(tr!("Travar proporção"), "lock", Some(ev(Evento::TravarProporcao(!self.objetos.travar))), self.objetos.travar),
+                    self.faixa_pequeno(tr!("Aplicar"), "check", Some(ev(Evento::AplicarTamanho)), false),
                 ].spacing(3),
             ].spacing(4).into()),
-            self.faixa_grupo("Macro", self.faixa_grande("Atribuir macro", "code", Some(ev(Evento::AtribuirMacro)),
+            self.faixa_grupo(tr!("Macro"), self.faixa_grande(tr!("Atribuir macro"), "code", Some(ev(Evento::AtribuirMacro)),
                 self.objetos.macro_dialogo.is_some() || o.macro_nome.is_some())),
         ]
     }

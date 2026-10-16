@@ -16,9 +16,9 @@ fn json_celula(v: &Json) -> Result<Value, String> {
         Json::Null => Ok(Value::Empty),
         Json::Bool(v) => Ok(Value::Bool(*v)),
         Json::String(v) => Ok(Value::Text(v.clone())),
-        Json::Number(v) => Ok(Value::Number(v.as_f64().ok_or("Número JSON inválido")?)),
+        Json::Number(v) => Ok(Value::Number(v.as_f64().ok_or(tr!("Número JSON inválido"))?)),
         Json::Array(_) | Json::Object(_) => serde_json::to_string(v)
-            .map(Value::Text).map_err(|e| format!("Não foi possível serializar campo JSON: {e}")),
+            .map(Value::Text).map_err(|e| trf!("Não foi possível serializar campo JSON: {e}")),
     }
 }
 
@@ -34,10 +34,10 @@ fn json_tabela(bytes: &[u8]) -> Result<Tabela, String> {
 /// Sem caminho mantém a detecção antiga de arrays (data/results).
 fn json_tabela_caminho(bytes: &[u8], caminho: &str) -> Result<Tabela, String> {
     let mut dado: Json = serde_json::from_slice(bytes)
-        .map_err(|e| format!("Não consegui interpretar JSON: {e}"))?;
+        .map_err(|e| trf!("Não consegui interpretar JSON: {e}"))?;
     if !caminho.trim().is_empty() {
         dado = caminho_json::seguir(&dado, caminho)
-            .ok_or_else(|| format!("O caminho JSON '{caminho}' não existe ou é inválido"))?
+            .ok_or_else(|| trf!("O caminho JSON '{caminho}' não existe ou é inválido"))?
             .clone();
     }
     let linhas = match dado {
@@ -55,9 +55,9 @@ fn json_tabela_caminho(bytes: &[u8], caminho: &str) -> Result<Tabela, String> {
                 vec![Json::Object(obj)]
             }
         }
-        _ => return Err("JSON precisa conter um objeto ou uma lista".into()),
+        _ => return Err(tr!("JSON precisa conter um objeto ou uma lista").into()),
     };
-    if linhas.is_empty() { return Err("JSON não contém registros".into()); }
+    if linhas.is_empty() { return Err(tr!("JSON não contém registros").into()); }
 
     let mut cabecalho = Vec::new();
     let mut vistos = std::collections::HashSet::new();
@@ -78,16 +78,16 @@ fn json_tabela_caminho(bytes: &[u8], caminho: &str) -> Result<Tabela, String> {
             _ => {}
         }
         if cabecalho.len() as u64 > MAX_CELULAS_FONTE {
-            return Err("JSON possui colunas demais".into());
+            return Err(tr!("JSON possui colunas demais").into());
         }
     }
     // Listas de números/textos/booleanos viram coluna única (Valor).
     if cabecalho.is_empty() {
-        cabecalho.push("Valor".into());
+        cabecalho.push(tr!("Valor").into());
     }
     if (linhas.len() as u64 + 1).saturating_mul(cabecalho.len() as u64)
         > MAX_CELULAS_FONTE {
-        return Err(format!("JSON excede {} células; refine a fonte", MAX_CELULAS_FONTE));
+        return Err(trf!("JSON excede {} células; refine a fonte", MAX_CELULAS_FONTE));
     }
 
     let mut matriz = Vec::with_capacity(linhas.len());
@@ -116,18 +116,18 @@ fn json_tabela_caminho(bytes: &[u8], caminho: &str) -> Result<Tabela, String> {
 
 fn validar_xlsx(path: &Path) -> Result<(), String> {
     let arquivo = std::fs::File::open(path)
-        .map_err(|e| format!("Não consegui abrir Excel: {e}"))?;
+        .map_err(|e| trf!("Não consegui abrir Excel: {e}"))?;
     let mut zip = zip::ZipArchive::new(arquivo)
-        .map_err(|e| format!("Arquivo Excel não é um ZIP válido: {e}"))?;
+        .map_err(|e| trf!("Arquivo Excel não é um ZIP válido: {e}"))?;
     if zip.len() > 512 {
-        return Err("XLSX possui entradas demais para a importação interativa".into());
+        return Err(tr!("XLSX possui entradas demais para a importação interativa").into());
     }
     let mut total = 0u64;
     for i in 0..zip.len() {
-        let entry = zip.by_index(i).map_err(|e| format!("Entrada XLSX inválida: {e}"))?;
+        let entry = zip.by_index(i).map_err(|e| trf!("Entrada XLSX inválida: {e}"))?;
         total = total.saturating_add(entry.size());
         if total > MAX_XML_XLSX {
-            return Err("XLSX descomprime mais de 32 MiB; importe-o pela planilha e selecione um intervalo".into());
+            return Err(tr!("XLSX descomprime mais de 32 MiB; importe-o pela planilha e selecione um intervalo").into());
         }
     }
     Ok(())
@@ -138,34 +138,34 @@ pub(super) fn ler(path: &Path) -> Result<(Tabela, String), String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("")
         .to_ascii_lowercase();
     if !["csv","tsv","json","xlsx","txt"].contains(&ext.as_str()) {
-        return Err("Use CSV, TSV, TXT, JSON ou XLSX neste importador".into());
+        return Err(tr!("Use CSV, TSV, TXT, JSON ou XLSX neste importador").into());
     }
     let tamanho = std::fs::metadata(path)
-        .map_err(|e| format!("Arquivo não encontrado: {e}"))?.len();
+        .map_err(|e| trf!("Arquivo não encontrado: {e}"))?.len();
     if tamanho > MAX_ARQUIVO {
-        return Err("Este arquivo excede 8 MiB. Abra pela planilha nativa, selecione a região e use OpenQuery".into());
+        return Err(tr!("Este arquivo excede 8 MiB. Abra pela planilha nativa, selecione a região e use OpenQuery").into());
     }
     let tabela = match ext.as_str() {
         "json" => json_tabela(&std::fs::read(path)
-            .map_err(|e| format!("Falha de leitura: {e}"))?)?,
+            .map_err(|e| trf!("Falha de leitura: {e}"))?)?,
         "csv" | "tsv" | "txt" => {
             let workbook = feathersheet_io::csv_workbook::importar_csv_tsv_arquivo(
                 path, ext == "tsv", None,
             )?;
-            let area = workbook.aba(0).ok_or("CSV sem aba")?.sheet.used_rect();
+            let area = workbook.aba(0).ok_or(tr!("CSV sem aba"))?.sheet.used_rect();
             ler_tabela(&workbook, 0, area)?
         }
         "xlsx" => {
             validar_xlsx(path)?;
             let (workbook, _) = feathersheet_io::xlsx_read::ler_xlsx_arquivo(path)?;
-            let area = workbook.aba(0).ok_or("Excel sem planilha")?.sheet.used_rect();
+            let area = workbook.aba(0).ok_or(tr!("Excel sem planilha"))?.sheet.used_rect();
             ler_tabela(&workbook, 0, area)?
         }
         _ => unreachable!(),
     };
-    if tabela.cabecalho.is_empty() { return Err("Arquivo sem colunas".into()); }
-    let nome = path.file_name().and_then(|n| n.to_str()).unwrap_or("Arquivo");
-    Ok((tabela, format!("Arquivo: {nome}")))
+    if tabela.cabecalho.is_empty() { return Err(tr!("Arquivo sem colunas").into()); }
+    let nome = path.file_name().and_then(|n| n.to_str()).unwrap_or(tr!("Arquivo"));
+    Ok((tabela, trf!("Arquivo: {nome}")))
 }
 
 
@@ -175,7 +175,7 @@ pub(super) fn ler(path: &Path) -> Result<(Tabela, String), String> {
 fn html_tabelas(bytes: &[u8]) -> Result<Vec<Tabela>, String> {
     const MAX_TABELAS_HTML: usize = 32;
     let texto = std::str::from_utf8(bytes)
-        .map_err(|_| "A página HTML precisa estar em UTF-8".to_string())?;
+        .map_err(|_| tr!("A página HTML precisa estar em UTF-8").to_string())?;
     let documento = scraper::Html::parse_document(texto);
     let seletor_tabela = scraper::Selector::parse("table").map_err(|e| e.to_string())?;
     let seletor_linha = scraper::Selector::parse("tr").map_err(|e| e.to_string())?;
@@ -184,7 +184,7 @@ fn html_tabelas(bytes: &[u8]) -> Result<Vec<Tabela>, String> {
     let mut total_celulas = 0u64;
     for (indice, tabela_html) in documento.select(&seletor_tabela).enumerate() {
         if indice >= MAX_TABELAS_HTML {
-            return Err("A página contém mais de 32 tabelas HTML; refine a fonte".into());
+            return Err(tr!("A página contém mais de 32 tabelas HTML; refine a fonte").into());
         }
         let mut cabecalho = Vec::new();
         let mut linhas: Vec<Vec<Value>> = Vec::new();
@@ -198,16 +198,16 @@ fn html_tabelas(bytes: &[u8]) -> Result<Vec<Tabela>, String> {
                 // cabeçalho, seja composta por <th> ou por <td>.
                 cabecalho = celulas.into_iter().enumerate()
                     .map(|(i, nome)| if nome.is_empty() {
-                        format!("Coluna {}", i + 1)
+                        trf!("Coluna {}", i + 1)
                     } else { nome })
                     .collect();
                 if total_celulas.saturating_add(cabecalho.len() as u64) > MAX_CELULAS_FONTE {
-                    return Err("As tabelas HTML excedem o limite de células da prévia".into());
+                    return Err(tr!("As tabelas HTML excedem o limite de células da prévia").into());
                 }
                 continue;
             }
             if celulas.len() > cabecalho.len() {
-                return Err(format!(
+                return Err(trf!(
                     "Tabela HTML {} tem mais colunas do que o cabeçalho", indice + 1
                 ));
             }
@@ -215,7 +215,7 @@ fn html_tabelas(bytes: &[u8]) -> Result<Vec<Tabela>, String> {
                 (linhas.len() as u64 + 2).saturating_mul(cabecalho.len() as u64),
             );
             if previstas > MAX_CELULAS_FONTE {
-                return Err("As tabelas HTML excedem o limite de células da prévia".into());
+                return Err(tr!("As tabelas HTML excedem o limite de células da prévia").into());
             }
             let mut valores: Vec<Value> = celulas.into_iter().map(|v| {
                 if v.is_empty() { Value::Empty }
@@ -234,7 +234,7 @@ fn html_tabelas(bytes: &[u8]) -> Result<Vec<Tabela>, String> {
         }
     }
     if tabelas.is_empty() {
-        return Err("Esta página não contém <table> HTML estática com cabeçalho".into());
+        return Err(tr!("Esta página não contém <table> HTML estática com cabeçalho").into());
     }
     Ok(tabelas)
 }
@@ -245,32 +245,32 @@ fn html_tabelas(bytes: &[u8]) -> Result<Vec<Tabela>, String> {
 pub(super) fn ler_web(url: &str) -> Result<(Vec<Tabela>, String), String> {
     use std::io::Read;
     let mut endereco = reqwest::Url::parse(url.trim())
-        .map_err(|e| format!("URL inválida: {e}"))?;
+        .map_err(|e| trf!("URL inválida: {e}"))?;
     let caminho_json = caminho_json::extrair_fragmento(&mut endereco)?;
     if !matches!(endereco.scheme(), "http" | "https") {
-        return Err("A fonte Web precisa usar http:// ou https://".into());
+        return Err(tr!("A fonte Web precisa usar http:// ou https://").into());
     }
     if endereco.host_str().is_none() {
-        return Err("Informe um endereço HTTP(S) com domínio ou IP".into());
+        return Err(tr!("Informe um endereço HTTP(S) com domínio ou IP").into());
     }
     let client = reqwest::blocking::Client::builder()
         .timeout(std::time::Duration::from_secs(25))
         .redirect(reqwest::redirect::Policy::limited(3))
-        .build().map_err(|e| format!("Erro no cliente Web: {e}"))?;
+        .build().map_err(|e| trf!("Erro no cliente Web: {e}"))?;
     let resposta = client.get(endereco.clone()).send()
         .and_then(reqwest::blocking::Response::error_for_status)
-        .map_err(|e| format!("Não foi possível obter dados da Web: {e}"))?;
+        .map_err(|e| trf!("Não foi possível obter dados da Web: {e}"))?;
     if resposta.content_length().is_some_and(|tam| tam > MAX_ARQUIVO) {
-        return Err("Resposta Web acima de 8 MiB; escolha uma fonte menor".into());
+        return Err(tr!("Resposta Web acima de 8 MiB; escolha uma fonte menor").into());
     }
     let tipo = resposta.headers()
         .get(reqwest::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok()).unwrap_or("").to_ascii_lowercase();
     let mut bytes = Vec::new();
     resposta.take(MAX_ARQUIVO + 1).read_to_end(&mut bytes)
-        .map_err(|e| format!("Falha ao baixar os dados: {e}"))?;
+        .map_err(|e| trf!("Falha ao baixar os dados: {e}"))?;
     if bytes.len() as u64 > MAX_ARQUIVO {
-        return Err("Resposta Web acima de 8 MiB; refine a URL da consulta".into());
+        return Err(tr!("Resposta Web acima de 8 MiB; refine a URL da consulta").into());
     }
     let caminho = endereco.path().to_ascii_lowercase();
     let tsv = caminho.ends_with(".tsv") || tipo.contains("tab-separated");
@@ -299,15 +299,15 @@ pub(super) fn ler_web(url: &str) -> Result<(Vec<Tabela>, String), String> {
         || (tipo.is_empty() && !caminho.ends_with(".html"))
     {
         let workbook = feathersheet_io::csv_workbook::importar_csv_tsv(bytes, tsv)?;
-        let area = workbook.aba(0).ok_or("Resposta Web sem linhas")?.sheet.used_rect();
+        let area = workbook.aba(0).ok_or(tr!("Resposta Web sem linhas"))?.sheet.used_rect();
         vec![ler_tabela(&workbook, 0, area)?]
     } else {
-        return Err("Formato Web não suportado. Use JSON, CSV, TSV ou páginas HTML com tabelas estáticas.".into());
+        return Err(tr!("Formato Web não suportado. Use JSON, CSV, TSV ou páginas HTML com tabelas estáticas.").into());
     };
     if tabelas.is_empty() || tabelas.iter().any(|t| t.cabecalho.is_empty()) {
-        return Err("A resposta Web não contém colunas".into());
+        return Err(tr!("A resposta Web não contém colunas").into());
     }
-    Ok((tabelas, format!("Web: {}", url.trim())))
+    Ok((tabelas, trf!("Web: {}", url.trim())))
 }
 
 #[cfg(test)]

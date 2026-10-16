@@ -85,7 +85,7 @@ impl App {
                     self.restaurar_meta(aba, &r);
                     self.workbook.escrever_celula(aba, r.celula.0, r.celula.1, to_js_string(r.x));
                     self.alterado = true;
-                    self.status = format!("{} = {} mantido", cell_name(r.celula.0, r.celula.1),
+                    self.status = trf!("{} = {} mantido", cell_name(r.celula.0, r.celula.1),
                         to_js_string(r.x));
                 }
             }
@@ -119,26 +119,26 @@ impl App {
     fn executar_atingir_meta(&mut self) -> Result<(), String> {
         let e = self.atingir_meta.clone().expect("janela aberta");
         let celula = |t: &str, nome: &str| parse_cell_ref(&t.trim().replace('$', "").to_uppercase())
-            .ok_or(format!("\"{nome}\" precisa ser o endereço de uma célula, como B10."));
-        let (dr, dc) = celula(&e.definir, "Definir célula")?;
-        let (ar, ac) = celula(&e.alterando, "Alterando a célula")?;
+            .ok_or(trf!("\"{nome}\" precisa ser o endereço de uma célula, como B10."));
+        let (dr, dc) = celula(&e.definir, tr!("Definir célula"))?;
+        let (ar, ac) = celula(&e.alterando, tr!("Alterando a célula"))?;
         let alvo = match parse_literal(e.valor.trim()).value {
             Value::Number(n) => n,
-            _ => return Err("\"Para valor\" precisa ser um número.".into()),
+            _ => return Err(tr!("\"Para valor\" precisa ser um número.").into()),
         };
-        let aba = self.workbook.aba(e.aba).ok_or("A aba não existe mais.")?;
+        let aba = self.workbook.aba(e.aba).ok_or(tr!("A aba não existe mais."))?;
         if !aba.sheet.get_raw(dr, dc).starts_with('=') {
-            return Err(format!("{} precisa conter uma fórmula.", cell_name(dr, dc)));
+            return Err(trf!("{} precisa conter uma fórmula.", cell_name(dr, dc)));
         }
         if aba.sheet.get_raw(ar, ac).starts_with('=') {
-            return Err(format!("{} precisa conter um valor, não uma fórmula.", cell_name(ar, ac)));
+            return Err(trf!("{} precisa conter um valor, não uma fórmula.", cell_name(ar, ac)));
         }
         let original = aba.sheet.snapshot(ar, ac);
         let estilo = original.as_ref().and_then(|s| s.style.clone());
         let inicio = match self.workbook.valor(e.aba, ar, ac) {
             Value::Number(n) => n,
             Value::Empty => 0.0,
-            _ => return Err(format!("{} precisa conter um número.", cell_name(ar, ac))),
+            _ => return Err(trf!("{} precisa conter um número.", cell_name(ar, ac))),
         };
         let workbook = &mut self.workbook;
         let indice = e.aba;
@@ -150,7 +150,7 @@ impl App {
         }, inicio, alvo, ITERACOES, TOLERANCIA);
         let Some(b) = busca else {
             self.workbook.editar(indice, |s| { s.apply(ar, ac, original.clone(), false); });
-            return Err(format!("{} dá erro com o valor atual de {}.", cell_name(dr, dc), cell_name(ar, ac)));
+            return Err(trf!("{} dá erro com o valor atual de {}.", cell_name(dr, dc), cell_name(ar, ac)));
         };
         // A planilha mostra a solução enquanto a pessoa decide.
         let snap = Snap { raw: to_js_string(b.x), style: estilo };
@@ -177,11 +177,11 @@ impl App {
         if let Some(r) = &e.resultado {
             let alvo = cell_name(r.celula.0, r.celula.1);
             let (frase, detalhe) = if r.convergiu {
-                ("Solução encontrada.".to_owned(),
-                    format!("{alvo} = {} faz o resultado valer {}.", to_js_string(r.x), to_js_string(r.y)))
+                (tr!("Solução encontrada.").to_owned(),
+                    trf!("{alvo} = {} faz o resultado valer {}.", to_js_string(r.x), to_js_string(r.y)))
             } else {
-                ("Não foi possível chegar ao valor pedido.".to_owned(),
-                    format!("O mais perto foi {alvo} = {} (resultado {}), em {} tentativas.",
+                (tr!("Não foi possível chegar ao valor pedido.").to_owned(),
+                    trf!("O mais perto foi {alvo} = {} (resultado {}), em {} tentativas.",
                         to_js_string(r.x), to_js_string(r.y), r.tentativas))
             };
             corpo = corpo.push(column![
@@ -202,15 +202,15 @@ impl App {
                     }),
             ].spacing(8).align_y(Alignment::Center);
             corpo = corpo
-                .push(campo("Definir célula:", &e.definir, "célula com a fórmula, ex.: B10",
+                .push(campo(tr!("Definir célula:"), &e.definir, tr!("célula com a fórmula, ex.: B10"),
                     e.campo == Campo::Definir, Evento::Definir))
-                .push(campo("Para valor:", &e.valor, "o resultado desejado, ex.: 1000",
+                .push(campo(tr!("Para valor:"), &e.valor, tr!("o resultado desejado, ex.: 1000"),
                     false, Evento::Valor))
-                .push(campo("Alterando a célula:", &e.alterando, "célula com o valor, ex.: B3",
+                .push(campo(tr!("Alterando a célula:"), &e.alterando, tr!("célula com o valor, ex.: B3"),
                     e.campo == Campo::Alterando, Evento::Alterando))
                 .push(row![
                     feather_ui::icones::icone("info-circle", 14.0),
-                    text("Clique na planilha para preencher o campo destacado.")
+                    text(tr!("Clique na planilha para preencher o campo destacado."))
                         .size(11.5).color(COR_TEXTO_MUTED()),
                 ].spacing(6).align_y(Alignment::Center));
             if let Some(erro) = &e.erro {
@@ -220,7 +220,7 @@ impl App {
             }
         }
         // Não modal, à direita: os cliques na planilha preenchem os campos.
-        let d = self.dialogo("Atingir meta", corpo)
+        let d = self.dialogo(tr!("Atingir meta"), corpo)
             .icone("math-function")
             .topo(14.0)
             .altura_maxima((self.tamanho_principal.height - self.topo_dialogo() - 28.0).max(300.0))
@@ -229,10 +229,10 @@ impl App {
             .a_direita()
             .ao_fechar(ev(Evento::Fechar));
         if resolvido {
-            d.secundario("Desfazer", Some(ev(Evento::Desfazer)))
-                .primario("Manter", Some(ev(Evento::Manter)))
+            d.secundario(tr!("Desfazer"), Some(ev(Evento::Desfazer)))
+                .primario(tr!("Manter"), Some(ev(Evento::Manter)))
         } else {
-            d.secundario("Cancelar", Some(ev(Evento::Fechar)))
+            d.secundario(tr!("Cancelar"), Some(ev(Evento::Fechar)))
                 .primario("OK", Some(ev(Evento::Confirmar)))
         }
     }

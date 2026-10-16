@@ -78,9 +78,9 @@ impl App {
     /// Lê um lote pequeno da coluna. Mantém os valores distintos e o índice
     /// de busca incrementalmente, sem preparar widgets para a coluna inteira.
     fn carregar_lote_tabela(&mut self) -> Result<(), String> {
-        let id = self.tabela_editando.as_deref().ok_or("Tabela não selecionada.")?;
+        let id = self.tabela_editando.as_deref().ok_or(tr!("Tabela não selecionada."))?;
         let tabela = sob_id(&self.workbook, self.folha, id)?;
-        let area = area_de(&tabela).ok_or("Área de tabela inválida.")?;
+        let area = area_de(&tabela).ok_or(tr!("Área de tabela inválida."))?;
         let col = self.tabela_col_filtro.clamp(area.c0, area.c1);
         let (novos, proxima, ultimo) = distintos_lote(
             &self.workbook, self.folha, &tabela, col,
@@ -198,17 +198,17 @@ impl App {
         if matches!(acao, Acao::Reaplicar) {
             let Some(id) = sob_qualquer(&self.workbook, self.folha, self.linha, self.coluna)
                 .and_then(|t| t["id"].as_str().map(str::to_owned)) else {
-                self.status = "Reaplicar: selecione uma célula de uma tabela ou de um intervalo com filtro.".into();
+                self.status = tr!("Reaplicar: selecione uma célula de uma tabela ou de um intervalo com filtro.").into();
                 return Task::none();
             };
             match reaplicar(&mut self.workbook, self.folha, &id) {
                 Ok((ordenou, ocultas, filtro)) => {
                     self.alterado = true;
                     let mut partes = Vec::new();
-                    if ordenou { partes.push("classificação refeita".to_string()); }
-                    if filtro { partes.push(format!("filtro reaplicado ({ocultas} linha(s) oculta(s))")); }
-                    if partes.is_empty() { partes.push("nada mudou".into()); }
-                    self.status = format!("Reaplicar: {}.", partes.join("; "));
+                    if ordenou { partes.push(tr!("classificação refeita").to_string()); }
+                    if filtro { partes.push(trf!("filtro reaplicado ({ocultas} linha(s) oculta(s))")); }
+                    if partes.is_empty() { partes.push(tr!("nada mudou").into()); }
+                    self.status = trf!("Reaplicar: {}.", partes.join("; "));
                 }
                 Err(e) => self.status = e,
             }
@@ -240,7 +240,7 @@ impl App {
                 self.carregar_opcoes_tabela();
                 self.faixa_ativa = crate::app::AbaFaixa::Tabela;
             } else {
-                self.status="Selecione uma célula dentro de uma tabela criada.".into();
+                self.status=tr!("Selecione uma célula dentro de uma tabela criada.").into();
             }
             return Task::none();
         }
@@ -270,7 +270,7 @@ impl App {
             Ok(t)=>t,
             Err(e)=>{self.status=e;self.tabela_editando=None;return Task::none();}
         };
-        let Some(area)=area_de(&t) else {self.status="Área de tabela inválida.".into();return Task::none()};
+        let Some(area)=area_de(&t) else {self.status=tr!("Área de tabela inválida.").into();return Task::none()};
         let col=self.tabela_col_filtro.clamp(area.c0,area.c1);
         let rel=col-area.c0;
         let fechar_popup_apos=matches!(acao,Acao::AplicarLista|Acao::AplicarFiltro
@@ -283,9 +283,9 @@ impl App {
             Acao::Intervalo(s)=>{self.tabela_intervalo_novo=s;return Task::none();}
             Acao::Redimensionar=>{
                 feathersheet_core::celulas::refs::parse_range_ref(&self.tabela_intervalo_novo)
-                    .ok_or_else(||"Intervalo inválido. Use A1:C20, por exemplo.".to_string())
+                    .ok_or_else(||tr!("Intervalo inválido. Use A1:C20, por exemplo.").to_string())
                     .and_then(|nova|redimensionar(&mut self.workbook,self.folha,&id,nova))
-                    .map(|_|"Intervalo alterado sem apagar células.".into())
+                    .map(|_|tr!("Intervalo alterado sem apagar células.").into())
             },
             Acao::BuscaLista(s) => {
                 self.tabela_filtro_busca = s;
@@ -423,7 +423,7 @@ impl App {
                             Some(json!({"op":"not_in","val":removidos}))
                         },
                         Some(_) => {
-                            self.status = "Carregue todos os valores antes de trocar uma condição por uma lista.".into();
+                            self.status = tr!("Carregue todos os valores antes de trocar uma condição por uma lista.").into();
                             return Task::none();
                         },
                         None => {
@@ -448,7 +448,7 @@ impl App {
                     }
                 };
                 filtrar(&mut self.workbook, self.folha, &id, rel, criterio)
-                    .map(|n| format!("Filtro aplicado: {n} linhas ocultadas."))
+                    .map(|n| trf!("Filtro aplicado: {n} linhas ocultadas."))
             },
             Acao::Criterio(s)=>{self.tabela_criterio=s;return Task::none();}
             Acao::Operador(op)=>{
@@ -458,22 +458,22 @@ impl App {
                 return Task::none();
             }
             Acao::Renomear=>renomear(&mut self.workbook,self.folha,&id,&self.tabela_nome_novo)
-                .map(|_|format!("Tabela renomeada para {}.",self.tabela_nome_novo)),
+                .map(|_|trf!("Tabela renomeada para {}.",self.tabela_nome_novo)),
             Acao::Faixas=>estilo(&mut self.workbook,self.folha,&id,Estilo::Faixas(t["faixas"]!=true))
-                .map(|_|"Faixas por linha atualizadas.".into()),
+                .map(|_|tr!("Faixas por linha atualizadas.").into()),
             Acao::FaixasColuna=>estilo(&mut self.workbook,self.folha,&id,
                     Estilo::FaixasColuna(t["estilo"]["faixasColuna"]!=true))
-                .map(|_|"Faixas por coluna atualizadas.".into()),
+                .map(|_|tr!("Faixas por coluna atualizadas.").into()),
             Acao::Borda=>estilo(&mut self.workbook,self.folha,&id,Estilo::Borda(t["estilo"]["borda"]!=true))
-                .map(|_|"Borda da tabela atualizada.".into()),
+                .map(|_|tr!("Borda da tabela atualizada.").into()),
             Acao::Totais=>{
                 let ligar=t["mostrarTotais"]!=true;
                 super::totais::alternar_totais(&mut self.workbook,self.folha,&id,ligar)
-                    .map(|_|if ligar {"Linha de totais ligada: clique numa célula dela para escolher o cálculo."}
-                        else {"Linha de totais removida."}.into())
+                    .map(|_|if ligar {tr!("Linha de totais ligada: clique numa célula dela para escolher o cálculo.")}
+                        else {tr!("Linha de totais removida.")}.into())
             },
             Acao::Tema(tema)=>estilo(&mut self.workbook,self.folha,&id,Estilo::Tema(tema.into()))
-                .map(|_|format!("Paleta {tema} aplicada.")),
+                .map(|_|trf!("Paleta {tema} aplicada.")),
             Acao::Funcao(funcao)=>{
                 // Uma ação só: liga a linha (se preciso) e grava a fórmula.
                 let ligada=t["mostrarTotais"]==true;
@@ -485,30 +485,30 @@ impl App {
                     if resultado.is_ok() { a.sheet.fechar_transacao(); }
                     else { a.sheet.reverter_transacao(); }
                 }
-                resultado.map(|_|format!("Total {} configurado para a coluna {}.",funcao,rel+1))
+                resultado.map(|_|trf!("Total {} configurado para a coluna {}.",funcao,rel+1))
             },
             Acao::Ordenar(asc)=>ordenar(&mut self.workbook,self.folha,&id,rel,asc)
-                .map(|_|if asc{"Tabela ordenada A → Z".into()}else{"Tabela ordenada Z → A".into()}),
+                .map(|_|if asc{tr!("Tabela ordenada A → Z").into()}else{tr!("Tabela ordenada Z → A").into()}),
             Acao::OrdenarPor(criterio,asc)=>{
                 let rotulo=match &criterio {
-                    CriterioOrdem::Cor{..}=>"Tabela classificada pela cor escolhida.",
-                    CriterioOrdem::Lista(_)=>"Tabela classificada pela lista.",
-                    CriterioOrdem::Valor=>"Tabela classificada.",
+                    CriterioOrdem::Cor{..}=>tr!("Tabela classificada pela cor escolhida."),
+                    CriterioOrdem::Lista(_)=>tr!("Tabela classificada pela lista."),
+                    CriterioOrdem::Valor=>tr!("Tabela classificada."),
                 };
                 ordenar_por(&mut self.workbook,self.folha,&id,rel,criterio,asc)
-                    .map(|mudou|if mudou {rotulo.into()} else {"A ordem já era essa.".into()})
+                    .map(|mudou|if mudou {rotulo.into()} else {tr!("A ordem já era essa.").into()})
             },
             Acao::AplicarCriterio(criterio)=>filtrar(&mut self.workbook,self.folha,&id,rel,Some(criterio))
-                .map(|q|format!("Filtro aplicado: {q} linhas ocultadas.")),
+                .map(|q|trf!("Filtro aplicado: {q} linhas ocultadas.")),
             Acao::AplicarTop10=>{
                 let e=&self.tabela_filtro_extra;
                 match e.top_n.parse::<u32>() {
                     Ok(n) if (1..=500).contains(&n) => {
                         let crit=json!({"op":"top10","topo":e.top_topo,"n":n,"percentual":e.top_percentual});
                         filtrar(&mut self.workbook,self.folha,&id,rel,Some(crit))
-                            .map(|q|format!("Filtro aplicado: {q} linhas ocultadas."))
+                            .map(|q|trf!("Filtro aplicado: {q} linhas ocultadas."))
                     },
-                    _ => Err("Informe um número de 1 a 500.".into()),
+                    _ => Err(tr!("Informe um número de 1 a 500.").into()),
                 }
             },
             Acao::AplicarFiltro=>{
@@ -516,7 +516,7 @@ impl App {
                 let sem_parametro=["is_true","is_false","is_blank","is_not_blank"]
                     .contains(&self.tabela_operador);
                 if valor.is_empty() && !sem_parametro {
-                    Err("Informe um valor para o critério.".into())
+                    Err(tr!("Informe um valor para o critério.").into())
                 } else {
                     // Data digitada (15/10/2026) vira o serial, como na célula;
                     // "Igual"/"Diferente" numa data compara como número.
@@ -533,25 +533,25 @@ impl App {
                     } else if ["gt","lt","gte","lte","eq_num","neq_num"].contains(&operador) {
                         let numero=valor.replace(',', ".").parse::<f64>().ok()
                             .or(match literal.value { Value::Number(n) => Some(n), _ => None })
-                            .ok_or_else(||"Informe um número ou uma data válida para comparação.".to_string());
+                            .ok_or_else(||tr!("Informe um número ou uma data válida para comparação.").to_string());
                         numero.map(|n|json!({"op":operador,"val":n}))
                     } else {Ok(json!({"op":operador,"val":valor}))};
                     regra.and_then(|crit|filtrar(&mut self.workbook,self.folha,&id,rel,Some(crit)))
-                        .map(|q|format!("Filtro aplicado: {q} linhas ocultadas."))
+                        .map(|q|trf!("Filtro aplicado: {q} linhas ocultadas."))
                 }
             },
             Acao::FiltrarUnico(s)=> {
                 let valor=if s=="(Vazias)" {serde_json::Value::Null} else {json!(s)};
                 filtrar(&mut self.workbook,self.folha,&id,rel,Some(json!([valor])))
-                    .map(|q|format!("Filtro aplicado: {q} linhas ocultadas."))
+                    .map(|q|trf!("Filtro aplicado: {q} linhas ocultadas."))
             },
             Acao::LimparFiltro=>filtrar(&mut self.workbook,self.folha,&id,rel,None)
-                .map(|_|"Filtro da coluna removido.".into()),
+                .map(|_|tr!("Filtro da coluna removido.").into()),
             Acao::LimparTodosFiltros=>limpar_todos_filtros(&mut self.workbook,self.folha,&id)
-                .map(|n|format!("{n} filtros removidos da tabela.")),
+                .map(|n|trf!("{n} filtros removidos da tabela.")),
             Acao::Converter=>{
                 let res=converter(&mut self.workbook,self.folha,&id)
-                    .map(|_|"Tabela convertida em intervalo, sem apagar as células.".into());
+                    .map(|_|tr!("Tabela convertida em intervalo, sem apagar as células.").into());
                 if res.is_ok() {
                     self.tabela_editando=None;
                     self.tabela_renomeando=false;

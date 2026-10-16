@@ -31,6 +31,8 @@ pub fn comecar(caminho: &std::path::Path) {
     TOTAL.store(total, Ordering::Relaxed);
     FASE.store(0, Ordering::Relaxed);
     EM_LINHAS.store(false, Ordering::Relaxed);
+    etapa_total(0);
+    feathersheet_core::paralelismo::andamento::comecar(0);
     if let Ok(mut nome) = NOME.lock() {
         *nome = caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     }
@@ -38,6 +40,36 @@ pub fn comecar(caminho: &std::path::Path) {
 
 pub fn fase(f: Fase) {
     FASE.store(f as u8, Ordering::Relaxed);
+}
+
+static ETAPA_FEITO: AtomicU64 = AtomicU64::new(0);
+static ETAPA_TOTAL: AtomicU64 = AtomicU64::new(0);
+
+/// Quanto há para montar na memória (bytes de XML no `.xlsx`, células no
+/// `.fshz`): a montagem também anda na barra, não fica parada em 100%.
+pub fn etapa_total(total: u64) {
+    ETAPA_FEITO.store(0, Ordering::Relaxed);
+    ETAPA_TOTAL.store(total, Ordering::Relaxed);
+}
+
+pub fn etapa_somar(n: u64) {
+    ETAPA_FEITO.fetch_add(n, Ordering::Relaxed);
+}
+
+/// (feito, total) da montagem.
+pub fn etapa() -> (u64, u64) {
+    (ETAPA_FEITO.load(Ordering::Relaxed), ETAPA_TOTAL.load(Ordering::Relaxed))
+}
+
+/// Leitor que soma à montagem o que passa por ele (o XML descompactado).
+pub struct ContadorEtapa<R>(pub R);
+
+impl<R: Read> Read for ContadorEtapa<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.0.read(buf)?;
+        ETAPA_FEITO.fetch_add(n as u64, Ordering::Relaxed);
+        Ok(n)
+    }
 }
 
 /// (bytes lidos, tamanho do arquivo, fase, nome do arquivo)

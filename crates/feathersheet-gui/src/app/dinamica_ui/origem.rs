@@ -34,7 +34,7 @@ impl App {
         let Some(e) = self.dinamica.as_ref() else { return false };
         match intervalo(&e.origem_texto) {
             None => {
-                self.status = "Intervalo inválido. Use, por exemplo, A1:D100.".into();
+                self.status = tr!("Intervalo inválido. Use, por exemplo, A1:D100.").into();
                 false
             }
             Some(nova) if nova != e.origem => {
@@ -48,15 +48,15 @@ impl App {
     pub(super) fn aplicar_nova_origem_dinamica(&mut self) {
         let Some(e) = self.dinamica.as_ref() else { return };
         let Some(nova) = intervalo(&e.origem_texto) else {
-            self.status = "Intervalo inválido. Use, por exemplo, A1:D100.".into();
+            self.status = tr!("Intervalo inválido. Use, por exemplo, A1:D100.").into();
             return;
         };
         if nova.r0 >= nova.r1 {
-            self.status = "A origem deve ter cabeçalho e pelo menos uma linha de dados.".into();
+            self.status = tr!("A origem deve ter cabeçalho e pelo menos uma linha de dados.").into();
             return;
         }
         if nova == e.origem {
-            self.status = "A origem já corresponde ao intervalo informado.".into();
+            self.status = tr!("A origem já corresponde ao intervalo informado.").into();
             return;
         }
         let folha = e.folha_origem;
@@ -78,7 +78,7 @@ impl App {
             e.valores_filtro.clear();
             e.filtro_cortado = false;
         }
-        self.status = "Intervalo aplicado. Campos e filtros anteriores foram redefinidos.".into();
+        self.status = tr!("Intervalo aplicado. Campos e filtros anteriores foram redefinidos.").into();
     }
 
     pub(super) fn preset_dinamica(&mut self, id: u8) {
@@ -86,7 +86,7 @@ impl App {
         let col0 = e.origem.c0 as usize;
         let largura = e.origem.c1 as usize - col0 + 1;
         if largura < 2 {
-            self.status = "É necessário ter pelo menos dois campos para as sugestões.".into();
+            self.status = tr!("É necessário ter pelo menos dois campos para as sugestões.").into();
             return;
         }
         let medida = e.valores.first().map(|v| v.coluna).unwrap_or(e.origem.c1 as usize);
@@ -102,7 +102,7 @@ impl App {
                 .unwrap_or(col0+1);
             e.colunas = vec![candidato];
         }
-        self.status = "Sugestão selecionada. Revise os campos e confirme a dinâmica.".into();
+        self.status = tr!("Sugestão selecionada. Revise os campos e confirme a dinâmica.").into();
     }
 }
 

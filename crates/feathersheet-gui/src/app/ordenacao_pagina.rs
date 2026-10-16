@@ -10,12 +10,12 @@ impl App {
         if !self.confirmar() { return; }
         let Some(aba) = self.workbook.aba(self.folha) else { return; };
         if aba.sheet.is_empty() {
-            self.status = "A página está vazia; nada para classificar.".into();
+            self.status = tr!("A página está vazia; nada para classificar.").into();
             return;
         }
         let usada = aba.sheet.used_rect();
         if self.coluna < usada.c0 || self.coluna > usada.c1 {
-            self.status = "Selecione uma coluna com dados para classificar a página.".into();
+            self.status = tr!("Selecione uma coluna com dados para classificar a página.").into();
             return;
         }
         let linhas = u64::from(usada.r1) + 1;
@@ -25,7 +25,7 @@ impl App {
         const MAX_LINHAS: u64 = 250_000;
         const MAX_CELULAS: u64 = 3_000_000;
         if linhas > MAX_LINHAS || linhas.saturating_mul(colunas) > MAX_CELULAS {
-            self.status = format!(
+            self.status = trf!(
                 "Classificação interrompida: {linhas} linhas × {colunas} colunas excedem o limite seguro (250.000 linhas / 3 milhões de células)."
             );
             return;
@@ -42,13 +42,13 @@ impl App {
             self.edicao = self.workbook.aba(self.folha)
                 .map(|a| a.sheet.get_raw(self.linha, self.coluna))
                 .unwrap_or_default();
-            self.status = format!(
+            self.status = trf!(
                 "Página classificada {} pela coluna {} (cabeçalho preservado).",
-                if crescente { "A → Z" } else { "Z → A" },
+                if crescente { tr!("A → Z") } else { tr!("Z → A") },
                 feathersheet_core::celulas::refs::col_name(self.coluna)
             );
         } else {
-            self.status = "A página já está classificada ou possui apenas o cabeçalho.".into();
+            self.status = tr!("A página já está classificada ou possui apenas o cabeçalho.").into();
         }
     }
 }

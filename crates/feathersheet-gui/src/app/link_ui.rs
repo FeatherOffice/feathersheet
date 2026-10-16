@@ -52,7 +52,7 @@ fn abrir_no_sistema(url: &str) -> Result<(), String> {
     let resultado = Command::new("open").arg(url).spawn();
     #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
     let resultado = Command::new("xdg-open").arg(url).spawn();
-    resultado.map(|_| ()).map_err(|e| format!("Não foi possível abrir o navegador: {e}"))
+    resultado.map(|_| ()).map_err(|e| trf!("Não foi possível abrir o navegador: {e}"))
 }
 
 impl App {
@@ -94,7 +94,7 @@ impl App {
                 Some(endereco) => Some(endereco),
                 None => {
                     if let Some(ref mut modal) = self.link_modal {
-                        modal.erro = Some("Use http://, https://, mailto: ou www. (sem espaços).".into());
+                        modal.erro = Some(tr!("Use http://, https://, mailto: ou www. (sem espaços).").into());
                     }
                     return Task::none();
                 }
@@ -125,7 +125,7 @@ impl App {
                 sheet.fechar_transacao();
             });
             self.alterado = true;
-            self.status = if link.is_some() { "Hiperlink salvo".into() } else { "Hiperlink removido".into() };
+            self.status = if link.is_some() { tr!("Hiperlink salvo").into() } else { tr!("Hiperlink removido").into() };
             if !estado.formula && novo != anterior && estado.folha == self.folha
                 && (estado.linha, estado.coluna) == (self.linha, self.coluna)
             {
@@ -147,9 +147,9 @@ impl App {
             patch.insert("link".into(), Campo::Nulo);
             self.workbook.editar(self.folha, |s| s.set_style(&area, &patch));
             self.alterado = true;
-            self.status = "Hiperlink removido; texto preservado".into();
+            self.status = tr!("Hiperlink removido; texto preservado").into();
         } else {
-            self.status = "Essa célula não tem hiperlink salvo no estilo".into();
+            self.status = tr!("Essa célula não tem hiperlink salvo no estilo").into();
         }
         Task::none()
     }
@@ -187,9 +187,9 @@ impl App {
         });
         if removidos > 0 {
             self.alterado = true;
-            self.status = "Hiperlinks removidos da seleção; texto preservado".into();
+            self.status = tr!("Hiperlinks removidos da seleção; texto preservado").into();
         } else {
-            self.status = "A seleção não tem hiperlinks".into();
+            self.status = tr!("A seleção não tem hiperlinks").into();
         }
         Task::none()
     }
@@ -197,11 +197,11 @@ impl App {
     pub(super) fn abrir_link(&mut self) -> Task<Msg> {
         if !self.confirmar() { return Task::none(); }
         let Some(link) = self.link_da_celula(self.folha, self.linha, self.coluna) else {
-            self.status = "A célula não contém um endereço web válido".into();
+            self.status = tr!("A célula não contém um endereço web válido").into();
             return Task::none();
         };
         match abrir_no_sistema(&link) {
-            Ok(()) => self.status = "Abrindo link no navegador…".into(),
+            Ok(()) => self.status = tr!("Abrindo link no navegador…").into(),
             Err(erro) => self.status = erro,
         }
         Task::none()
@@ -210,23 +210,23 @@ impl App {
     fn view_link(&self) -> super::dialogo_interno::Dialogo<'_, Msg> {
         use super::dialogo_interno::dlg;
         let s = self.link_modal.as_ref().expect("diálogo de link aberto");
-        let titulo = if s.endereco.is_empty() { "Inserir link" } else { "Editar link" };
+        let titulo = if s.endereco.is_empty() { tr!("Inserir link") } else { tr!("Editar link") };
         let rotulo = |t: &str| text(t.to_owned()).size(12).color(COR_TEXTO_MUTED());
         let texto_celula = if s.formula {
-            text_input("A célula contém uma fórmula", &s.texto)
+            text_input(tr!("A célula contém uma fórmula"), &s.texto)
         } else {
-            text_input("Texto exibido (vazio: endereço)", &s.texto).on_input(Msg::LinkTexto)
+            text_input(tr!("Texto exibido (vazio: endereço)"), &s.texto).on_input(Msg::LinkTexto)
         };
         let mut corpo = iced::widget::column![
-            rotulo("Endereço (http, https, mailto ou www.)"),
+            rotulo(tr!("Endereço (http, https, mailto ou www.)")),
             text_input("https://exemplo.com", &s.endereco)
                 .on_input(Msg::LinkEndereco).on_submit(Msg::LinkSalvar).padding(8).size(13),
             Space::with_height(2),
-            rotulo("Texto da célula"),
+            rotulo(tr!("Texto da célula")),
             texto_celula.padding(8).size(13),
         ].spacing(6);
         if s.formula {
-            corpo = corpo.push(dlg::aviso_vazio("Esta célula tem fórmula: só o endereço será alterado."));
+            corpo = corpo.push(dlg::aviso_vazio(tr!("Esta célula tem fórmula: só o endereço será alterado.")));
         }
         if let Some(erro) = &s.erro {
             corpo = corpo.push(row![feather_ui::icones::icone("info-circle", 15.0),
@@ -234,11 +234,11 @@ impl App {
         }
         self.dialogo(titulo, corpo)
             .icone("link")
-            .subtitulo(format!("Célula {}", cell_name(s.linha, s.coluna)))
+            .subtitulo(trf!("Célula {}", cell_name(s.linha, s.coluna)))
             .largura(460.0)
             .ao_fechar(Msg::LinkFechar)
-            .secundario("Cancelar", Some(Msg::LinkFechar))
-            .primario("Salvar link", Some(Msg::LinkSalvar))
+            .secundario(tr!("Cancelar"), Some(Msg::LinkFechar))
+            .primario(tr!("Salvar link"), Some(Msg::LinkSalvar))
     }
 
     pub(super) fn sobrepor_link<'a>(&'a self, base: Element<'a, Msg>) -> Element<'a, Msg> {

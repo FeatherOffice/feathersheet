@@ -206,13 +206,13 @@ impl Estado {
 
 fn nome_operacao(op: AgregacaoOp) -> &'static str {
     match op {
-        AgregacaoOp::Soma => "Soma",
-        AgregacaoOp::Contagem => "Contagem",
-        AgregacaoOp::Media => "Média",
-        AgregacaoOp::Min => "Mínimo",
-        AgregacaoOp::Max => "Máximo",
-        AgregacaoOp::DesvioPadrao => "Desvio padrão",
-        AgregacaoOp::Moda => "Moda",
+        AgregacaoOp::Soma => tr!("Soma"),
+        AgregacaoOp::Contagem => tr!("Contagem"),
+        AgregacaoOp::Media => tr!("Média"),
+        AgregacaoOp::Min => tr!("Mínimo"),
+        AgregacaoOp::Max => tr!("Máximo"),
+        AgregacaoOp::DesvioPadrao => tr!("Desvio padrão"),
+        AgregacaoOp::Moda => tr!("Moda"),
     }
 }
 
@@ -239,10 +239,10 @@ fn proximo_agrupamento(modo: Option<AgruparData>) -> Option<AgruparData> {
 
 fn rotulo_agrupamento(modo: Option<AgruparData>) -> &'static str {
     match modo {
-        None => "Sem agrupamento",
-        Some(AgruparData::Mes) => "Mês",
-        Some(AgruparData::Trimestre) => "Trimestre",
-        Some(AgruparData::Ano) => "Ano",
+        None => tr!("Sem agrupamento"),
+        Some(AgruparData::Mes) => tr!("Mês"),
+        Some(AgruparData::Trimestre) => tr!("Trimestre"),
+        Some(AgruparData::Ano) => tr!("Ano"),
     }
 }
 
@@ -286,7 +286,7 @@ impl App {
             Evento::Abrir => {
                 self.confirmar();
                 let Some(aba) = self.workbook.aba(self.folha) else {
-                    self.status = "Não foi possível localizar a aba de origem.".into();
+                    self.status = tr!("Não foi possível localizar a aba de origem.").into();
                     return Task::none();
                 };
                 let selecionada = self.area_selecionada();
@@ -296,12 +296,12 @@ impl App {
                     selecionada.normalized()
                 };
                 if origem.r1 <= origem.r0 {
-                    self.status = "Selecione uma tabela com cabeçalho e ao menos uma linha de dados.".into();
+                    self.status = tr!("Selecione uma tabela com cabeçalho e ao menos uma linha de dados.").into();
                     return Task::none();
                 }
                 let campos = campos::campos(origem.clone(), |r, c| self.workbook.valor(self.folha, r, c));
                 if campos.is_empty() {
-                    self.status = "Não foram encontrados campos na origem.".into();
+                    self.status = tr!("Não foram encontrados campos na origem.").into();
                     return Task::none();
                 }
                 let coluna_medida = campos.iter().enumerate().rev()
@@ -521,7 +521,7 @@ impl App {
                         .map(|f| f.excluir).unwrap_or(true);
                     let novo_excluir = !modo_atual_excluir;
                     if e.filtro_cortado && !novo_excluir {
-                        self.status = "A lista foi limitada. Para não ocultar dados não vistos, use Excluir escolhidos.".into();
+                        self.status = tr!("A lista foi limitada. Para não ocultar dados não vistos, use Excluir escolhidos.").into();
                     } else if let Some(filtro) = e.filtros.iter_mut().find(|f| f.coluna == col) {
                         filtro.excluir = novo_excluir;
                     } else {
@@ -555,7 +555,7 @@ impl App {
                         },
                         Err(erro) => {
                             if let Some(e) = &mut self.dinamica { e.previa_calculado = None; }
-                            self.status = format!("Prévia inválida: {erro}");
+                            self.status = trf!("Prévia inválida: {erro}");
                         }
                     }
                 }
@@ -707,24 +707,24 @@ impl App {
         let altura = matriz.height();
         let colunas = matriz.rows().iter().map(Vec::len).max().unwrap_or(0);
         if altura == 0 || colunas == 0 {
-            self.status = "A tabela dinâmica não gerou resultados.".into();
+            self.status = tr!("A tabela dinâmica não gerou resultados.").into();
             return;
         }
         if altura > MAX_ROWS as usize || colunas > MAX_COLS as usize {
-            self.status = "O resultado ultrapassa o limite de linhas ou colunas da planilha.".into();
+            self.status = tr!("O resultado ultrapassa o limite de linhas ou colunas da planilha.").into();
             return;
         }
         let inicio_col = if e.nova_aba { 0 } else {
             match e.origem.c1.checked_add(2) {
                 Some(c) => c,
                 None => {
-                    self.status = "Não existe espaço para criar a dinâmica à direita da origem.".into();
+                    self.status = tr!("Não existe espaço para criar a dinâmica à direita da origem.").into();
                     return;
                 }
             }
         };
         if (inicio_col as usize) + colunas > MAX_COLS as usize {
-            self.status = "Não existe espaço suficiente para a dinâmica nesta aba. Selecione Nova aba.".into();
+            self.status = tr!("Não existe espaço suficiente para a dinâmica nesta aba. Selecione Nova aba.").into();
             return;
         }
         if !e.nova_aba {
@@ -733,7 +733,7 @@ impl App {
             for (r, linha) in matriz.rows().iter().enumerate() {
                 for c in 0..linha.len() {
                     if !aba.sheet.get_raw(r as u32, inicio_col + c as u32).is_empty() {
-                        self.status = "O destino contém dados. Use Nova aba para não sobrescrever células.".into();
+                        self.status = tr!("O destino contém dados. Use Nova aba para não sobrescrever células.").into();
                         return;
                     }
                 }
@@ -748,7 +748,7 @@ impl App {
                 Some(raw) => match serde_json::from_str(raw) {
                     Ok(v) => v,
                     Err(_) => {
-                        self.status = "As definições das dinâmicas existentes estão inválidas. Nada foi alterado.".into();
+                        self.status = tr!("As definições das dinâmicas existentes estão inválidas. Nada foi alterado.").into();
                         return;
                     }
                 }
@@ -763,7 +763,7 @@ impl App {
                 .and_then(retangulo_json)
                 .is_some_and(|antigo| antigo.r0 <= novo.r1 && novo.r0 <= antigo.r1 &&
                     antigo.c0 <= novo.c1 && novo.c0 <= antigo.c1)) {
-                self.status = "O local reservado cruza outra tabela dinâmica. Use Nova aba.".into();
+                self.status = tr!("O local reservado cruza outra tabela dinâmica. Use Nova aba.").into();
                 return;
             }
         }
@@ -824,7 +824,7 @@ impl App {
         self.endereco = cell_name(0, inicio_col);
         self.faixa_ativa = AbaFaixa::Inserir;
         self.alterado = true;
-        self.status = format!("Tabela dinâmica criada: {} linhas × {} colunas ({largura} campos na origem).", altura, colunas);
+        self.status = trf!("Tabela dinâmica criada: {} linhas × {} colunas ({largura} campos na origem).", altura, colunas);
     }
 
     /// Recalcula a definição persistida com o mesmo caminho da edição nativa.

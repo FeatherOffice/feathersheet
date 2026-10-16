@@ -125,3 +125,23 @@ mod testes {
         assert_eq!(nucleos(), padrao());
     }
 }
+
+/// Andamento do cálculo em paralelo (células feitas de quantas), para a
+/// barra de abertura da janela. Um cálculo grande por vez: estado global.
+pub mod andamento {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static FEITO: AtomicU64 = AtomicU64::new(0);
+    static TOTAL: AtomicU64 = AtomicU64::new(0);
+
+    pub fn comecar(total: u64) {
+        FEITO.store(0, Ordering::Relaxed);
+        TOTAL.store(total, Ordering::Relaxed);
+    }
+    pub fn somar(n: u64) {
+        FEITO.fetch_add(n, Ordering::Relaxed);
+    }
+    /// (feito, total)
+    pub fn agora() -> (u64, u64) {
+        (FEITO.load(Ordering::Relaxed), TOTAL.load(Ordering::Relaxed))
+    }
+}

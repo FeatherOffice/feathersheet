@@ -78,7 +78,7 @@ impl App {
                 let e = e.clone();
                 if e.opcao == Opcao::Referencia {
                     if e.referencia.trim().is_empty() {
-                        self.definir_erro_ir_para("Digite uma referência ou escolha uma opção.");
+                        self.definir_erro_ir_para(tr!("Digite uma referência ou escolha uma opção."));
                         return Task::none();
                     }
                     self.ir_para = None;
@@ -125,13 +125,13 @@ impl App {
         let areas: Vec<Rect> = if let Some(especial) = especial {
             if matches!(especial, Especial::Constantes(t) | Especial::Formulas(t)
                 if !(t.numeros || t.texto || t.logicos || t.erros)) {
-                return Err("Marque ao menos um tipo de valor.".into());
+                return Err(tr!("Marque ao menos um tipo de valor.").into());
             }
             let busca = self.areas_de_busca();
             let total: u64 = busca.iter().map(|a|
                 u64::from(a.r1 - a.r0 + 1) * u64::from(a.c1 - a.c0 + 1)).sum();
             if total > TETO_CELULAS {
-                return Err(format!("A área tem {total} células; selecione até {TETO_CELULAS}."));
+                return Err(trf!("A área tem {total} células; selecione até {TETO_CELULAS}."));
             }
             let Some(aba) = self.workbook.aba(self.folha) else { return Ok(()) };
             let ativa = (self.linha, self.coluna);
@@ -161,7 +161,7 @@ impl App {
                 _ => Vec::new(),
             }
         };
-        if areas.is_empty() { return Err("Nenhuma célula encontrada.".into()); }
+        if areas.is_empty() { return Err(tr!("Nenhuma célula encontrada.").into()); }
         let quantas = areas.len();
         let mut areas = areas;
         areas.truncate(TETO_AREAS);
@@ -169,8 +169,8 @@ impl App {
         areas.rotate_left(1);
         self.selecionar_areas(areas);
         self.status = if quantas > TETO_AREAS {
-            format!("{quantas} áreas encontradas; selecionadas as primeiras {TETO_AREAS}.")
-        } else { format!("{quantas} área(s) selecionada(s).") };
+            trf!("{quantas} áreas encontradas; selecionadas as primeiras {TETO_AREAS}.")
+        } else { trf!("{quantas} área(s) selecionada(s).") };
         Ok(())
     }
 
@@ -227,8 +227,8 @@ impl App {
         };
         let mut corpo = column![
             row![
-                text("Referência:").size(12.5).width(Length::Fixed(86.0)),
-                text_input("A1, B2:D10 ou um nome", &e.referencia)
+                text(tr!("Referência:")).size(12.5).width(Length::Fixed(86.0)),
+                text_input(tr!("A1, B2:D10 ou um nome"), &e.referencia)
                     .id(text_input::Id::new(ID_REFERENCIA))
                     .on_input(|t| Msg::IrParaJanela(Evento::Referencia(t)))
                     .on_submit(ev(Evento::Confirmar))
@@ -236,23 +236,23 @@ impl App {
             ].spacing(8).align_y(Alignment::Center),
             column![
                 grupo("ESPECIAL"),
-                duas(opcao("Em branco", Opcao::EmBranco),
-                    opcao("Diferenças na linha", Opcao::DiferencasNaLinha)),
-                duas(opcao("Constantes", Opcao::Constantes),
-                    opcao("Diferenças na coluna", Opcao::DiferencasNaColuna)),
-                duas(opcao("Fórmulas", Opcao::Formulas),
-                    opcao("Última célula", Opcao::UltimaCelula)),
+                duas(opcao(tr!("Em branco"), Opcao::EmBranco),
+                    opcao(tr!("Diferenças na linha"), Opcao::DiferencasNaLinha)),
+                duas(opcao(tr!("Constantes"), Opcao::Constantes),
+                    opcao(tr!("Diferenças na coluna"), Opcao::DiferencasNaColuna)),
+                duas(opcao(tr!("Fórmulas"), Opcao::Formulas),
+                    opcao(tr!("Última célula"), Opcao::UltimaCelula)),
                 row![
                     Space::with_width(Length::Fixed(22.0)),
-                    tipo("Números", e.tipos.numeros, Evento::Numeros),
-                    tipo("Texto", e.tipos.texto, Evento::Texto),
-                    tipo("Lógicos", e.tipos.logicos, Evento::Logicos),
-                    tipo("Erros", e.tipos.erros, Evento::Erros),
+                    tipo(tr!("Números"), e.tipos.numeros, Evento::Numeros),
+                    tipo(tr!("Texto"), e.tipos.texto, Evento::Texto),
+                    tipo(tr!("Lógicos"), e.tipos.logicos, Evento::Logicos),
+                    tipo(tr!("Erros"), e.tipos.erros, Evento::Erros),
                 ].spacing(12),
-                duas(opcao("Região atual", Opcao::RegiaoAtual),
-                    opcao("Somente células visíveis", Opcao::SomenteVisiveis)),
-                duas(opcao("Formatação condicional", Opcao::FormatacaoCondicional),
-                    opcao("Validação de dados", Opcao::ValidacaoDeDados)),
+                duas(opcao(tr!("Região atual"), Opcao::RegiaoAtual),
+                    opcao(tr!("Somente células visíveis"), Opcao::SomenteVisiveis)),
+                duas(opcao(tr!("Formatação condicional"), Opcao::FormatacaoCondicional),
+                    opcao(tr!("Validação de dados"), Opcao::ValidacaoDeDados)),
             ].spacing(8),
         ].spacing(16);
         if let Some(erro) = &e.erro {
@@ -261,11 +261,11 @@ impl App {
                 text(erro.clone()).size(12).color(COR_ERRO()),
             ].spacing(6).align_y(Alignment::Center));
         }
-        self.dialogo("Ir para", corpo)
+        self.dialogo(tr!("Ir para"), corpo)
             .icone("arrow-right")
             .largura(500.0)
             .ao_fechar(ev(Evento::Fechar))
-            .secundario("Cancelar", Some(ev(Evento::Fechar)))
+            .secundario(tr!("Cancelar"), Some(ev(Evento::Fechar)))
             .primario("OK", Some(ev(Evento::Confirmar)))
     }
 

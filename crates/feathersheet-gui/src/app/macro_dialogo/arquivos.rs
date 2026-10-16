@@ -12,7 +12,7 @@ use std::time::Instant;
 
 /// O PDF da aba: a área de impressão dela, senão a parte usada.
 fn pdf_da_aba(wb: &Workbook, indice: usize, area: Option<Rect>) -> Result<Vec<u8>, String> {
-    let aba = wb.aba(indice).ok_or("Aba inexistente")?;
+    let aba = wb.aba(indice).ok_or(tr!("Aba inexistente"))?;
     let f = area.unwrap_or_else(|| {
         let u = aba.sheet.used_rect();
         Rect::new(0, 0, u.r1, u.c1)
@@ -62,13 +62,13 @@ fn bytes_da_pasta(nova: &Workbook, caminho: &Path) -> Result<Vec<u8>, String> {
     match ext.as_str() {
         "xlsx" => feathersheet_io::xlsx_write::gerar_xlsx(nova),
         "fshz" => feathersheet_io::da_workbook::pasta_gravar_bytes(nova, 0),
-        _ => Err(format!("Formato .{ext} não suportado (use .xlsx ou .fshz)")),
+        _ => Err(trf!("Formato .{ext} não suportado (use .xlsx ou .fshz)")),
     }
 }
 
 fn gravar(caminho: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(pasta) = caminho.parent().filter(|p| !p.as_os_str().is_empty() && !p.is_dir()) {
-        return Err(format!("a pasta {} não existe", pasta.display()));
+        return Err(trf!("a pasta {} não existe", pasta.display()));
     }
     feathersheet_io::arquivo::gravar_atomico(caminho, bytes).map_err(|e| e.to_string())
 }
@@ -82,13 +82,13 @@ impl App {
             let t = Instant::now();
             let (tipo, caminho, bytes) = match pedido {
                 PedidoArquivo::Pdf { aba, caminho } => {
-                    let bytes = self.workbook.indice_do_id(*aba).ok_or_else(|| "a aba não existe mais".to_string())
+                    let bytes = self.workbook.indice_do_id(*aba).ok_or_else(|| tr!("a aba não existe mais").to_string())
                         .and_then(|i| pdf_da_aba(&self.workbook, i, self.area_impressao_da_aba(*aba)));
                     ("PDF", caminho, bytes)
                 }
                 PedidoArquivo::Abas { abas, caminho } => {
                     let indices: Option<Vec<usize>> = abas.iter().map(|id| self.workbook.indice_do_id(*id)).collect();
-                    let bytes = indices.ok_or_else(|| "uma das abas não existe mais".to_string())
+                    let bytes = indices.ok_or_else(|| tr!("uma das abas não existe mais").to_string())
                         .and_then(|ix| bytes_da_pasta(&pasta_com_abas(&self.workbook, &ix), caminho));
                     ("abas", caminho, bytes)
                 }
@@ -97,13 +97,13 @@ impl App {
                 Ok(n) => {
                     let linha = format!("[macro] {tipo} gravado: {} · {} KB · {} ms",
                         caminho.display(), n.div_ceil(1024), t.elapsed().as_millis());
-                    self.monitor.registrar(feather_ui::monitor::Nivel::Info, "Macros", &linha);
+                    self.monitor.registrar(feather_ui::monitor::Nivel::Info, tr!("Macros"), &linha);
                     gravados.push(linha);
                 }
                 Err(e) => {
-                    self.monitor.registrar(feather_ui::monitor::Nivel::Erro, "Macros",
+                    self.monitor.registrar(feather_ui::monitor::Nivel::Erro, tr!("Macros"),
                         &format!("[macro] falhou ao gravar {}: {e}", caminho.display()));
-                    falhas.push(format!("Não foi possível gravar {}: {e}", caminho.display()));
+                    falhas.push(trf!("Não foi possível gravar {}: {e}", caminho.display()));
                 }
             }
         }

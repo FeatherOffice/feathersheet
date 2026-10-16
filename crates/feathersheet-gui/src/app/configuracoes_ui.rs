@@ -57,16 +57,16 @@ pub(super) fn linha<'a>(titulo: &str, dica: &str, controle: impl Into<Element<'a
 /// Recuperação e salvamento automáticos (Configurações e Primeiros passos).
 pub(super) fn linhas_salvamento(app: &App) -> Element<'_, Msg> {
     iced::widget::column![
-        linha("Recuperação automática",
-            "Vale para qualquer planilha alterada: .fshz, .xlsx, .csv, .parquet e as nunca salvas. Guarda uma cópia à parte (não mexe no seu arquivo); se o computador desligar ou o app fechar sem salvar, ela aparece na tela inicial para recuperar.",
+        linha(tr!("Recuperação automática"),
+            tr!("Vale para qualquer planilha alterada: .fshz, .xlsx, .csv, .parquet e as nunca salvas. Guarda uma cópia à parte (não mexe no seu arquivo); se o computador desligar ou o app fechar sem salvar, ela aparece na tela inicial para recuperar."),
             toggler(app.config.recuperacao_automatica).on_toggle(Msg::RecuperacaoAutomatica).style(estilo_toggle)),
-        linha("Salvamento automático",
-            "Só para arquivos .fshz já salvos: grava por cima deles. Um .xlsx, .csv ou .parquet aberto e planilhas novas NÃO são gravados sozinhos; use Salvar como… em .fshz para que passem a ser.",
+        linha(tr!("Salvamento automático"),
+            tr!("Só para arquivos .fshz já salvos: grava por cima deles. Um .xlsx, .csv ou .parquet aberto e planilhas novas NÃO são gravados sozinhos; use Salvar como… em .fshz para que passem a ser."),
             toggler(app.config.auto_salvar).on_toggle(Msg::AutoSalvar).style(estilo_toggle)),
         if app.config.auto_salvar {
-            linha("Gravar após inatividade", "Intervalo mínimo; pode aumentar se o arquivo for muito grande ou a gravação anterior for lenta.",
+            linha(tr!("Gravar após inatividade"), tr!("Intervalo mínimo; pode aumentar se o arquivo for muito grande ou a gravação anterior for lenta."),
                 feather_ui::componentes::lista_suspensa(
-                    "Intervalo", &["2 s", "5 s", "15 s", "30 s", "60 s"],
+                    tr!("Intervalo"), &["2 s", "5 s", "15 s", "30 s", "60 s"],
                     Some(match app.config.intervalo_auto_salvar {
                         2 => "2 s", 5 => "5 s", 30 => "30 s", 60 => "60 s", _ => "15 s",
                     }),
@@ -84,16 +84,16 @@ pub(super) fn linhas_salvamento(app: &App) -> Element<'_, Msg> {
 /// Automático / Claro / Escuro (Configurações e Primeiros passos).
 pub(super) fn opcoes_tema(app: &App) -> Element<'_, Msg> {
     row![
-        opcao("Automático", "device-desktop", app.config.tema_auto, Msg::TemaAuto),
-        opcao("Claro", "eye", !app.config.tema_auto && !app.config.escuro, Msg::Tema(false)),
-        opcao("Escuro", "eye-off", !app.config.tema_auto && app.config.escuro, Msg::Tema(true)),
+        opcao(tr!("Automático"), "device-desktop", app.config.tema_auto, Msg::TemaAuto),
+        opcao(tr!("Claro"), "eye", !app.config.tema_auto && !app.config.escuro, Msg::Tema(false)),
+        opcao(tr!("Escuro"), "eye-off", !app.config.tema_auto && app.config.escuro, Msg::Tema(true)),
     ].spacing(3).into()
 }
 
 /// Idioma da interface e das fórmulas (Configurações e Primeiros passos).
 pub(super) fn lista_idioma(app: &App) -> Element<'_, Msg> {
     feather_ui::componentes::lista_suspensa(
-        "Idioma", &["Português (Brasil)", "English (United States)"],
+        tr!("Idioma"), &["Português (Brasil)", "English (United States)"],
         Some(if app.config.idioma == "en-US" { "English (United States)" } else { "Português (Brasil)" }),
         |v| Msg::Idioma(if v == "English (United States)" { "en-US" } else { "pt-BR" }),
         210.0,
@@ -136,9 +136,9 @@ pub(super) fn amostras_acento(app: &App) -> Element<'_, Msg> {
 }
 
 pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
-    let secoes = ["Aparência", "Salvamento", "Planilha", "OpenQuery", "Atalhos", "Sobre"];
+    let secoes = [tr!("Aparência"), tr!("Salvamento"), tr!("Planilha"), "OpenQuery", tr!("Atalhos"), tr!("Sobre")];
     let menu = feather_ui::configuracoes::menu(
-        "Configurações",
+        tr!("Configurações"),
         secoes.iter().enumerate().map(|(i, nome)|
             ((*nome).to_string(), i == app.config_secao, Msg::SecaoConfig(i))),
     );
@@ -148,173 +148,173 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
             let minimo = nome_zoom(ZOOM_LIMITES, app.config.zoom_minimo);
             let maximo = nome_zoom(ZOOM_LIMITES, app.config.zoom_maximo);
             iced::widget::column![
-                linha("Tema", "Automático acompanha o sistema na abertura.", opcoes_tema(app)),
-                linha("Cor de destaque", "Personaliza a interface.", amostras_acento(app)),
-                linha("Zoom padrão", "Aproximação aplicada à grade e salva localmente.",
+                linha(tr!("Tema"), tr!("Automático acompanha o sistema na abertura."), opcoes_tema(app)),
+                linha(tr!("Cor de destaque"), tr!("Personaliza a interface."), amostras_acento(app)),
+                linha(tr!("Zoom padrão"), tr!("Aproximação aplicada à grade e salva localmente."),
                     feather_ui::componentes::lista_suspensa(
-                        "Zoom", ZOOM_OPCOES,
+                        tr!("Zoom"), ZOOM_OPCOES,
                         escolhido,
                         |v| Msg::Zoom(v.trim_end_matches('%').parse().unwrap_or(100)),
                         115.0,
                     )),
-                linha("Limites de zoom", "Define a faixa permitida (25% a 400%).",
+                linha(tr!("Limites de zoom"), tr!("Define a faixa permitida (25% a 400%)."),
                     row![
-                        text("Mín.").size(11).color(COR_TEXTO_MUTED()),
+                        text(tr!("Mín.")).size(11).color(COR_TEXTO_MUTED()),
                         feather_ui::componentes::lista_suspensa(
-                            "Mínimo", ZOOM_LIMITES, minimo,
+                            tr!("Mínimo"), ZOOM_LIMITES, minimo,
                             |v| Msg::ZoomMinimo(v.trim_end_matches('%').parse().unwrap_or(50)),
                             102.0,
                         ),
-                        text("Máx.").size(11).color(COR_TEXTO_MUTED()),
+                        text(tr!("Máx.")).size(11).color(COR_TEXTO_MUTED()),
                         feather_ui::componentes::lista_suspensa(
-                            "Máximo", ZOOM_LIMITES, maximo,
+                            tr!("Máximo"), ZOOM_LIMITES, maximo,
                             |v| Msg::ZoomMaximo(v.trim_end_matches('%').parse().unwrap_or(200)),
                             102.0,
                         ),
                     ].spacing(6).align_y(Alignment::Center)),
-                linha("Letra da grade", "Aplicada às células sem fonte própria.",
+                linha(tr!("Letra da grade"), tr!("Aplicada às células sem fonte própria."),
                     feather_ui::componentes::lista_suspensa(
-                        "Fonte", &["Sem serifa", "Com serifa", "Monoespaçada"],
+                        tr!("Fonte"), crate::idioma::lista(&["Sem serifa", "Com serifa", "Monoespaçada"]),
                         Some(match app.config.fonte_grade.as_str() {
-                            "mono" => "Monoespaçada", "serif" => "Com serifa", _ => "Sem serifa",
+                            "mono" => tr!("Monoespaçada"), "serif" => tr!("Com serifa"), _ => tr!("Sem serifa"),
                         }),
-                        |v| Msg::FonteGrade(match v {
+                        |v| Msg::FonteGrade(match crate::idioma::chave_de(&[tr!("Monoespaçada"), tr!("Com serifa")], v).unwrap_or("") {
                             "Monoespaçada" => "mono", "Com serifa" => "serif", _ => "sans",
                         }),
                         152.0,
                     )),
-                linha("Corpo da letra", "Tamanho padrão em pixels.",
+                linha(tr!("Corpo da letra"), tr!("Tamanho padrão em pixels."),
                     feather_ui::componentes::lista_suspensa(
-                        "Tamanho", &["11", "12", "13", "14", "16"],
+                        tr!("Tamanho"), &["11", "12", "13", "14", "16"],
                         Some(match app.config.tamanho_fonte_grade {
                             11 => "11", 12 => "12", 14 => "14", 16 => "16", _ => "13",
                         }),
                         |v| Msg::CorpoGrade(v.parse().unwrap_or(13)),
                         94.0,
                     )),
-                linha("Barra de janela", "Reinicie para aplicar a alteração.",
+                linha(tr!("Barra de janela"), tr!("Reinicie para aplicar a alteração."),
                     feather_ui::componentes::lista_suspensa(
-                        "Barra", &["Personalizada", "Sistema"],
-                        Some(if app.config.barra_propria { "Personalizada" } else { "Sistema" }),
-                        |v| Msg::BarraPropria(v == "Personalizada"),
+                        tr!("Barra"), crate::idioma::lista(&["Personalizada", "Sistema"]),
+                        Some(if app.config.barra_propria { tr!("Personalizada") } else { tr!("Sistema") }),
+                        |v| Msg::BarraPropria(v == tr!("Personalizada")),
                         145.0,
                     )),
-                text("Esquemas completos de cores ainda não estão disponíveis no motor nativo.")
+                text(tr!("Esquemas completos de cores ainda não estão disponíveis no motor nativo."))
                     .size(11).color(COR_TEXTO_MUTED()),
             ].spacing(0).into()
         }
         1 => {
             let nome = app.caminho.as_ref().and_then(|p| p.file_name())
                 .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "Nenhum arquivo salvo ainda".to_owned());
+                .unwrap_or_else(|| tr!("Nenhum arquivo salvo ainda").to_owned());
             iced::widget::column![
-                linha("Salvar", &nome,
+                linha(tr!("Salvar"), &nome,
                     row![
-                        opcao("Salvar agora", "device-floppy", false, Msg::Salvar),
-                        opcao("Salvar como…", "file-export", false, Msg::SalvarComo),
+                        opcao(tr!("Salvar agora"), "device-floppy", false, Msg::Salvar),
+                        opcao(tr!("Salvar como…"), "file-export", false, Msg::SalvarComo),
                     ].spacing(6)),
                 linhas_salvamento(app),
-                linha("Cópia de segurança",
-                    "Cria uma cópia independente do último .fshz salvo, sem carregar seus dados na RAM.",
+                linha(tr!("Cópia de segurança"),
+                    tr!("Cria uma cópia independente do último .fshz salvo, sem carregar seus dados na RAM."),
                     row![
-                        opcao("Criar backup", "copy", false, Msg::BackupCriar),
-                        opcao("Recuperar cópia…", "folder-open", false, Msg::RecuperarTemporario),
+                        opcao(tr!("Criar backup"), "copy", false, Msg::BackupCriar),
+                        opcao(tr!("Recuperar cópia…"), "folder-open", false, Msg::RecuperarTemporario),
                     ].spacing(6)),
-                text("O salvamento automático não substitui cópias de segurança. Para documentos novos, use Salvar como… primeiro.")
+                text(tr!("O salvamento automático não substitui cópias de segurança. Para documentos novos, use Salvar como… primeiro."))
                     .size(11).color(COR_TEXTO_MUTED()),
             ].spacing(0).into()
         }
         2 => iced::widget::column![
-            linha("Idioma das fórmulas e da Ajuda", "Muda nomes das funções (SOMA ou SUM), separadores (; ou ,) e a Ajuda F1. Menus e janelas ainda são só em português.",
+            linha(tr!("Idioma"), tr!("Muda nomes das funções (SOMA ou SUM), separadores (; ou ,) e a Ajuda F1."),
                 lista_idioma(app)),
-            linha("Separadores de fórmulas e texto/CSV", "Definidos pelo idioma; Padrão aplicado às fórmulas e ao texto/CSV.",
-                text(if app.config.idioma == "en-US" { "Vírgula (,)" } else { "Ponto e vírgula (;)" }).size(12)),
-            linha("Detectar separador do arquivo CSV", "Desligado: usa o idioma (; em português, , em inglês). Ligado: detecta um único separador; os demais ficam no texto.",
+            linha(tr!("Separadores de fórmulas e texto/CSV"), tr!("Definidos pelo idioma; Padrão aplicado às fórmulas e ao texto/CSV."),
+                text(if app.config.idioma == "en-US" { tr!("Vírgula (,)") } else { tr!("Ponto e vírgula (;)") }).size(12)),
+            linha(tr!("Detectar separador do arquivo CSV"), tr!("Desligado: usa o idioma (; em português, , em inglês). Ligado: detecta um único separador; os demais ficam no texto."),
                 toggler(app.config.csv_detectar_separador).on_toggle(Msg::CsvDetectarSeparador).style(estilo_toggle)),
-            linha("Linhas de grade", "Mostra ou oculta o quadriculado das células.",
+            linha(tr!("Linhas de grade"), tr!("Mostra ou oculta o quadriculado das células."),
                 toggler(app.linhas_grade).on_toggle(Msg::LinhasGrade).style(estilo_toggle)),
-            linha("Barra de fórmulas", "Campo fx acima da planilha.",
+            linha(tr!("Barra de fórmulas"), tr!("Campo fx acima da planilha."),
                 toggler(app.mostrar_fx).on_toggle(|_| Msg::AlternarBarraFx).style(estilo_toggle)),
-            linha("Mostrar fórmulas", "Mostra a expressão em vez do resultado.",
+            linha(tr!("Mostrar fórmulas"), tr!("Mostra a expressão em vez do resultado."),
                 toggler(app.mostrar_formulas).on_toggle(|_| Msg::AlternarMostrarFormulas).style(estilo_toggle)),
-            linha("Realçar linha e coluna", "Destaca os eixos da célula selecionada.",
+            linha(tr!("Realçar linha e coluna"), tr!("Destaca os eixos da célula selecionada."),
                 toggler(app.config.realce_eixos).on_toggle(Msg::RealceEixos).style(estilo_toggle)),
-            linha("Faixa de opções", "Ctrl+F1 recolhe ou expande a faixa.",
+            linha(tr!("Faixa de opções"), tr!("Ctrl+F1 recolhe ou expande a faixa."),
                 toggler(!app.config.faixa_recolhida).on_toggle(|_| Msg::Faixa).style(estilo_toggle)),
-            linha("Monitor de atividade", "CPU, memória e informações da sessão.",
-                opcao("Abrir monitor", "device-desktop", false, Msg::Monitor)),
-            linha("Vigia de memória ao abrir",
+            linha(tr!("Monitor de atividade"), tr!("CPU, memória e informações da sessão."),
+                opcao(tr!("Abrir monitor"), "device-desktop", false, Msg::Monitor)),
+            linha(tr!("Vigia de memória ao abrir"),
                 &descricao_memoria(),
                 feather_ui::componentes::lista_suspensa(
-                    "Limite", super::limite_memoria::opcoes_limite(),
+                    tr!("Limite"), crate::idioma::lista(super::limite_memoria::opcoes_limite()),
                     Some(match app.config.limite_memoria_gb {
-                        0 => "0 GB (desligado)", 2 => "2 GB", 4 => "4 GB", 8 => "8 GB",
+                        0 => tr!("0 GB (desligado)"), 2 => "2 GB", 4 => "4 GB", 8 => "8 GB",
                         12 => "12 GB", 16 => "16 GB", 32 => "32 GB", 64 => "64 GB",
                         128 => "128 GB", _ => "6 GB",
                     }),
                     |v| Msg::LimiteMemoriaGb(v.split_whitespace().next().unwrap_or("6").parse().unwrap_or(6)),
                     165.0,
                 )),
-            linha("Núcleos para abrir e calcular",
+            linha(tr!("Núcleos para abrir e calcular"),
                 &descricao_nucleos(),
                 feather_ui::componentes::lista_suspensa(
-                    "Núcleos", &NUCLEOS[..feathersheet_core::paralelismo::maximo().min(NUCLEOS.len())],
+                    tr!("Núcleos"), &NUCLEOS[..feathersheet_core::paralelismo::maximo().min(NUCLEOS.len())],
                     NUCLEOS.get(feathersheet_core::paralelismo::nucleos().saturating_sub(1)).copied(),
                     |v| Msg::Nucleos(v.parse().unwrap_or(0)),
                     165.0,
                 )),
-            linha("Janela no Linux (Wayland)",
-                "Com mesa digitalizadora a janela abre pelo XWayland: no Wayland nativo a ponta da caneta não clica. Vale na próxima abertura.",
+            linha(tr!("Janela no Linux (Wayland)"),
+                tr!("Com mesa digitalizadora a janela abre pelo XWayland: no Wayland nativo a ponta da caneta não clica. Vale na próxima abertura."),
                 feather_ui::componentes::lista_suspensa(
-                    "Janela", &crate::configuracao::ROTULOS_JANELAS_LINUX,
-                    crate::configuracao::JANELAS_LINUX.iter().find(|(_, v)| *v == app.config.janela_linux).map(|(r, _)| *r),
+                    tr!("Janela"), crate::idioma::lista(&crate::configuracao::ROTULOS_JANELAS_LINUX),
+                    crate::configuracao::JANELAS_LINUX.iter().find(|(_, v)| *v == app.config.janela_linux).map(|(r, _)| tr!(*r)),
                     |r| Msg::Caneta(super::desenhar::AjusteCaneta::Janela(
-                        crate::configuracao::JANELAS_LINUX.iter().find(|(x, _)| *x == r).map_or("auto", |(_, v)| *v))),
+                        crate::configuracao::JANELAS_LINUX.iter().find(|(x, _)| tr!(*x) == r).map_or("auto", |(_, v)| *v))),
                     230.0,
                 )),
-            linha("Caneta: usar pressão da mesa",
-                "Lê a força da caneta (XInput2 numa janela X11/XWayland, Windows Ink no Windows). Vale na próxima abertura.",
+            linha(tr!("Caneta: usar pressão da mesa"),
+                tr!("Lê a força da caneta (XInput2 numa janela X11/XWayland, Windows Ink no Windows). Vale na próxima abertura."),
                 toggler(app.config.caneta_pressao)
                     .on_toggle(|v| Msg::Caneta(super::desenhar::AjusteCaneta::Pressao(v))).style(estilo_toggle)),
-            linha("Curva da pressão", "Leve: pouca força já engrossa o traço. Firme: pede mais força.",
+            linha(tr!("Curva da pressão"), tr!("Leve: pouca força já engrossa o traço. Firme: pede mais força."),
                 feather_ui::componentes::lista_suspensa(
-                    "Curva", &crate::configuracao::ROTULOS_CURVAS_CANETA,
-                    crate::configuracao::CURVAS_CANETA.iter().find(|(_, g)| *g == app.config.caneta_gama).map(|(n, _)| *n),
+                    tr!("Curva"), crate::idioma::lista(&crate::configuracao::ROTULOS_CURVAS_CANETA),
+                    crate::configuracao::CURVAS_CANETA.iter().find(|(_, g)| *g == app.config.caneta_gama).map(|(n, _)| tr!(*n)),
                     |v| Msg::Caneta(super::desenhar::AjusteCaneta::Curva(
-                        crate::configuracao::CURVAS_CANETA.iter().find(|(n, _)| *n == v).map_or(0.75, |(_, g)| *g))),
+                        crate::configuracao::CURVAS_CANETA.iter().find(|(n, _)| tr!(*n) == v).map_or(0.75, |(_, g)| *g))),
                     165.0,
                 )),
-            linha("Sem mesa: espessura pela velocidade", "Com mouse ou caneta sem pressão, o traço rápido sai mais fino.",
+            linha(tr!("Sem mesa: espessura pela velocidade"), tr!("Com mouse ou caneta sem pressão, o traço rápido sai mais fino."),
                 toggler(app.config.caneta_velocidade)
                     .on_toggle(|v| Msg::Caneta(super::desenhar::AjusteCaneta::Velocidade(v))).style(estilo_toggle)),
-            linha("Mostrar a pressão durante o traço", "Indicador \"pressão 0,63\" no canto da planilha (para testar a mesa).",
+            linha(tr!("Mostrar a pressão durante o traço"), tr!("Indicador \"pressão 0,63\" no canto da planilha (para testar a mesa)."),
                 toggler(app.config.caneta_mostrar_pressao)
                     .on_toggle(|v| Msg::Caneta(super::desenhar::AjusteCaneta::MostrarPressao(v))).style(estilo_toggle)),
-            linha("Caneta entra no modo desenhar automaticamente",
-                "Encostar a ponta na planilha já risca (a borracha da caneta apaga); o mouse ou Esc voltam à seleção. Faixa, menus e janelas continuam recebendo clique.",
+            linha(tr!("Caneta entra no modo desenhar automaticamente"),
+                tr!("Encostar a ponta na planilha já risca (a borracha da caneta apaga); o mouse ou Esc voltam à seleção. Faixa, menus e janelas continuam recebendo clique."),
                 toggler(app.config.caneta_auto_desenhar)
                     .on_toggle(|v| Msg::Caneta(super::desenhar::AjusteCaneta::AutoDesenhar(v))).style(estilo_toggle)),
-            text("Largura/altura padrão e estilo inicial de tabelas ainda dependem de integração adicional ao motor Rust.")
+            text(tr!("Largura/altura padrão e estilo inicial de tabelas ainda dependem de integração adicional ao motor Rust."))
                 .size(11).color(COR_TEXTO_MUTED()),
         ].spacing(0).into(),
         3 => iced::widget::column![
             text("OpenQuery").size(16).color(COR_TEXTO()),
-            text("O editor de consultas do TypeScript ainda não foi integrado ao FeatherSheet nativo.")
+            text(tr!("O editor de consultas do TypeScript ainda não foi integrado ao FeatherSheet nativo."))
                 .size(12).color(COR_TEXTO_MUTED()),
-            text("O limite padrão de pré-visualização será configurável quando o executor de consultas estiver disponível. Nenhuma consulta será modificada por esta tela.")
+            text(tr!("O limite padrão de pré-visualização será configurável quando o executor de consultas estiver disponível. Nenhuma consulta será modificada por esta tela."))
                 .size(12).color(COR_TEXTO_MUTED()),
         ].spacing(12).into(),
         4 => {
             let mut col = iced::widget::column![
-                linha("Personalizar atalhos",
-                    "Selecione uma combinação e pressione o novo atalho. Esc cancela.",
-                    opcao("Restaurar padrões", "refresh", false, Msg::RestaurarAtalhos)),
+                linha(tr!("Personalizar atalhos"),
+                    tr!("Selecione uma combinação e pressione o novo atalho. Esc cancela."),
+                    opcao(tr!("Restaurar padrões"), "refresh", false, Msg::RestaurarAtalhos)),
             ].spacing(0);
             for &(id, rotulo, padrao) in ATALHOS {
                 let capturando = app.atalho_captura == Some(id);
                 let atual = app.config.atalhos.get(id).map(String::as_str).unwrap_or(padrao);
-                col = col.push(linha(rotulo, &format!("Padrão: {padrao}"),
-                    button(text(if capturando { "Pressione teclas…".to_owned() } else { atual.to_owned() }).size(12))
+                col = col.push(linha(tr!(rotulo), &trf!("Padrão: {padrao}"),
+                    button(text(if capturando { tr!("Pressione teclas…").to_owned() } else { atual.to_owned() }).size(12))
                         .padding([7, 12])
                         .width(Length::Fixed(154.0))
                         .style(estilo_botao_pequeno(capturando))
@@ -323,13 +323,13 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
             col.into()
         }
         _ => iced::widget::column![
-            text(format!("FeatherSheet {}", super::atualizacao::versao_atual())).size(17),
+            text(trf!("FeatherSheet {}", super::atualizacao::versao_atual())).size(17),
             secao_atualizacao(app),
-            text("Aplicativo desktop nativo. As células, fórmulas e arquivos são processados localmente.")
+            text(tr!("Aplicativo desktop nativo. As células, fórmulas e arquivos são processados localmente."))
                 .size(12),
-            text("As preferências são guardadas no diretório de configuração do usuário, fora do arquivo da planilha.")
+            text(tr!("As preferências são guardadas no diretório de configuração do usuário, fora do arquivo da planilha."))
                 .size(12),
-            text("Recursos exclusivos do TypeScript permanecem identificados como pendentes, sem controles fictícios.")
+            text(tr!("Recursos exclusivos do TypeScript permanecem identificados como pendentes, sem controles fictícios."))
                 .size(12).color(COR_TEXTO_MUTED()),
             Space::with_height(4),
             feather_ui::creditos::colaboradores(),
@@ -345,29 +345,29 @@ fn secao_atualizacao(app: &App) -> Element<'_, Msg> {
     use super::atualizacao::{instalacao_atual, Estado, Evento};
     let ev = Msg::Atualizacao;
     let inst = instalacao_atual();
-    let procurar = opcao("Procurar atualizações", "refresh", false, ev(Evento::Procurar));
+    let procurar = opcao(tr!("Procurar atualizações"), "refresh", false, ev(Evento::Procurar));
     let estado: Element<'_, Msg> = match &app.atualizacao {
-        Estado::Parado => text("Consulta só github.com/FeatherOffice/feathersheet quando você clicar. Nada sobre você ou suas planilhas é enviado.")
+        Estado::Parado => text(tr!("Consulta só github.com/FeatherOffice/feathersheet quando você clicar. Nada sobre você ou suas planilhas é enviado."))
             .size(11.5).color(COR_TEXTO_MUTED()).into(),
-        Estado::Procurando => text("Procurando no GitHub…").size(12).color(COR_TEXTO_MUTED()).into(),
+        Estado::Procurando => text(tr!("Procurando no GitHub…")).size(12).color(COR_TEXTO_MUTED()).into(),
         Estado::EmDia => row![feather_ui::icones::icone("check", 14.0),
-            text("Você já está na versão mais nova.").size(12)].spacing(6).align_y(Alignment::Center).into(),
+            text(tr!("Você já está na versão mais nova.")).size(12)].spacing(6).align_y(Alignment::Center).into(),
         Estado::Disponivel(l) => {
             let notas: String = l.notas.lines().filter(|x| !x.trim().is_empty()).take(6).collect::<Vec<_>>().join("\n");
-            let mut acoes = row![opcao("Ver no GitHub", "info-circle", false, ev(Evento::AbrirPagina))].spacing(8);
+            let mut acoes = row![opcao(tr!("Ver no GitHub"), "info-circle", false, ev(Evento::AbrirPagina))].spacing(8);
             if inst.arquivo().is_some() {
-                acoes = acoes.push(opcao(&format!("Atualizar para a {}", l.versao), "terminal", true, ev(Evento::Instalar)));
+                acoes = acoes.push(opcao(&trf!("Atualizar para a {}", l.versao), "terminal", true, ev(Evento::Instalar)));
             }
             iced::widget::column![
-                text(format!("Versão {} disponível.", l.versao)).size(13),
+                text(trf!("Versão {} disponível.", l.versao)).size(13),
                 text(notas).size(11.5).color(COR_TEXTO_MUTED()),
                 acoes,
                 text(if inst.pede_senha() {
-                    "Atualizar abre o terminal com os passos à vista: baixa do GitHub, confere o arquivo e instala por cima (pede sua senha lá)."
+                    tr!("Atualizar abre o terminal com os passos à vista: baixa do GitHub, confere o arquivo e instala por cima (pede sua senha lá).")
                 } else if inst.arquivo().is_some() {
-                    "Atualizar abre o terminal com os passos à vista: baixa do GitHub, confere o arquivo e instala por cima."
+                    tr!("Atualizar abre o terminal com os passos à vista: baixa do GitHub, confere o arquivo e instala por cima.")
                 } else {
-                    "Esta cópia não veio de um instalador: baixe a versão nova pela página do GitHub."
+                    tr!("Esta cópia não veio de um instalador: baixe a versão nova pela página do GitHub.")
                 }).size(11).color(COR_TEXTO_MUTED()),
             ].spacing(8).into()
         }
@@ -377,7 +377,7 @@ fn secao_atualizacao(app: &App) -> Element<'_, Msg> {
             .spacing(6).align_y(Alignment::Center).into(),
     };
     iced::widget::column![
-        linha("Atualizações", inst.descricao(), procurar),
+        linha(tr!("Atualizações"), inst.descricao(), procurar),
         estado,
     ].spacing(8).into()
 }
@@ -403,18 +403,18 @@ pub(super) fn comando_do_atalho(app: &App, combo: &str) -> Option<Msg> {
 /// Não permitir combinações globais, edição básica ou duplicadas.
 pub(super) fn atalho_valido(app: &App, id: &str, combo: &str) -> Result<(), &'static str> {
     if !combo.contains('+') || combo.len() > 40 {
-        return Err("Escolha um atalho com Ctrl ou Alt.");
+        return Err(tr!("Escolha um atalho com Ctrl ou Alt."));
     }
     if matches!(combo,
         "Ctrl+C" | "Ctrl+X" | "Ctrl+V" | "Ctrl+Z" | "Ctrl+Y" |
         "Ctrl+B" | "Ctrl+I" | "Ctrl+U" | "Ctrl+N" | "Ctrl+O" |
         "Ctrl+F" | "Ctrl+F1" | "Alt+F11" | "Ctrl+Shift+M"
     ) {
-        return Err("Combinação reservada por outro comando.");
+        return Err(tr!("Combinação reservada por outro comando."));
     }
     for &(outro, _, padrao) in ATALHOS {
         let atual = app.config.atalhos.get(outro).map(String::as_str).unwrap_or(padrao);
-        if outro != id && atual == combo { return Err("Este atalho já está em uso."); }
+        if outro != id && atual == combo { return Err(tr!("Este atalho já está em uso.")); }
     }
     Ok(())
 }

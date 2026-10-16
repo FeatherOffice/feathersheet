@@ -9,20 +9,20 @@ impl App {
         let nome = e.novo_nome.trim().to_owned();
         let formula = e.nova_formula.trim().to_owned();
         if nome.is_empty() || formula.is_empty() {
-            self.status = "Informe nome e fórmula para o campo calculado.".into();
+            self.status = tr!("Informe nome e fórmula para o campo calculado.").into();
             return;
         }
         if e.nomes.iter().any(|existente| existente.eq_ignore_ascii_case(&nome)) {
-            self.status = format!("O campo '{nome}' já existe na tabela dinâmica.");
+            self.status = trf!("O campo '{nome}' já existe na tabela dinâmica.");
             return;
         }
         let real = e.nomes.len().saturating_sub(e.calculados.len());
         if (e.origem.c1 as usize) + e.calculados.len() + 1 >= MAX_COLS as usize {
-            self.status = "Não existem mais colunas disponíveis para campos calculados.".into();
+            self.status = tr!("Não existem mais colunas disponíveis para campos calculados.").into();
             return;
         }
         if let Err(msg) = campo_calculado::compilar(&formula, &e.nomes[..real]) {
-            self.status = format!("Fórmula inválida: {msg}");
+            self.status = trf!("Fórmula inválida: {msg}");
             return;
         }
         let col = e.origem.c1 as usize + 1 + e.calculados.len();
@@ -32,7 +32,7 @@ impl App {
         e.novo_nome.clear();
         e.nova_formula.clear();
         e.previa_calculado = None;
-        self.status = "Campo calculado adicionado. Clique em Criar/Aplicar para atualizar o resultado.".into();
+        self.status = tr!("Campo calculado adicionado. Clique em Criar/Aplicar para atualizar o resultado.").into();
     }
 
     pub(super) fn remover_campo_calculado(&mut self, indice: usize) {
@@ -83,14 +83,14 @@ impl App {
                 .on_press(Msg::Dinamica(Evento::Recolher(caminho.clone()))));
         }
         let painel_grupos: Element<'a, Msg> = if e.grupos.is_empty() {
-            text("Os grupos aparecem depois que a tabela tiver linhas agrupadas.")
+            text(tr!("Os grupos aparecem depois que a tabela tiver linhas agrupadas."))
                 .size(11).color(COR_TEXTO_MUTED()).into()
         } else {
             column![
                 row![
-                    button(text("Recolher tudo").size(11)).style(estilo_botao_secundario)
+                    button(text(tr!("Recolher tudo")).size(11)).style(estilo_botao_secundario)
                         .on_press(Msg::Dinamica(Evento::RecolherTodos(true))),
-                    button(text("Expandir tudo").size(11)).style(estilo_botao_secundario)
+                    button(text(tr!("Expandir tudo")).size(11)).style(estilo_botao_secundario)
                         .on_press(Msg::Dinamica(Evento::RecolherTodos(false))),
                 ].spacing(6),
                 scrollable(grupos).height(Length::Fixed(90.0)),
@@ -106,48 +106,48 @@ impl App {
             ].spacing(6).align_y(Alignment::Center));
         }
         let previa: Element<'a, Msg> = if let Some(valores) = &e.previa_calculado {
-            text(format!("Prévia: {}", valores.iter().map(|v| v.to_string())
+            text(trf!("Prévia: {}", valores.iter().map(|v| v.to_string())
                 .collect::<Vec<_>>().join(" · "))).size(11).color(COR_TEXTO_MUTED()).into()
         } else { Space::with_height(0).into() };
         let titulo = |t: &'static str| text(t).size(10.5).color(COR_TEXTO_MUTED());
         column![
             titulo("LAYOUT"),
-            linha("Formato do relatório", row![
-                segmento("Compacto", !tabular, Msg::Dinamica(Evento::LayoutEscolher(false))),
-                segmento("Tabular", tabular, Msg::Dinamica(Evento::LayoutEscolher(true))),
+            linha(tr!("Formato do relatório"), row![
+                segmento(tr!("Compacto"), !tabular, Msg::Dinamica(Evento::LayoutEscolher(false))),
+                segmento(tr!("Tabular"), tabular, Msg::Dinamica(Evento::LayoutEscolher(true))),
             ].spacing(4).into()),
-            linha("Repetir rótulos", toggler(e.repetir_rotulos)
+            linha(tr!("Repetir rótulos"), toggler(e.repetir_rotulos)
                 .on_toggle(|_| Msg::Dinamica(Evento::RepetirRotulos)).style(estilo_toggle).into()),
-            linha("Subtotais", toggler(e.subtotais)
+            linha(tr!("Subtotais"), toggler(e.subtotais)
                 .on_toggle(|_| Msg::Dinamica(Evento::Subtotais)).style(estilo_toggle).into()),
-            linha("Agrupar datas", pick_list(rotulos_agrupar, Some(rotulo_agrupamento(e.agrupar_data)),
+            linha(tr!("Agrupar datas"), pick_list(rotulos_agrupar, Some(rotulo_agrupamento(e.agrupar_data)),
                 |escolha| Msg::Dinamica(Evento::AgruparEscolher(
                     AGRUPAR.into_iter().find(|m| rotulo_agrupamento(*m) == escolha).flatten())))
                 .text_size(11.5).padding([4, 8]).into()),
-            linha("Cores", pick_list(TEMAS_DINAMICA, TEMAS_DINAMICA.iter().copied().find(|t| *t == e.tema),
+            linha(tr!("Cores"), pick_list(TEMAS_DINAMICA, TEMAS_DINAMICA.iter().copied().find(|t| *t == e.tema),
                 |t| Msg::Dinamica(Evento::TemaEscolher(t)))
                 .text_size(11.5).padding([4, 8]).into()),
-            titulo("ORIGEM DOS DADOS"),
+            titulo(tr!("ORIGEM DOS DADOS")),
             row![
                 text_input("A1:D100", &e.origem_texto)
                     .on_input(|v| Msg::Dinamica(Evento::OrigemTexto(v)))
                     .on_submit(Msg::Dinamica(Evento::OrigemAplicar)).padding(5).size(12),
-                button(text("Aplicar").size(11.5)).style(estilo_botao_secundario)
+                button(text(tr!("Aplicar")).size(11.5)).style(estilo_botao_secundario)
                     .on_press(Msg::Dinamica(Evento::OrigemAplicar)),
             ].spacing(6).align_y(Alignment::Center),
             titulo("GRUPOS"),
             painel_grupos,
-            titulo("CAMPOS CALCULADOS"),
+            titulo(tr!("CAMPOS CALCULADOS")),
             calculados,
-            text_input("Nome do campo", &e.novo_nome)
+            text_input(tr!("Nome do campo"), &e.novo_nome)
                 .on_input(|s| Msg::Dinamica(Evento::NomeCalculado(s))).padding(6).size(12),
-            text_input("Fórmula: [Preço] * Quantidade", &e.nova_formula)
+            text_input(tr!("Fórmula: [Preço] * Quantidade"), &e.nova_formula)
                 .on_input(|s| Msg::Dinamica(Evento::FormulaCalculado(s))).padding(6).size(12),
             row![
                 Space::with_width(Length::Fill),
-                button(text("Prévia").size(11.5)).style(estilo_botao_secundario)
+                button(text(tr!("Prévia")).size(11.5)).style(estilo_botao_secundario)
                     .on_press(Msg::Dinamica(Evento::PreviaCalculado)),
-                button(text("Adicionar").size(11.5)).style(estilo_botao_primario)
+                button(text(tr!("Adicionar")).size(11.5)).style(estilo_botao_primario)
                     .on_press(Msg::Dinamica(Evento::AdicionarCalculado)),
             ].spacing(6),
             previa,

@@ -21,14 +21,14 @@ impl App {
                     text(meaning).size(13).color(COR_TEXTO()),
                 ].spacing(10).align_y(Alignment::Center))
                 .push(text(summary).size(12.5).line_height(1.4))
-                .push(dlg::secao("Caminho do erro"));
+                .push(dlg::secao(tr!("Caminho do erro")));
             let mut passos = column![].spacing(6);
             for (indice, passo) in steps.iter().enumerate() {
                 let mut detalhe = column![
                     text(format!("{}. {}", indice + 1, passo.cell)).size(13).font(semibold),
-                    text(format!("Fórmula: {}", passo.formula)).size(12).font(iced::Font::MONOSPACE)
+                    text(trf!("Fórmula: {}", passo.formula)).size(12).font(iced::Font::MONOSPACE)
                         .color(COR_TEXTO_MUTED()),
-                    text(format!("Trecho: {}", passo.culprit)).size(12).color(COR_TEXTO_MUTED()),
+                    text(trf!("Trecho: {}", passo.culprit)).size(12).color(COR_TEXTO_MUTED()),
                 ].spacing(3);
                 if let Some(onde) = &passo.onde {
                     detalhe = detalhe.push(text(onde.clone()).size(12).color(COR_TEXTO_MUTED()));
@@ -36,7 +36,7 @@ impl App {
                 passos = passos.push(container(
                     row![
                         detalhe.width(Length::Fill),
-                        button(row![feather_ui::icones::icone("chevron-right", 14.0), text("Ir para").size(12.5)]
+                        button(row![feather_ui::icones::icone("chevron-right", 14.0), text(tr!("Ir para")).size(12.5)]
                             .spacing(4).align_y(Alignment::Center))
                             .padding([5, 10])
                             .on_press(Msg::ExplicacaoErroIrPara(indice))
@@ -46,15 +46,15 @@ impl App {
             }
             conteudo = conteudo
                 .push(passos)
-                .push(dlg::secao("Como corrigir"))
+                .push(dlg::secao(tr!("Como corrigir")))
                 .push(text(hint).size(12.5).line_height(1.4));
         } else {
             conteudo = conteudo.push(dlg::aviso_vazio(
-                "Esta célula não contém um erro de fórmula no momento."));
+                tr!("Esta célula não contém um erro de fórmula no momento.")));
         }
-        Some(self.dialogo("Diagnóstico de fórmula", conteudo)
+        Some(self.dialogo(tr!("Diagnóstico de fórmula"), conteudo)
             .icone("bug")
-            .subtitulo(format!("Célula {referencia}"))
+            .subtitulo(trf!("Célula {referencia}"))
             .largura(560.0)
             .ao_fechar(Msg::ExplicacaoErroFechar))
     }

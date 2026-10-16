@@ -28,7 +28,7 @@ pub(in crate::app) fn nome(id: &str) -> String {
 /// Nome para a barra de status: "Ícone home" ou o nome da forma.
 pub(in crate::app) fn nome_objeto(o: &feathersheet_io::objetos_aba::ObjetoSolto) -> String {
     match o.tipo {
-        feathersheet_io::objetos_aba::TipoObjeto::Icone => format!("Ícone {}", o.forma.replace('-', " ")),
+        feathersheet_io::objetos_aba::TipoObjeto::Icone => trf!("Ícone {}", o.forma.replace('-', " ")),
         feathersheet_io::objetos_aba::TipoObjeto::Wordart => "WordArt".to_owned(),
         _ => nome(&o.forma),
     }

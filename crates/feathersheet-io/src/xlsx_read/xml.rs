@@ -191,6 +191,296 @@ fn parse_xml_impl<R: BufRead>(
     })
 }
 
+// ---------------------------------------------------------------- linhas rápidas
+
+/// Texto com "existe ou não", reaproveitando a memória de uma linha para a
+/// outra (`limpar` não devolve a capacidade).
+#[derive(Debug, Default)]
+pub struct Campo {
+    tem: bool,
+    texto: String,
+}
+
+impl Campo {
+    fn limpar(&mut self) {
+        self.tem = false;
+        self.texto.clear();
+    }
+    fn definir(&mut self, valor: &str) {
+        self.tem = true;
+        self.texto.clear();
+        self.texto.push_str(valor);
+    }
+    fn marcar(&mut self) {
+        self.tem = true;
+    }
+    pub fn get(&self) -> Option<&str> {
+        self.tem.then_some(self.texto.as_str())
+    }
+}
+
+/// Uma `<c>` do `sheetData`, só com o que a importação usa: atributos
+/// `r`/`s`/`t`/`cm`, a `<f>` (texto e `t`/`si`/`ref`), o texto do `<v>` e o
+/// texto inline (`<is>`, das `<t>` diretas ou das `<r><t>`, sem as `<rPh>`).
+#[derive(Debug, Default)]
+pub struct CelulaXml {
+    pub r: Campo,
+    pub s: Campo,
+    pub t: Campo,
+    pub cm: Campo,
+    pub f: Campo,
+    pub f_t: Campo,
+    pub f_si: Campo,
+    pub f_ref: Campo,
+    pub v: Campo,
+    pub inline: Campo,
+}
+
+impl CelulaXml {
+    fn limpar(&mut self) {
+        for c in [&mut self.r, &mut self.s, &mut self.t, &mut self.cm, &mut self.f, &mut self.f_t,
+            &mut self.f_si, &mut self.f_ref, &mut self.v, &mut self.inline] {
+            c.limpar();
+        }
+    }
+    pub fn attr(&self, nome: &str) -> Option<&str> {
+        match nome {
+            "r" => self.r.get(),
+            "s" => self.s.get(),
+            "t" => self.t.get(),
+            "cm" => self.cm.get(),
+            _ => None,
+        }
+    }
+}
+
+/// Uma `<row>`: os atributos que a importação lê e as células. As células
+/// e os textos são reaproveitados linha a linha: ler 13 milhões de células
+/// não cria um objeto (nem um mapa de atributos) por nó, como a árvore.
+#[derive(Debug, Default)]
+pub struct LinhaXml {
+    pub r: Campo,
+    pub s: Campo,
+    pub custom_format: Campo,
+    pub hidden: Campo,
+    pub ht: Campo,
+    pub custom_height: Campo,
+    pub outline_level: Campo,
+    pub collapsed: Campo,
+    celulas: Vec<CelulaXml>,
+    usadas: usize,
+}
+
+impl LinhaXml {
+    fn limpar(&mut self) {
+        for c in [&mut self.r, &mut self.s, &mut self.custom_format, &mut self.hidden, &mut self.ht,
+            &mut self.custom_height, &mut self.outline_level, &mut self.collapsed] {
+            c.limpar();
+        }
+        self.usadas = 0;
+    }
+    fn nova_celula(&mut self) -> &mut CelulaXml {
+        if self.usadas == self.celulas.len() {
+            self.celulas.push(CelulaXml::default());
+        }
+        let c = &mut self.celulas[self.usadas];
+        c.limpar();
+        self.usadas += 1;
+        c
+    }
+    pub fn celulas(&self) -> &[CelulaXml] {
+        &self.celulas[..self.usadas]
+    }
+    pub fn attr(&self, nome: &str) -> Option<&str> {
+        match nome {
+            "r" => self.r.get(),
+            "s" => self.s.get(),
+            "customFormat" => self.custom_format.get(),
+            "hidden" => self.hidden.get(),
+            "ht" => self.ht.get(),
+            "customHeight" => self.custom_height.get(),
+            "outlineLevel" => self.outline_level.get(),
+            "collapsed" => self.collapsed.get(),
+            _ => None,
+        }
+    }
+}
+
+/// Nome local (sem prefixo de namespace), sem alocar.
+fn local(raw: &[u8]) -> &[u8] {
+    match raw.iter().position(|b| *b == b':') {
+        Some(i) => &raw[i + 1..],
+        None => raw,
+    }
+}
+
+/// Copia os atributos pedidos de um elemento para os campos, sem mapa.
+fn atributos(e: &quick_xml::events::BytesStart, decoder: quick_xml::Decoder,
+    campos: &mut [(&[u8], &mut Campo)]) {
+    for a in e.attributes().flatten() {
+        let chave = a.key.as_ref();
+        if let Some((_, campo)) = campos.iter_mut().find(|(nome, _)| *nome == chave) {
+            match a.decode_and_unescape_value(decoder) {
+                Ok(v) => campo.definir(&v),
+                Err(_) => campo.marcar(),
+            }
+        }
+    }
+}
+
+/// `&amp;`, `&#233;`… como o leitor da árvore resolve.
+fn entidade(e: &quick_xml::events::BytesRef) -> Option<String> {
+    e.resolve_char_ref().ok().flatten().map(|c| c.to_string()).or_else(|| {
+        let nome = e.decode().ok()?;
+        Some(match nome.as_ref() {
+            "lt" => "<", "gt" => ">", "amp" => "&", "quot" => "\"", "apos" => "'",
+            _ => return None,
+        }.to_string())
+    })
+}
+
+/// Para onde vai o texto lido dentro da célula.
+#[derive(Clone, Copy, PartialEq)]
+enum Alvo { Nada, F, V, Inline }
+
+/// Lê o conteúdo de uma `<row>` já aberta até o `</row>`.
+fn ler_linha<R: BufRead>(reader: &mut Reader<R>, buf: &mut Vec<u8>, linha: &mut LinhaXml) -> Result<(), String> {
+    let mut alvo = Alvo::Nada;
+    let mut dentro_is = false;
+    let mut em_rph = false;
+    loop {
+        buf.clear();
+        let decoder = reader.decoder();
+        let evento = reader.read_event_into(buf).map_err(|e| format!("XML inválido: {e}"))?;
+        match evento {
+            Event::Start(ref e) | Event::Empty(ref e) => {
+                let vazio = matches!(evento, Event::Empty(_));
+                match local(e.name().as_ref()) {
+                    b"c" => {
+                        let c = linha.nova_celula();
+                        atributos(e, decoder, &mut [(b"r", &mut c.r), (b"s", &mut c.s), (b"t", &mut c.t), (b"cm", &mut c.cm)]);
+                        alvo = Alvo::Nada;
+                    }
+                    b"f" if linha.usadas > 0 => {
+                        let c = &mut linha.celulas[linha.usadas - 1];
+                        c.f.marcar();
+                        atributos(e, decoder, &mut [(b"t", &mut c.f_t), (b"si", &mut c.f_si), (b"ref", &mut c.f_ref)]);
+                        if !vazio { alvo = Alvo::F; }
+                    }
+                    b"v" if linha.usadas > 0 => {
+                        linha.celulas[linha.usadas - 1].v.marcar();
+                        if !vazio { alvo = Alvo::V; }
+                    }
+                    b"is" if linha.usadas > 0 => {
+                        linha.celulas[linha.usadas - 1].inline.marcar();
+                        dentro_is = !vazio;
+                    }
+                    b"rPh" if dentro_is && !vazio => em_rph = true,
+                    b"t" if dentro_is && !em_rph && !vazio => alvo = Alvo::Inline,
+                    _ => {}
+                }
+            }
+            Event::End(ref e) => match local(e.name().as_ref()) {
+                b"row" => return Ok(()),
+                b"f" | b"v" | b"t" => alvo = Alvo::Nada,
+                b"is" => dentro_is = false,
+                b"rPh" => em_rph = false,
+                _ => {}
+            },
+            Event::Text(ref e) if alvo != Alvo::Nada => {
+                let txt = e.decode().unwrap_or_default();
+                empurrar(linha, alvo, &txt);
+            }
+            Event::GeneralRef(ref e) if alvo != Alvo::Nada => {
+                if let Some(txt) = entidade(e) { empurrar(linha, alvo, &txt); }
+            }
+            Event::CData(ref e) if alvo != Alvo::Nada => {
+                let txt = String::from_utf8_lossy(e.as_ref()).to_string();
+                empurrar(linha, alvo, &txt);
+            }
+            Event::Eof => return Err("XML inválido: <row> sem fim".into()),
+            _ => {}
+        }
+    }
+}
+
+fn empurrar(linha: &mut LinhaXml, alvo: Alvo, txt: &str) {
+    let Some(c) = linha.usadas.checked_sub(1).map(|i| &mut linha.celulas[i]) else { return };
+    let campo = match alvo {
+        Alvo::F => &mut c.f,
+        Alvo::V => &mut c.v,
+        Alvo::Inline => &mut c.inline,
+        Alvo::Nada => return,
+    };
+    campo.texto.push_str(txt);
+}
+
+/// Como [`parse_xml_items_reader_result`] com `sheetData`/`row`, mas cada
+/// linha chega como [`LinhaXml`] (sem árvore por célula). O resto do
+/// documento (colunas, mesclas, links, condicional…) volta na árvore.
+pub fn parse_xml_linhas_rapidas<R: BufRead>(
+    source: R,
+    ler: &mut dyn FnMut(&LinhaXml) -> Result<(), String>,
+) -> Result<XmlNode, String> {
+    let mut reader = Reader::from_reader(source);
+    reader.config_mut().trim_text(false);
+    let mut stack: Vec<XmlNode> = vec![XmlNode::default()];
+    let mut buf = Vec::new();
+    let mut buf_linha = Vec::new();
+    let mut linha = LinhaXml::default();
+    loop {
+        let decoder = reader.decoder();
+        let evento = reader.read_event_into(&mut buf);
+        match evento {
+            Ok(Event::Start(ref e)) | Ok(Event::Empty(ref e))
+                if local(e.name().as_ref()) == b"row" && stack.last().is_some_and(|n| n.name == "sheetData") =>
+            {
+                let vazio = matches!(evento, Ok(Event::Empty(_)));
+                linha.limpar();
+                atributos(e, decoder, &mut [
+                    (b"r", &mut linha.r), (b"s", &mut linha.s), (b"customFormat", &mut linha.custom_format),
+                    (b"hidden", &mut linha.hidden), (b"ht", &mut linha.ht), (b"customHeight", &mut linha.custom_height),
+                    (b"outlineLevel", &mut linha.outline_level), (b"collapsed", &mut linha.collapsed),
+                ]);
+                if !vazio {
+                    ler_linha(&mut reader, &mut buf_linha, &mut linha)?;
+                }
+                ler(&linha)?;
+            }
+            Ok(Event::Start(e)) => {
+                stack.push(XmlNode { name: local_name(e.name().as_ref()), attrs: read_attrs(&e, decoder), ..Default::default() });
+            }
+            Ok(Event::Empty(e)) => {
+                let node = XmlNode { name: local_name(e.name().as_ref()), attrs: read_attrs(&e, decoder), ..Default::default() };
+                stack.last_mut().expect("raiz sempre existe").children.push(node);
+            }
+            Ok(Event::End(_)) => {
+                if stack.len() > 1 {
+                    let node = stack.pop().expect("verificado acima");
+                    stack.last_mut().expect("raiz sempre existe").children.push(node);
+                }
+            }
+            Ok(Event::Text(e)) => {
+                let txt = e.decode().unwrap_or_default();
+                if let Some(top) = stack.last_mut() { top.text.push_str(&txt); }
+            }
+            Ok(Event::GeneralRef(e)) => {
+                if let (Some(top), Some(txt)) = (stack.last_mut(), entidade(&e)) { top.text.push_str(&txt); }
+            }
+            Ok(Event::CData(e)) => {
+                let txt = String::from_utf8_lossy(e.as_ref()).to_string();
+                if let Some(top) = stack.last_mut() { top.text.push_str(&txt); }
+            }
+            Ok(Event::Eof) => break,
+            Ok(_) => {}
+            Err(e) => return Err(format!("XML inválido: {e}")),
+        }
+        buf.clear();
+    }
+    let mut root = stack.pop().unwrap_or_default();
+    Ok(if root.children.is_empty() { root } else { root.children.remove(0) })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,5 +563,36 @@ mod tests {
         let root = parse_xml(xml).unwrap();
         assert_eq!(root.name, "root");
         assert_eq!(root.child("id").unwrap().text, "5");
+    }
+
+    #[test]
+    fn linhas_rapidas_leem_o_mesmo_que_a_arvore() {
+        let xml = r#"<x:worksheet xmlns:x="a"><x:sheetData>
+            <x:row r="1" ht="20" customHeight="1" outlineLevel="2"><x:c r="A1" s="3" t="s"><x:v>7</x:v></x:c>
+              <x:c r="B1"><x:f t="shared" si="0" ref="B1:B9">A1&amp;"&lt;x"</x:f><x:v>1.5</x:v></x:c>
+              <x:c r="C1" t="inlineStr"><x:is><x:r><x:t>Olá </x:t></x:r><x:r><x:t>mundo</x:t></x:r><x:rPh><x:t>fon</x:t></x:rPh></x:is></x:c>
+              <x:c r="D1" s="2"/></x:row>
+            <x:row r="2"/>
+          </x:sheetData><x:mergeCells><x:mergeCell ref="A1:A2"/></x:mergeCells></x:worksheet>"#;
+        let mut vistas = Vec::new();
+        let raiz = parse_xml_linhas_rapidas(xml.as_bytes(), &mut |l| {
+            let cs: Vec<String> = l.celulas().iter().map(|c| format!("{}|{}|{}|{}|{}|{}|{}",
+                c.attr("r").unwrap_or(""), c.attr("s").unwrap_or("-"), c.attr("t").unwrap_or("-"),
+                c.f.get().unwrap_or("-"), c.f_si.get().unwrap_or("-"), c.v.get().unwrap_or("-"),
+                c.inline.get().unwrap_or("-"))).collect();
+            vistas.push((l.attr("r").unwrap_or("").to_owned(), l.attr("ht").map(str::to_owned), l.attr("outlineLevel").map(str::to_owned), cs));
+            Ok(())
+        }).unwrap();
+        assert_eq!(vistas.len(), 2);
+        assert_eq!(vistas[0].1.as_deref(), Some("20"));
+        assert_eq!(vistas[0].2.as_deref(), Some("2"));
+        assert_eq!(vistas[0].3, [
+            "A1|3|s|-|-|7|-",
+            "B1|-|-|A1&\"<x\"|0|1.5|-",
+            "C1|-|inlineStr|-|-|-|Olá mundo",
+            "D1|2|-|-|-|-|-",
+        ]);
+        assert!(vistas[1].3.is_empty());
+        assert!(raiz.child("mergeCells").is_some(), "o resto do documento continua na árvore");
     }
 }

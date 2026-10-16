@@ -65,21 +65,21 @@ pub enum EventoVisual {
 impl App {
     pub(super) fn executar_macro(&mut self) {
         if !self.macro_visual.documento.starts_with("modulo:") {
-            self.macro_saida = "Abra um módulo JavaScript para executar. Os eventos e formulários ainda são visuais.".into();
+            self.macro_saida = tr!("Abra um módulo JavaScript para executar. Os eventos e formulários ainda são visuais.").into();
             return;
         }
         self.confirmar();
         let codigo = self.macro_codigo.text();
         let nome = self.macro_visual.documento.trim_start_matches("modulo:").to_owned();
-        let Some(resultado) = self.rodar_macro(historico_macros::GatilhoMacro::manual("Executar macro"), &nome, &codigo, Vec::new()) else {
-            self.macro_saida = "A macro fez uma pergunta: responda na janela.".into();
+        let Some(resultado) = self.rodar_macro(historico_macros::GatilhoMacro::manual(tr!("Executar macro")), &nome, &codigo, Vec::new()) else {
+            self.macro_saida = tr!("A macro fez uma pergunta: responda na janela.").into();
             return;
         };
         self.trocar_selecao(self.linha,self.coluna);
         self.macro_saida = resultado.saida.join("\n");
         if let Some(e) = resultado.erro {
-            self.macro_saida.push_str(&format!("\nErro: {e}\nAs escritas desta execução foram revertidas."));
-        } else { self.macro_saida.push_str("\nMacro concluída."); }
+            self.macro_saida.push_str(&trf!("\nErro: {e}\nAs escritas desta execução foram revertidas."));
+        } else { self.macro_saida.push_str(tr!("\nMacro concluída.")); }
         if let Some(mensagem) = resultado.status {
             self.status = mensagem;
         }
@@ -87,38 +87,45 @@ impl App {
 
     pub(super) fn abrir_macro() -> Task<Msg> {
         Task::perform(async {
-            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter("Macro JavaScript", &["js"])
+            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter(tr!("Macro JavaScript"), &["js"])
                 .pick_file().await.map(|f|std::fs::read_to_string(f.path())
-                    .map_err(|e|format!("Não consegui abrir a macro: {e}"))).transpose()
+                    .map_err(|e|trf!("Não consegui abrir a macro: {e}"))).transpose()
         },Msg::MacroLido)
     }
 
     pub(super) fn salvar_macro() -> Task<Msg> {
         Task::perform(async {
-            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter("Macro JavaScript", &["js"])
+            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter(tr!("Macro JavaScript"), &["js"])
                 .set_file_name("macro.js").save_file().await.map(|f|f.path().to_path_buf())
         },Msg::MacroDestino)
     }
 
-    // Persistência compartilhada: UI do Sheet só fornece os comandos locais.
+    /// As macros moram na pasta de trabalho (gravadas no .fshz), como no
+    /// .xlsm do Excel: cada arquivo leva as suas e Novo começa sem nenhuma.
     pub(super) fn persistir_modulos(&mut self, catalogo: feather_macros::Catalogo, status: &str) -> bool {
         let resultado = catalogo.exportar_json()
-            .and_then(|json| feather_macros::Catalogo::importar_json(&json))
-            .and_then(|validado| {
-                feather_macros::salvar_padrao(&validado)?;
-                Ok(validado)
-            });
+            .and_then(|json| feather_macros::Catalogo::importar_json(&json).map(|v| (json, v)));
         match resultado {
-            Ok(validado) => {
+            Ok((json, validado)) => {
+                self.workbook.macros = (!validado.macros.is_empty()).then_some(json);
                 self.macro_catalogo = validado;
-                self.macro_saida = format!("{status}. Biblioteca comum atualizada.");
+                self.alterado = true;
+                self.macro_saida = trf!("{status}. Guardado nesta planilha (salve o arquivo para gravar).");
                 true
             }
             Err(e) => {
-                self.macro_saida = format!("Falha ao salvar biblioteca: {e}");
+                self.macro_saida = trf!("Falha ao guardar as macros: {e}");
                 false
             }
         }
+    }
+
+    /// O catálogo da pasta aberta (vazio se ela não tem macros). Chamado
+    /// sempre que a pasta troca: abrir, Novo, modelo.
+    pub(super) fn recarregar_macros(&mut self) {
+        self.macro_catalogo = self.workbook.macros.as_deref()
+            .and_then(|t| feather_macros::Catalogo::importar_json(t).ok())
+            .unwrap_or_default();
     }
 
     /// Gera um nome não utilizado, sem depender do código aberto no editor.
@@ -139,7 +146,7 @@ impl App {
         // Não substituir o texto do editor se ainda houver mudanças não
         // salvas. Para um rascunho novo a falta de módulo também conta.
         if guardado.is_none_or(|m| m.code != codigo) {
-            self.macro_saida = format!(
+            self.macro_saida = trf!(
                 "Guarde primeiro as alterações de '{}' antes de criar outro módulo.",
                 self.macro_nome
             );
@@ -147,7 +154,7 @@ impl App {
             return;
         }
         if self.macro_catalogo.macros.len() >= 1_000 {
-            self.macro_saida = "Limite de 1.000 módulos da biblioteca atingido.".into();
+            self.macro_saida = tr!("Limite de 1.000 módulos da biblioteca atingido.").into();
             return;
         }
         let nome = Self::proximo_nome_modulo(&self.macro_catalogo);
@@ -157,7 +164,7 @@ impl App {
             name: nome.clone(), code: codigo.clone(), auto: false,
         });
         // Só muda a UI depois do arquivo ser gravado com sucesso.
-        if self.persistir_modulos(catalogo, &format!("Módulo {nome} criado")) {
+        if self.persistir_modulos(catalogo, &trf!("Módulo {nome} criado")) {
             self.macro_nome = nome.clone();
             self.macro_codigo = iced::widget::text_editor::Content::with_text(&codigo);
             self.macro_visual.documento = format!("modulo:{nome}");
@@ -170,7 +177,7 @@ impl App {
     pub(super) fn guardar_modulo_macro(&mut self) {
         let nome = self.macro_nome.trim().to_owned();
         if nome.is_empty() {
-            self.macro_saida = "Informe o nome do módulo.".into();
+            self.macro_saida = tr!("Informe o nome do módulo.").into();
             return;
         }
         let mut c = self.macro_catalogo.clone();
@@ -181,7 +188,7 @@ impl App {
                 name: nome.clone(), code: self.macro_codigo.text(), auto: false,
             });
         }
-        self.persistir_modulos(c, &format!("Módulo {nome} salvo"));
+        self.persistir_modulos(c, &trf!("Módulo {nome} salvo"));
         self.macro_visual.documento = format!("modulo:{nome}");
     }
 
@@ -190,7 +197,7 @@ impl App {
             self.macro_codigo = iced::widget::text_editor::Content::with_text(&m.code);
             self.macro_nome = m.name.clone();
             self.macro_visual.documento = format!("modulo:{}", m.name);
-            self.macro_saida = format!("Módulo {} carregado; execute manualmente.", m.name);
+            self.macro_saida = trf!("Módulo {} carregado; execute manualmente.", m.name);
         }
     }
 
@@ -199,10 +206,10 @@ impl App {
         let antes = c.macros.len();
         c.macros.retain(|m| !m.name.eq_ignore_ascii_case(self.macro_nome.trim()));
         if antes == c.macros.len() {
-            self.macro_saida = "Selecione um módulo existente.".into();
+            self.macro_saida = tr!("Selecione um módulo existente.").into();
             return;
         }
-        self.persistir_modulos(c, "Módulo excluído");
+        self.persistir_modulos(c, tr!("Módulo excluído"));
     }
 
     /// Importa o array de office.macros.v1 (TS), preservando outros módulos.
@@ -223,15 +230,15 @@ impl App {
                         c.macros.push(novo);
                     }
                 }
-                self.persistir_modulos(c, "Catálogo TypeScript importado");
+                self.persistir_modulos(c, tr!("Catálogo TypeScript importado"));
             }
-            Err(e) => self.macro_saida = format!("Catálogo inválido: {e}"),
+            Err(e) => self.macro_saida = trf!("Catálogo inválido: {e}"),
         }
     }
 
     pub(super) fn importar_catalogo_macro() -> Task<Msg> {
         Task::perform(async {
-            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter("Biblioteca JSON", &["json"])
+            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter(tr!("Biblioteca JSON"), &["json"])
                 .pick_file().await.map(|f| std::fs::read_to_string(f.path())
                     .map_err(|e| e.to_string())).transpose()
         }, Msg::MacroCatalogoLido)
@@ -239,7 +246,7 @@ impl App {
 
     pub(super) fn exportar_catalogo_macro() -> Task<Msg> {
         Task::perform(async {
-            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter("Biblioteca JSON", &["json"])
+            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter(tr!("Biblioteca JSON"), &["json"])
                 .set_file_name("featheroffice-macros.json").save_file()
                 .await.map(|f| f.path().to_path_buf())
         }, Msg::MacroDestinoCatalogo)
@@ -331,7 +338,7 @@ impl App {
         if matches!(acao, Msg::MacroExecutar | Msg::MacroGuardarModulo | Msg::MacroSalvar)
             && !self.macro_visual.documento.starts_with("modulo:")
         {
-            self.macro_saida = "Abra um módulo JavaScript para executar ou guardar o código.".into();
+            self.macro_saida = tr!("Abra um módulo JavaScript para executar ou guardar o código.").into();
             return Some(Task::none());
         }
         Some(self.update(acao))
@@ -483,5 +490,30 @@ mod testes_visuais {
         assert!(app.macro_visual.documento.starts_with("planilha:"));
         app.evento_macro_visual(EventoVisual::Documento("pasta".into()));
         assert_eq!(app.macro_visual.documento, "pasta");
+    }
+}
+
+#[cfg(test)]
+mod testes_macros_da_pasta {
+    use super::*;
+
+    #[test]
+    fn macros_moram_na_pasta_novo_comeca_vazio_e_voltam_ao_reabrir() {
+        let mut app = App::default();
+        assert!(app.macro_catalogo.macros.is_empty(), "nada global ao abrir");
+        let mut c = app.macro_catalogo.clone();
+        c.macros.push(feather_macros::Macro { name: "Colorir".into(), code: "sheet.set('A1',1);".into(), auto: false });
+        assert!(app.persistir_modulos(c, "Criada"));
+        assert!(app.alterado && app.workbook.macros.is_some());
+        // O arquivo leva a macro: grava e lê de volta noutra pasta.
+        let bytes = feathersheet_io::da_workbook::pasta_gravar_bytes(&app.workbook, 0).unwrap();
+        let lida = feathersheet_io::para_workbook::para_workbook(&feathersheet_io::fshz_read::ler_fshz(&bytes).unwrap());
+        // Novo: pasta sem macros.
+        let _ = app.executar_pendente(Pendente::Novo);
+        assert!(app.macro_catalogo.macros.is_empty() && app.workbook.macros.is_none());
+        // Reabrir o arquivo traz o catálogo dele.
+        app.workbook = lida;
+        app.recarregar_macros();
+        assert_eq!(app.macro_catalogo.macros.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(), ["Colorir"]);
     }
 }

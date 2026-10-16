@@ -151,7 +151,7 @@ pub(in crate::app) fn botao<'a>(rotulo: &str, acao: Option<Msg>, escolhido: bool
 }
 
 pub(in crate::app) fn botao_executar<'a>(acao: Option<Msg>) -> Element<'a, Msg> {
-    botao_primario("Executar  F5", "player-play", acao)
+    botao_primario(tr!("Executar  F5"), "player-play", acao)
 }
 
 /// Botão primário na cor de destaque configurada (Executar, Carregar…).

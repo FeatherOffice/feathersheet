@@ -59,16 +59,16 @@ fn itens(area: &Rect, dados: &ColumnStats) -> (Pares, Pares) {
     let sem_numero = dados.numbers == 0;
     let ou_traco = |v: f64| if sem_numero { "—".to_string() } else { numero_pt(v) };
     let contagens = vec![
-        ("Células preenchidas".to_string(), inteiro_pt(dados.count)),
-        ("Vazias".to_string(), agrupar(&vazias.to_string())),
-        ("Números".to_string(), inteiro_pt(dados.numbers)),
-        ("Valores distintos".to_string(), inteiro_pt(dados.distinct)),
+        (tr!("Células preenchidas").to_string(), inteiro_pt(dados.count)),
+        (tr!("Vazias").to_string(), agrupar(&vazias.to_string())),
+        (tr!("Números").to_string(), inteiro_pt(dados.numbers)),
+        (tr!("Valores distintos").to_string(), inteiro_pt(dados.distinct)),
     ];
     let numeros = vec![
-        ("Soma".to_string(), numero_pt(dados.sum)),
-        ("Média".to_string(), ou_traco(dados.average)),
-        ("Mínimo".to_string(), ou_traco(dados.min)),
-        ("Máximo".to_string(), ou_traco(dados.max)),
+        (tr!("Soma").to_string(), numero_pt(dados.sum)),
+        (tr!("Média").to_string(), ou_traco(dados.average)),
+        (tr!("Mínimo").to_string(), ou_traco(dados.min)),
+        (tr!("Máximo").to_string(), ou_traco(dados.max)),
     ];
     (contagens, numeros)
 }
@@ -78,7 +78,7 @@ impl App {
         if !self.confirmar() { return Task::none(); }
         let area = self.area_selecionada().normalized();
         let Some(aba) = self.workbook.aba(self.folha) else {
-            self.status = "Nenhuma planilha disponível para analisar.".into();
+            self.status = tr!("Nenhuma planilha disponível para analisar.").into();
             return Task::none();
         };
         let vazia = aba.sheet.is_empty();
@@ -88,7 +88,7 @@ impl App {
         let colunas = u64::from(area.c1 - area.c0) + 1;
         let celulas = linhas.saturating_mul(colunas);
         if celulas > LIMITE_CELULAS {
-            self.status = format!(
+            self.status = trf!(
                 "Seleção com {celulas} células: limite de {} para Estatísticas. Reduza a seleção.",
                 inteiro_pt(LIMITE_CELULAS as usize)
             );
@@ -112,7 +112,7 @@ impl App {
             let dados = ops::column_stats_com(medida, ultima,
                 |r, c| self.workbook.valor(self.folha, r, c));
             self.estatisticas = Some(Estado::Prontas(Visao { area, dados }));
-            self.status = "Estatísticas calculadas sobre a seleção.".into();
+            self.status = tr!("Estatísticas calculadas sobre a seleção.").into();
             return Task::none();
         }
 
@@ -128,7 +128,7 @@ impl App {
         let linha_inicial = medida.r0;
         let coluna_inicial = medida.c0;
         self.estatisticas = Some(Estado::Calculando { area: area.clone() });
-        self.status = format!("Calculando estatísticas de {} células…", inteiro_pt(celulas as usize));
+        self.status = trf!("Calculando estatísticas de {} células…", inteiro_pt(celulas as usize));
         Task::perform(async move {
             tokio::task::spawn_blocking(move || {
                 let dados = ops::column_stats_com(medida, ultima, |r, c| {
@@ -154,20 +154,20 @@ impl App {
             format!("{}:{}", cell_name(area.r0, area.c0), cell_name(area.r1, area.c1))
         };
         let corpo: Element<'_, Msg> = match estado {
-            Estado::Calculando { .. } => dlg::aviso_vazio("Calculando contagens e valores distintos…"),
+            Estado::Calculando { .. } => dlg::aviso_vazio(tr!("Calculando contagens e valores distintos…")),
             Estado::Prontas(visao) => {
                 let (contagens, numeros) = itens(&visao.area, &visao.dados);
                 iced::widget::column![
-                    dlg::secao("Contagens"),
+                    dlg::secao(tr!("Contagens")),
                     dlg::grade_rotulo_valor(contagens, 2),
-                    dlg::secao("Números"),
+                    dlg::secao(tr!("Números")),
                     dlg::grade_rotulo_valor(numeros, 2),
                 ].spacing(8).into()
             }
         };
-        self.dialogo("Estatísticas da seleção", corpo)
+        self.dialogo(tr!("Estatísticas da seleção"), corpo)
             .icone("chart-bar")
-            .subtitulo(format!("Intervalo {titulo_area} · somente leitura, não altera valores nem fórmulas"))
+            .subtitulo(trf!("Intervalo {titulo_area} · somente leitura, não altera valores nem fórmulas"))
             .largura(460.0)
             .ao_fechar(Msg::EstatisticasFechar)
     }

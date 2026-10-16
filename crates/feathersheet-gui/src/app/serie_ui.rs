@@ -50,7 +50,7 @@ impl Estado {
             let t = texto.trim();
             if t.is_empty() { return Ok(None); }
             t.replace(',', ".").parse::<f64>().ok().filter(|n| n.is_finite()).map(Some)
-                .ok_or_else(|| format!("{campo}: digite um número"))
+                .ok_or_else(|| trf!("{campo}: digite um número"))
         };
         let tipo = match (self.tipo, self.tendencia_ativa()) {
             (Tipo::Linear, true) => TipoSerie::TendenciaLinear,
@@ -59,14 +59,14 @@ impl Estado {
             (Tipo::Crescimento, false) => TipoSerie::Geometrica,
             (Tipo::Data, _) => TipoSerie::Data(self.unidade),
         };
-        let incremento = if self.tendencia_ativa() { None } else { numero(&self.incremento, "Incremento")? };
+        let incremento = if self.tendencia_ativa() { None } else { numero(&self.incremento, tr!("Incremento"))? };
         let limite = match self.tipo {
             // Data aceita o limite como data digitada (15/03/2026) ou número de série.
             Tipo::Data if !self.limite.trim().is_empty() && numero(&self.limite, "").is_err() => {
                 Some(feathersheet_core::celulas::input::parse_date_text(self.limite.trim())
-                    .ok_or("Limite: digite uma data ou um número")?)
+                    .ok_or(tr!("Limite: digite uma data ou um número"))?)
             }
-            _ => numero(&self.limite, "Limite")?,
+            _ => numero(&self.limite, tr!("Limite"))?,
         };
         Ok(ConfigSerie { tipo, direcao: self.direcao, incremento, limite })
     }
@@ -158,22 +158,22 @@ impl App {
         let todas = estado.tendencia_ativa() || cfg.incremento.is_none();
         let o = origem(sheet, &estado.area, estado.direcao, todas, numero_semente);
         if !numero_semente(&sheet.get_raw(o.r0, o.c0), &sheet.get_value(o.r0, o.c0)) {
-            return erro(self, "A primeira célula da seleção precisa ter um número ou uma data.".into());
+            return erro(self, tr!("A primeira célula da seleção precisa ter um número ou uma data.").into());
         }
         let mut resultado = Ok(0);
         self.workbook.editar(self.folha, |s| resultado = s.preencher_serie(&o, &estado.area, &cfg));
         match resultado {
             Err(e) => erro(self, e),
             Ok(0) => erro(self, if o == estado.area {
-                "Selecione as células de destino junto com o valor inicial, ou informe o limite.".into()
+                tr!("Selecione as células de destino junto com o valor inicial, ou informe o limite.").into()
             } else {
-                "Nenhuma célula foi preenchida: confira o incremento e o limite.".into()
+                tr!("Nenhuma célula foi preenchida: confira o incremento e o limite.").into()
             }),
             Ok(n) => {
                 self.serie = None;
                 self.alterado = true;
                 self.atualizar_circulos();
-                self.status = format!("Série: {n} célula(s) preenchida(s); Ctrl+Z desfaz.");
+                self.status = trf!("Série: {n} célula(s) preenchida(s); Ctrl+Z desfaz.");
             }
         }
     }
@@ -220,22 +220,22 @@ impl App {
         let grupo = |titulo: &'static str, itens: Vec<Element<'a, Msg>>| -> Element<'a, Msg> {
             column![dlg::secao(titulo), column(itens).spacing(8)].spacing(8).width(Length::Fill).into()
         };
-        let serie_em = grupo("Série em", vec![
-            opcao("Linhas", DirecaoSerie::Linhas, s.direcao, |d| Msg::Serie(Evento::Direcao(d)), true),
-            opcao("Colunas", DirecaoSerie::Colunas, s.direcao, |d| Msg::Serie(Evento::Direcao(d)), true),
+        let serie_em = grupo(tr!("Série em"), vec![
+            opcao(tr!("Linhas"), DirecaoSerie::Linhas, s.direcao, |d| Msg::Serie(Evento::Direcao(d)), true),
+            opcao(tr!("Colunas"), DirecaoSerie::Colunas, s.direcao, |d| Msg::Serie(Evento::Direcao(d)), true),
         ]);
-        let tipo = grupo("Tipo", [
-            ("Linear", Tipo::Linear), ("Crescimento", Tipo::Crescimento),
-            ("Data", Tipo::Data), ("AutoPreenchimento", Tipo::AutoPreenchimento),
+        let tipo = grupo(tr!("Tipo"), [
+            (tr!("Linear"), Tipo::Linear), (tr!("Crescimento"), Tipo::Crescimento),
+            (tr!("Data"), Tipo::Data), ("AutoPreenchimento", Tipo::AutoPreenchimento),
         ].into_iter().map(|(r, t)| opcao(r, t, s.tipo, |t| Msg::Serie(Evento::Tipo(t)), true)).collect());
         let data = s.tipo == Tipo::Data;
-        let unidade = grupo("Unidade de data", [
-            ("Dia", UnidadeData::Dia), ("Dia da semana", UnidadeData::DiaUtil),
-            ("Mês", UnidadeData::Mes), ("Ano", UnidadeData::Ano),
+        let unidade = grupo(tr!("Unidade de data"), [
+            (tr!("Dia"), UnidadeData::Dia), (tr!("Dia da semana"), UnidadeData::DiaUtil),
+            (tr!("Mês"), UnidadeData::Mes), (tr!("Ano"), UnidadeData::Ano),
         ].into_iter().map(|(r, u)| opcao(r, u, s.unidade, |u| Msg::Serie(Evento::Unidade(u)), data)).collect());
 
         let pode_tendencia = matches!(s.tipo, Tipo::Linear | Tipo::Crescimento);
-        let tendencia = checkbox("Tendência", s.tendencia && pode_tendencia)
+        let tendencia = checkbox(tr!("Tendência"), s.tendencia && pode_tendencia)
             .on_toggle_maybe(pode_tendencia.then_some(|v| Msg::Serie(Evento::Tendencia(v))))
             .size(15).text_size(12.5);
         let sem_incremento = s.tendencia_ativa() || s.tipo == Tipo::AutoPreenchimento;
@@ -247,13 +247,13 @@ impl App {
                 if ativo { entrada.on_input(move |v| ev(f(v))) } else { entrada },
             ].spacing(8).align_y(Alignment::Center)
         };
-        let dica_limite = if data { "Data ou número" } else { "Opcional" };
+        let dica_limite = if data { tr!("Data ou número") } else { tr!("Opcional") };
         let mut corpo = column![
             row![serie_em, tipo, unidade].spacing(18),
             tendencia,
             row![
-                campo("Incremento", "1", &s.incremento, !sem_incremento, Evento::Incremento),
-                campo("Limite", dica_limite, &s.limite, s.tipo != Tipo::AutoPreenchimento, Evento::Limite),
+                campo(tr!("Incremento"), "1", &s.incremento, !sem_incremento, Evento::Incremento),
+                campo(tr!("Limite"), dica_limite, &s.limite, s.tipo != Tipo::AutoPreenchimento, Evento::Limite),
             ].spacing(18),
         ].spacing(16);
         if let Some(erro) = &s.erro {
@@ -263,12 +263,12 @@ impl App {
             ].spacing(6).align_y(Alignment::Center));
         }
         let alvo = feathersheet_core::celulas::refs::format_ref(&s.area);
-        self.dialogo("Série", corpo)
+        self.dialogo(tr!("Série"), corpo)
             .icone("list-numbers")
-            .subtitulo(format!("Intervalo {alvo} · o valor inicial fica na primeira célula"))
+            .subtitulo(trf!("Intervalo {alvo} · o valor inicial fica na primeira célula"))
             .largura(540.0)
             .ao_fechar(ev(Evento::Fechar))
-            .secundario("Cancelar", Some(ev(Evento::Fechar)))
+            .secundario(tr!("Cancelar"), Some(ev(Evento::Fechar)))
             .primario("OK", Some(ev(Evento::Aplicar)))
             .sobre(base)
     }

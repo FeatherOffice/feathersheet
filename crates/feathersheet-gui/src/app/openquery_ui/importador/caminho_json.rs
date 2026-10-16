@@ -50,11 +50,11 @@ pub(super) fn extrair_fragmento(url: &mut reqwest::Url) -> Result<Option<String>
     while i < entrada.len() {
         if entrada[i] == b'%' {
             let (Some(&a), Some(&b)) = (entrada.get(i + 1), entrada.get(i + 2)) else {
-                return Err("Caminho JSON contém escape percentual inválido".into());
+                return Err(tr!("Caminho JSON contém escape percentual inválido").into());
             };
             let hex = |c: u8| (c as char).to_digit(16).map(|n| n as u8);
             let (Some(a), Some(b)) = (hex(a), hex(b)) else {
-                return Err("Caminho JSON contém escape percentual inválido".into());
+                return Err(tr!("Caminho JSON contém escape percentual inválido").into());
             };
             bytes.push(a * 16 + b);
             i += 3;
@@ -64,9 +64,9 @@ pub(super) fn extrair_fragmento(url: &mut reqwest::Url) -> Result<Option<String>
         }
     }
     let caminho = String::from_utf8(bytes)
-        .map_err(|_| "Caminho JSON precisa estar em UTF-8".to_string())?;
+        .map_err(|_| tr!("Caminho JSON precisa estar em UTF-8").to_string())?;
     if caminho.trim().is_empty() || caminho.len() > 1024 {
-        return Err("Informe um caminho JSON de até 1024 caracteres após #json=".into());
+        return Err(tr!("Informe um caminho JSON de até 1024 caracteres após #json=").into());
     }
     Ok(Some(caminho))
 }

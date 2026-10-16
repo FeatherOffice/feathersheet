@@ -88,7 +88,7 @@ fn caixa_marcacao(valor: String, rotulo: String, marcado: bool) -> Element<'stat
 fn botoes_rodape(acao_principal: Acao, texto_principal: &str) -> Element<'static, Msg> {
     row![
         Space::with_width(Length::Fill),
-        button(text("Cancelar").size(12.5))
+        button(text(tr!("Cancelar")).size(12.5))
             .padding([7, 14])
             .style(estilo_botao_secundario)
             .on_press(Msg::TabelaAcao(Acao::Fechar)),
@@ -119,7 +119,7 @@ impl App {
         // O menu principal nunca é substituído por um filtro avançado.
         // Os operadores e o critério são desenhados em outro popup (overlay).
         let cabecalho = row![
-            text(format!("Menu da coluna {nome_coluna}")).size(13.5).color(COR_TEXTO()),
+            text(trf!("Menu da coluna {nome_coluna}")).size(13.5).color(COR_TEXTO()),
             Space::with_width(Length::Fill),
             button(icone("x", 14.0))
                 .padding([2, 9])
@@ -139,26 +139,26 @@ impl App {
         {
             // 1. Classificação/limpeza em linhas discretas, sem botões azuis.
             conteudo = conteudo
-                .push(acao_com_icone("sort-ascending", "Classificar de A a Z",
+                .push(acao_com_icone("sort-ascending", tr!("Classificar de A a Z"),
                     Some(Acao::Ordenar(true))))
-                .push(acao_com_icone("sort-descending", "Classificar de Z a A",
+                .push(acao_com_icone("sort-descending", tr!("Classificar de Z a A"),
                     Some(Acao::Ordenar(false))));
             for item in self.itens_classificar_extra() { conteudo = conteudo.push(item); }
             conteudo = conteudo
                 .push(divisor())
                 .push(acao(
-                    format!("Limpar filtro de {nome_coluna}"),
+                    trf!("Limpar filtro de {nome_coluna}"),
                     filtro_ativo.then_some(Acao::LimparFiltro),
                 ))
                 .push(acao(
-                    "Limpar todos os filtros",
+                    tr!("Limpar todos os filtros"),
                     tem_filtros.then_some(Acao::LimparTodosFiltros),
                 ));
             for item in self.itens_filtro_extra() { conteudo = conteudo.push(item); }
             conteudo = conteudo
                 .push(button(
                     row![
-                        text("Filtrar por condição").size(13),
+                        text(tr!("Filtrar por condição")).size(13),
                         Space::with_width(Length::Fill),
                         icone("chevron-right", 14.0),
                     ].align_y(Alignment::Center),
@@ -179,17 +179,17 @@ impl App {
             let fim = inicio.saturating_add(JANELA).min(total);
             conteudo = conteudo.push(
                 row![
-                    button(text("Selecionar tudo").size(11.5).color(COR_AZUL_ACENTO()))
+                    button(text(tr!("Selecionar tudo")).size(11.5).color(COR_AZUL_ACENTO()))
                         .padding([3, 3])
                         .style(estilo_item_menu(false, true))
                         .on_press(Msg::TabelaAcao(Acao::MarcarTodos(true))),
                     text("·").size(12).color(COR_TEXTO_MUTED()),
-                    button(text("Limpar").size(11.5).color(COR_AZUL_ACENTO()))
+                    button(text(tr!("Limpar")).size(11.5).color(COR_AZUL_ACENTO()))
                         .padding([3, 3])
                         .style(estilo_item_menu(false, true))
                         .on_press(Msg::TabelaAcao(Acao::MarcarTodos(false))),
                     Space::with_width(Length::Fill),
-                    text(format!("{} / {} marcados",
+                    text(trf!("{} / {} marcados",
                         self.tabela_filtro_marcados.len(),
                         self.tabela_filtro_lista.len())).size(11)
                         .color(COR_TEXTO_MUTED()),
@@ -197,7 +197,7 @@ impl App {
             );
 
             conteudo = conteudo.push(
-                text_input("Pesquisar valores carregados…", &self.tabela_filtro_busca)
+                text_input(tr!("Pesquisar valores carregados…"), &self.tabela_filtro_busca)
                     .on_input(|v| Msg::TabelaAcao(Acao::BuscaLista(v)))
                     .style(estilo_entrada_suspensa)
                     .size(12.5)
@@ -222,7 +222,7 @@ impl App {
                 itens = itens.push(Space::with_height(Length::Fixed((total - fim) as f32 * ALTURA_LINHA)));
             }
             if total == 0 {
-                itens = itens.push(text("Nenhum valor encontrado entre os já carregados").size(12)
+                itens = itens.push(text(tr!("Nenhum valor encontrado entre os já carregados")).size(12)
                     .color(COR_TEXTO_MUTED()));
             }
             let altura = (total as f32 * ALTURA_LINHA + 8.0)
@@ -248,7 +248,7 @@ impl App {
             let lidas = self.tabela_filtro_proxima_linha
                 .saturating_sub(inicio_dados).min(total_linhas);
             conteudo = conteudo.push(
-                text(format!("{} valores encontrados · {} / {} linhas lidas · {} na pesquisa",
+                text(trf!("{} valores encontrados · {} / {} linhas lidas · {} na pesquisa",
                     self.tabela_filtro_lista.len(), lidas, total_linhas, total))
                     .size(10.5).color(COR_TEXTO_MUTED())
             );
@@ -256,12 +256,12 @@ impl App {
                 let carregando = self.tabela_filtro_automatico;
                 conteudo = conteudo.push(
                     row![
-                        button(text(if carregando { "Lendo…" } else { "Carregar +8 mil linhas" }).size(11))
+                        button(text(if carregando { tr!("Lendo…") } else { tr!("Carregar +8 mil linhas") }).size(11))
                             .padding([5, 7])
                             .style(estilo_botao_secundario)
                             .on_press_maybe((!carregando).then_some(Msg::TabelaAcao(Acao::CarregarMais))),
                         Space::with_width(Length::Fill),
-                        button(text(if carregando { "Parar" } else { "Carregar tudo" }).size(11))
+                        button(text(if carregando { tr!("Parar") } else { tr!("Carregar tudo") }).size(11))
                             .padding([5, 7])
                             .style(estilo_botao_secundario)
                             .on_press(Msg::TabelaAcao(if carregando { Acao::PararCarga }
@@ -270,7 +270,7 @@ impl App {
                 );
             } else {
                 conteudo = conteudo.push(
-                    text("Todos os dados da coluna foram examinados.")
+                    text(tr!("Todos os dados da coluna foram examinados."))
                         .size(10.5).color(COR_TEXTO_MUTED())
                 );
             }
@@ -306,8 +306,8 @@ impl App {
         if pagina >= super::filtro_extra::PAG_COR {
             return self.submenu_extra(pagina);
         }
-        let titulo = if pagina == 1 { "Filtrar por condição" }
-            else { "Configurar condição" };
+        let titulo = if pagina == 1 { tr!("Filtrar por condição") }
+            else { tr!("Configurar condição") };
         let cabecalho = row![
             button(icone("chevron-left", 14.0))
                 .padding([3, 5])
@@ -323,12 +323,12 @@ impl App {
 
         let mut corpo = column![cabecalho, divisor()].spacing(6).padding(7);
         if pagina == 1 {
-            corpo = corpo.push(text("Escolha uma condição").size(11.5)
+            corpo = corpo.push(text(tr!("Escolha uma condição")).size(11.5)
                 .color(COR_TEXTO_MUTED()));
             let mut operadores = column![].spacing(1);
             for &(rotulo, op) in super::painel::OPERADORES {
                 operadores = operadores.push(
-                    acao(rotulo, Some(Acao::Operador(op)))
+                    acao(tr!(rotulo), Some(Acao::Operador(op)))
                 );
             }
             // Só a lista de operadores rola, sem esticar a janelinha.
@@ -337,13 +337,13 @@ impl App {
         } else {
             let rotulo = super::painel::OPERADORES.iter()
                 .find(|(_, op)| *op == self.tabela_operador)
-                .map(|(r, _)| *r).unwrap_or("Condição");
+                .map(|(r, _)| tr!(*r)).unwrap_or(tr!("Condição"));
             corpo = corpo.push(text(rotulo).size(12.5));
             let sem_parametro = matches!(self.tabela_operador,
                 "is_true" | "is_false" | "is_blank" | "is_not_blank");
             if !sem_parametro {
                 corpo = corpo.push(
-                    text_input("Valor da condição", &self.tabela_criterio)
+                    text_input(tr!("Valor da condição"), &self.tabela_criterio)
                         .on_input(|v| Msg::TabelaAcao(Acao::Criterio(v)))
                         .on_submit(Msg::TabelaAcao(Acao::AplicarFiltro))
                         .style(estilo_entrada_suspensa)
@@ -354,12 +354,12 @@ impl App {
             }
             corpo = corpo.push(divisor());
             corpo = corpo.push(row![
-                button(text("Cancelar").size(12))
+                button(text(tr!("Cancelar")).size(12))
                     .padding([6, 9])
                     .style(estilo_botao_secundario)
                     .on_press(Msg::TabelaAcao(Acao::FecharCondicoes)),
                 Space::with_width(Length::Fill),
-                button(text("Aplicar").size(12))
+                button(text(tr!("Aplicar")).size(12))
                     .padding([6, 12])
                     .style(estilo_botao_primario)
                     .on_press(Msg::TabelaAcao(Acao::AplicarFiltro)),

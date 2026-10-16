@@ -38,3 +38,5 @@ impl Hasher for HasherChave {
 }
 
 pub type MapaChave<V> = HashMap<u64, V, BuildHasherDefault<HasherChave>>;
+/// O conjunto com a mesma chave e o mesmo hash barato.
+pub type ConjuntoChave = std::collections::HashSet<u64, BuildHasherDefault<HasherChave>>;

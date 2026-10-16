@@ -56,11 +56,12 @@ fn opcao_borda(e: &Estado, lado: &'static str, nome: &'static str) -> Element<'s
     let b=e.bordas();
     let ativo=borda_ativa(&b,lado);
     let icone_nome=match lado {
+        // Chave do desenho em português: não traduzir (ver menu_bordas::desenho_borda).
         "top"=>"Superior","bottom"=>"Inferior","left"=>"Esquerda","right"=>"Direita",_=>"Externas"
     };
     button(iced::widget::row![
         crate::app::menu_bordas::icone_borda(icone_nome,20.),
-        text(nome).size(12)
+        text(nome).size(12).wrapping(iced::widget::text::Wrapping::None)
     ].spacing(6).align_y(Alignment::Center))
         .padding([6,9]).style(estilo_botao_pequeno(ativo))
         .on_press(Msg::FormatoCelula(Evento::Borda(lado))).into()
@@ -72,82 +73,117 @@ pub(in crate::app) fn seletor_no_dialogo(e: &Estado, titulo: &'static str) -> El
     ).map(|evento| Msg::FormatoCelula(Evento::CorSeletor(evento)))
 }
 
+/// A cor da aba em pouco espaço: amostra da atual, a paleta em duas
+/// fileiras, "Sem cor" e "Mais cores…" (o seletor completo só quando pedido).
+pub(in crate::app) fn cores_compactas(e: &Estado, sem: &'static str) -> Element<'static, Msg> {
+    let atual = e.cor_atual().to_owned();
+    let mut grade = iced::widget::column![].spacing(4);
+    for fileira in CORES.chunks(12) {
+        let mut linha = iced::widget::row![].spacing(4);
+        for &hex in fileira {
+            let cor = seletor_cor::rgba_de(hex);
+            let escolhida = atual.eq_ignore_ascii_case(hex);
+            linha = linha.push(button(Space::new(Length::Fixed(16.), Length::Fixed(16.))).padding(0)
+                .style(move |_, status| button::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb8(cor[0], cor[1], cor[2]))),
+                    border: iced::Border {
+                        color: if escolhida || matches!(status, button::Status::Hovered) { COR_AZUL_ACENTO() } else { COR_BORDA() },
+                        width: if escolhida { 2.5 } else { 1. },
+                        radius: 4.into(),
+                    },
+                    ..Default::default()
+                })
+                .on_press(Msg::FormatoCelula(Evento::CorPredefinida(hex))));
+        }
+        grade = grade.push(linha);
+    }
+    let nome = if atual.is_empty() { sem.to_owned() } else { atual.clone() };
+    iced::widget::column![
+        grade,
+        iced::widget::row![
+            swatch(&atual, 18., 18.),
+            text(nome).size(12).width(Length::Fill),
+            button(text(tr!("Sem cor")).size(12).wrapping(iced::widget::text::Wrapping::None)).padding([5, 9]).style(estilo_botao_secundario)
+                .on_press(Msg::FormatoCelula(Evento::Texto(e.cor_alvo.campo(), String::new()))),
+            button(iced::widget::row![feather_ui::icones::icone("palette", 14.), text(tr!("Mais cores…")).size(12).wrapping(iced::widget::text::Wrapping::None)]
+                .spacing(6).align_y(Alignment::Center))
+                .padding([5, 9]).style(estilo_botao_pequeno(e.mais_cores))
+                .on_press(Msg::FormatoCelula(Evento::MaisCores)),
+        ].spacing(8).align_y(Alignment::Center),
+    ].spacing(8).into()
+}
+
+/// Título de seção dos painéis (caixa alta, discreto), igual nas abas.
+pub(in crate::app) fn secao<'a>(t: &str) -> Element<'a, Msg> {
+    text(t.to_owned()).size(11).color(COR_TEXTO_MUTED()).into()
+}
+
 impl App {
-    /// Os dois painéis compartilham o mesmo seletor completo do FeatherOffice,
-    /// mas editam destinos de estilo diferentes.
+    /// Borda: à esquerda predefinições, estilo e cor; à direita a célula
+    /// com os quatro lados clicáveis (ou o seletor completo, se aberto).
     pub(in crate::app) fn formato_borda(&self, e: &Estado) -> Element<'_, Msg> {
-        let mut presets=iced::widget::column![].spacing(6);
+        let mut presets=iced::widget::row![].spacing(5);
         // O motor de bordas atual trabalha com quatro lados; não oferecer
         // aqui presets "internas" que simulavam incorretamente bordas externas.
-        for opcoes in [["Nenhuma", "Externas", "Todas"]] {
-            let mut row=iced::widget::row![].spacing(5);
-            for &nome in &opcoes {
-                row=row.push(
-                    button(iced::widget::row![
-                        crate::app::menu_bordas::icone_borda(nome,18.),
-                        text(nome).size(11),
-                    ].spacing(5).align_y(Alignment::Center))
-                    .style(estilo_botao_pequeno(false)).padding([6,8])
-                    .on_press(Msg::FormatoCelula(Evento::Borda(nome)))
-                );
-            }
-            presets=presets.push(row);
+        // A chave (ícone e evento) fica em português; só o texto é traduzido.
+        for nome in ["Nenhuma", "Externas", "Todas"] {
+            presets=presets.push(
+                button(iced::widget::row![
+                    crate::app::menu_bordas::icone_borda(nome,18.),
+                    text(tr!(nome)).size(12),
+                ].spacing(5).align_y(Alignment::Center))
+                .style(estilo_botao_pequeno(false)).padding([6,8])
+                .on_press(Msg::FormatoCelula(Evento::Borda(nome)))
+            );
         }
-        let mut estilo_linhas=iced::widget::row![].spacing(7);
+        let mut estilo_linhas=iced::widget::row![].spacing(5);
         for nome in ["Fina","Média","Grossa","Tracejada"] {
             let selected=e.texto("borderLineStyle")==nome;
-            let path=if nome=="Tracejada" {"M3 12H32"} else {"M3 12H32"};
             let size=match nome {"Grossa"=>4.,"Média"=>2.5,_=>1.3};
             let dash=if nome=="Tracejada" {"stroke-dasharray=\"5 3\""} else {""};
-            let svg=format!(r##"<svg xmlns="http://www.w3.org/2000/svg" width="35" height="24" viewBox="0 0 35 24"><path d="{path}" stroke="#808080" stroke-width="{size}" {dash}/></svg>"##);
+            let svg=format!(r##"<svg xmlns="http://www.w3.org/2000/svg" width="35" height="24" viewBox="0 0 35 24"><path d="M3 12H32" stroke="#808080" stroke-width="{size}" {dash}/></svg>"##);
             let img=iced::widget::svg::Svg::new(
                 iced::widget::svg::Handle::from_memory(svg.into_bytes())
-            ).width(Length::Fixed(34.)).height(Length::Fixed(22.));
+            ).width(Length::Fixed(34.)).height(Length::Fixed(18.));
             estilo_linhas=estilo_linhas.push(
-                button(iced::widget::column![img,text(nome).size(11)]
-                    .spacing(2).align_x(Alignment::Center))
+                button(iced::widget::column![img,text(tr!(nome)).size(11)]
+                    .spacing(1).align_x(Alignment::Center))
                     .padding([4,8]).style(estilo_botao_pequeno(selected))
                     .on_press(Msg::FormatoCelula(Evento::Borda(nome)))
             );
         }
-        let painel_visual=iced::widget::column![
-            text("PRÉVIA DA CÉLULA").size(11).color(COR_TEXTO_MUTED()),
-            iced::widget::row![
-                Space::with_width(Length::Fixed(87.)),
-                opcao_borda(e,"top","Acima"),
-            ],
-            iced::widget::row![
-                opcao_borda(e,"left","Esquerda"),
-                desenho_previa(e),
-                opcao_borda(e,"right","Direita"),
-            ].spacing(5).align_y(Alignment::Center),
-            iced::widget::row![
-                Space::with_width(Length::Fixed(87.)),
-                opcao_borda(e,"bottom","Abaixo"),
-            ],
-        ].spacing(4);
         let ajustes=iced::widget::column![
-            text("PREDEFINIÇÕES").size(11).color(COR_TEXTO_MUTED()),
+            secao(tr!("PREDEFINIÇÕES")),
             presets,
-            Space::with_height(Length::Fixed(10.)),
-            text("ESTILO DA LINHA").size(11).color(COR_TEXTO_MUTED()),
+            secao(tr!("ESTILO DA LINHA")),
             estilo_linhas,
-            Space::with_height(Length::Fixed(10.)),
-            painel_visual,
-            text("Clique nos quatro lados para adicionar ou retirar uma borda.")
-                .size(11).color(COR_TEXTO_MUTED()),
-        ].spacing(6).width(Length::Fill);
-
-        iced::widget::row![
-            container(ajustes).padding(12).width(Length::Fill)
-                .style(estilo_painel_faixa),
+            secao(tr!("COR DA BORDA")),
+            cores_compactas(e, tr!("Automática")),
+        ].spacing(8).width(Length::Fill);
+        let direita: Element<'_, Msg> = if e.mais_cores {
+            seletor_no_dialogo(e,tr!("Cor da borda"))
+        } else {
             iced::widget::column![
-                text("COR DA BORDA").size(11).color(COR_TEXTO_MUTED()),
-                seletor_no_dialogo(e,"Cor da borda"),
-            ].spacing(8).width(Length::Fixed(278.)),
-        ].spacing(14).align_y(Alignment::Start).into()
+                secao(tr!("PRÉVIA DA CÉLULA")),
+                container(opcao_borda(e,"top",tr!("Acima"))).center_x(Length::Fill),
+                iced::widget::row![
+                    opcao_borda(e,"left",tr!("Esquerda")),
+                    desenho_previa(e),
+                    opcao_borda(e,"right",tr!("Direita")),
+                ].spacing(4).align_y(Alignment::Center),
+                container(opcao_borda(e,"bottom",tr!("Abaixo"))).center_x(Length::Fill),
+                text(tr!("Clique nos lados para pôr ou tirar a borda."))
+                    .size(11).color(COR_TEXTO_MUTED()),
+            ].spacing(4).into()
+        };
+        iced::widget::row![
+            container(ajustes).padding(12).width(Length::Fill).style(estilo_painel_faixa),
+            container(direita).padding(12).width(Length::Fixed(420.)).style(estilo_painel_faixa),
+        ].spacing(12).align_y(Alignment::Start).into()
     }
 
+    /// Preenchimento: a paleta grande à esquerda; à direita a prévia (ou o
+    /// seletor completo, se aberto).
     pub(in crate::app) fn formato_preenchimento(&self, e: &Estado) -> Element<'_, Msg> {
         let mut paleta=iced::widget::column![].spacing(6);
         for bloco in CORES.chunks(6) {
@@ -155,19 +191,15 @@ impl App {
             for &hex in bloco {
                 let cor=seletor_cor::rgba_de(hex);
                 let escolhida=e.cor_fundo.eq_ignore_ascii_case(hex);
-                let icone=Space::new(Length::Fixed(33.),Length::Fixed(25.));
                 linha=linha.push(
-                    button(icone).padding(2)
-                        .style(move |_,status| {
-                            let mut r=estilo_botao_pequeno(escolhida)(
-                                &iced::Theme::default(),status);
-                            r.background=Some(iced::Background::Color(
-                                iced::Color::from_rgb8(cor[0],cor[1],cor[2])));
-                            r.border=iced::Border {
-                                color:if escolhida {COR_AZUL_ACENTO()} else {COR_BORDA()},
-                                width:if escolhida {3.} else {1.},radius:5.into(),
-                            };
-                            r
+                    button(Space::new(Length::Fixed(30.),Length::Fixed(22.))).padding(2)
+                        .style(move |_,status| button::Style {
+                            background:Some(iced::Background::Color(iced::Color::from_rgb8(cor[0],cor[1],cor[2]))),
+                            border:iced::Border {
+                                color:if escolhida || matches!(status, button::Status::Hovered) {COR_AZUL_ACENTO()} else {COR_BORDA()},
+                                width:if escolhida {2.5} else {1.},radius:5.into(),
+                            },
+                            ..Default::default()
                         })
                         .on_press(Msg::FormatoCelula(Evento::CorPredefinida(hex)))
                 );
@@ -181,42 +213,41 @@ impl App {
         let contraste=if (cor.r*0.299+cor.g*0.587+cor.b*0.114)<0.52 {
             iced::Color::WHITE
         }else{iced::Color::from_rgb8(30,33,36)};
-        let previa=container(text("Aa   123   •   Prévia do preenchimento")
-            .size(14).color(contraste))
-            .center_x(Length::Fill).center_y(Length::Fixed(80.))
-            .style(move |_|container::Style {
-                background:Some(iced::Background::Color(cor)),
-                border:iced::Border{color:COR_BORDA(),width:1.,radius:7.into()},
-                ..Default::default()
-            });
-        let painel=iced::widget::column![
-            text("PALETA DE CORES").size(11).color(COR_TEXTO_MUTED()),
+        let nome = if e.cor_fundo.is_empty() { tr!("Sem preenchimento").to_owned() } else { e.cor_fundo.clone() };
+        let esquerda=iced::widget::column![
+            secao(tr!("PALETA DE CORES")),
             paleta,
-            Space::with_height(Length::Fixed(14.)),
-            text("PRÉ-VISUALIZAÇÃO").size(11).color(COR_TEXTO_MUTED()),
-            previa,
             iced::widget::row![
-                swatch(&e.cor_fundo,24.,24.),
-                text(if e.cor_fundo.is_empty() {"Sem preenchimento".into()}
-                    else {e.cor_fundo.clone()}).size(12),
-            ].spacing(9).align_y(Alignment::Center),
-            Space::with_height(Length::Fixed(6.)),
-            button(iced::widget::row![
-                feather_ui::icones::icone("eraser",15.),
-                text("Remover preenchimento").size(12)
-            ].spacing(8).align_y(Alignment::Center))
-                .padding([8,12]).style(estilo_botao_secundario)
-                .on_press(Msg::FormatoCelula(Evento::Texto(
-                    TextoCampo::CorFundo,String::new()))),
-        ].spacing(8).width(Length::Fill);
-        iced::widget::row![
-            container(painel).padding(14).width(Length::Fill)
-                .style(estilo_painel_faixa),
+                swatch(&e.cor_fundo,18.,18.),
+                text(nome).size(12).width(Length::Fill),
+                button(iced::widget::row![feather_ui::icones::icone("eraser",14.), text(tr!("Sem preenchimento")).size(12)]
+                    .spacing(6).align_y(Alignment::Center))
+                    .padding([5,9]).style(estilo_botao_secundario)
+                    .on_press(Msg::FormatoCelula(Evento::Texto(TextoCampo::CorFundo,String::new()))),
+            ].spacing(8).align_y(Alignment::Center),
+            button(iced::widget::row![feather_ui::icones::icone("palette",14.), text(tr!("Mais cores…")).size(12).wrapping(iced::widget::text::Wrapping::None)]
+                .spacing(6).align_y(Alignment::Center))
+                .padding([5,9]).style(estilo_botao_pequeno(e.mais_cores))
+                .on_press(Msg::FormatoCelula(Evento::MaisCores)),
+        ].spacing(10).width(Length::Fill);
+        let direita: Element<'_, Msg> = if e.mais_cores {
+            seletor_no_dialogo(e,tr!("Preenchimento"))
+        } else {
             iced::widget::column![
-                text("ESCOLHER COR").size(11).color(COR_TEXTO_MUTED()),
-                seletor_no_dialogo(e,"Preenchimento"),
-            ].spacing(8).width(Length::Fixed(278.)),
-        ].spacing(14).align_y(Alignment::Start).into()
+                secao(tr!("PRÉVIA")),
+                container(text(tr!("Aa 123")).size(18).color(contraste))
+                    .center_x(Length::Fill).center_y(Length::Fixed(150.))
+                    .style(move |_|container::Style {
+                        background:Some(iced::Background::Color(cor)),
+                        border:iced::Border{color:COR_BORDA(),width:1.,radius:7.into()},
+                        ..Default::default()
+                    }),
+            ].spacing(8).into()
+        };
+        iced::widget::row![
+            container(esquerda).padding(12).width(Length::Fill).style(estilo_painel_faixa),
+            container(direita).padding(12).width(Length::Fixed(300.)).style(estilo_painel_faixa),
+        ].spacing(12).align_y(Alignment::Start).into()
     }
 }
 
@@ -228,6 +259,12 @@ mod testes {
         let mut app=App::default();
         app.formato_celula=Some(Estado::novo(&app,Aba::Borda));
         let e=app.formato_celula.as_ref().unwrap();
+        let _: Element<'_,Msg>=app.formato_borda(e);
+        let _: Element<'_,Msg>=app.formato_preenchimento(e);
+        // Com o seletor completo aberto as duas abas também montam.
+        app.update(Msg::FormatoCelula(Evento::MaisCores));
+        let e=app.formato_celula.as_ref().unwrap();
+        assert!(e.mais_cores);
         let _: Element<'_,Msg>=app.formato_borda(e);
         let _: Element<'_,Msg>=app.formato_preenchimento(e);
         let svg=desenho_previa(e);

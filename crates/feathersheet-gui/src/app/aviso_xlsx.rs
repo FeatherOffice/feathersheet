@@ -17,7 +17,7 @@ impl App {
             })
             .collect();
         if fora.is_empty() { return; }
-        self.monitor.registrar(Nivel::Aviso, "Exportar", &format!(
+        self.monitor.registrar(Nivel::Aviso, tr!("Exportar"), &trf!(
             "O .xlsx usa funções que o Excel não tem: {}", fora.join(", ")));
         self.aviso_xlsx = Some(fora);
     }
@@ -33,18 +33,18 @@ impl App {
             ].spacing(8).align_y(Alignment::Center));
         }
         let corpo = column![
-            text("O arquivo foi exportado, mas usa funções que o Excel não tem. Ao abrir no Excel, as células com elas mostram #NOME? quando forem recalculadas.")
+            text(tr!("O arquivo foi exportado, mas usa funções que o Excel não tem. Ao abrir no Excel, as células com elas mostram #NOME? quando forem recalculadas."))
                 .size(12.5).line_height(1.4),
-            dlg::secao("Funções sem equivalente no Excel"),
+            dlg::secao(tr!("Funções sem equivalente no Excel")),
             container(lista).padding([8, 12]).width(Length::Fill).style(dlg::estilo_bloco),
-            text("No FeatherSheet (.fshz) elas continuam funcionando. Para usar o arquivo no Excel, troque essas fórmulas por valores (Colar especial, opção Valores) ou por funções do Excel.")
+            text(tr!("No FeatherSheet (.fshz) elas continuam funcionando. Para usar o arquivo no Excel, troque essas fórmulas por valores (Colar especial, opção Valores) ou por funções do Excel."))
                 .size(12).line_height(1.4).color(COR_TEXTO_MUTED()),
         ].spacing(12);
-        self.dialogo("Funções que o Excel não tem", corpo)
+        self.dialogo(tr!("Funções que o Excel não tem"), corpo)
             .icone("alert-triangle")
-            .subtitulo("Exportar para .xlsx")
+            .subtitulo(tr!("Exportar para .xlsx"))
             .largura(520.0)
-            .botao(dlg::botao_primario("Entendi", Some(Msg::AvisoXlsxFechar)))
+            .botao(dlg::botao_primario(tr!("Entendi"), Some(Msg::AvisoXlsxFechar)))
             .ao_fechar(Msg::AvisoXlsxFechar)
             .sobre(base)
     }

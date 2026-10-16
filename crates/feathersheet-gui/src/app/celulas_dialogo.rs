@@ -23,12 +23,12 @@ pub(super) struct Estado {
 
 fn rotulo(inserir: bool, opcao: Opcao) -> &'static str {
     match (inserir, opcao) {
-        (true, Opcao::Vertical) => "Deslocar células para baixo",
-        (true, Opcao::Horizontal) => "Deslocar células para a direita",
-        (false, Opcao::Vertical) => "Deslocar células para cima",
-        (false, Opcao::Horizontal) => "Deslocar células para a esquerda",
-        (_, Opcao::Linhas) => "Linha inteira",
-        (_, Opcao::Colunas) => "Coluna inteira",
+        (true, Opcao::Vertical) => tr!("Deslocar células para baixo"),
+        (true, Opcao::Horizontal) => tr!("Deslocar células para a direita"),
+        (false, Opcao::Vertical) => tr!("Deslocar células para cima"),
+        (false, Opcao::Horizontal) => tr!("Deslocar células para a esquerda"),
+        (_, Opcao::Linhas) => tr!("Linha inteira"),
+        (_, Opcao::Colunas) => tr!("Coluna inteira"),
     }
 }
 
@@ -64,7 +64,7 @@ impl App {
             Opcao::Vertical | Opcao::Horizontal => {
                 let sentido = if opcao == Opcao::Vertical { Deslocamento::Vertical } else { Deslocamento::Horizontal };
                 self.status = match self.deslocar_celulas(inserir, sentido, &a) {
-                    Ok(()) => format!("Células {} ({})", if inserir { "inseridas" } else { "excluídas" },
+                    Ok(()) => trf!("Células {} ({})", if inserir { "inseridas" } else { tr!("excluídas") },
                         rotulo(inserir, opcao).trim_start_matches("Deslocar células ")),
                     Err(e) => e,
                 };
@@ -78,7 +78,7 @@ impl App {
             (true, false) => self.workbook.excluir_colunas(self.folha, at, quantas),
         };
         if feito.is_none() {
-            self.status = "Não foi possível alterar a estrutura".into();
+            self.status = tr!("Não foi possível alterar a estrutura").into();
             return;
         }
         let tabela = tabelas::refluir(&mut self.workbook, self.folha, coluna, at, quantas, !inserir);
@@ -88,23 +88,23 @@ impl App {
         let nome = if coluna { format!("{}:{}", col_name(at), col_name(at + quantas - 1)) }
             else { format!("{}:{}", at + 1, at + quantas) };
         self.status = match (tabela, mescla) {
-            (Ok(()), Ok(())) => format!("{} {nome} {}", if coluna { "Colunas" } else { "Linhas" },
-                if inserir { "inseridas" } else { "excluídas" }),
-            (Err(e), _) | (_, Err(e)) => format!("Estrutura alterada; revise: {e}"),
+            (Ok(()), Ok(())) => trf!("{} {nome} {}", if coluna { tr!("Colunas") } else { tr!("Linhas") },
+                if inserir { "inseridas" } else { tr!("excluídas") }),
+            (Err(e), _) | (_, Err(e)) => trf!("Estrutura alterada; revise: {e}"),
         };
     }
 
     fn deslocar_celulas(&mut self, inserir: bool, sentido: Deslocamento, a: &Rect) -> Result<(), String> {
-        let sheet = &self.workbook.aba(self.folha).ok_or("Aba ausente.")?.sheet;
+        let sheet = &self.workbook.aba(self.folha).ok_or(tr!("Aba ausente."))?.sheet;
         // O motor não move mesclas nem tabelas: recusar como o Excel quando
         // a área que anda (ou some) passa por uma delas.
         let anda = bloco_deslocado(a, sentido, inserir);
         let afetadas: Vec<Rect> = [Some(a.clone()), anda].into_iter().flatten().collect();
         if mesclas::ler(sheet).iter().any(|m| afetadas.iter().any(|x| cruzam(m, x))) {
-            return Err("Esta operação deslocaria parte de células mescladas. Desmescle ou selecione linhas/colunas inteiras.".into());
+            return Err(tr!("Esta operação deslocaria parte de células mescladas. Desmescle ou selecione linhas/colunas inteiras.").into());
         }
         if tabelas::areas(sheet).iter().any(|t| afetadas.iter().any(|x| cruzam(t, x))) {
-            return Err("Esta operação deslocaria parte de uma tabela. Use linha ou coluna inteira.".into());
+            return Err(tr!("Esta operação deslocaria parte de uma tabela. Use linha ou coluna inteira.").into());
         }
         let mudanca = if inserir {
             self.workbook.inserir_celulas(self.folha, a.clone(), sentido)?
@@ -134,13 +134,13 @@ impl App {
             opcoes = opcoes.push(iced::widget::radio(rotulo(s.inserir, o), o, Some(s.opcao),
                 |o| Msg::Celulas(Evento::Opcao(o))).size(15).spacing(9).text_size(13));
         }
-        self.dialogo(if s.inserir { "Inserir células" } else { "Excluir células" }, opcoes)
+        self.dialogo(if s.inserir { tr!("Inserir células") } else { tr!("Excluir células") }, opcoes)
             .icone(if s.inserir { "plus" } else { "trash" })
-            .subtitulo(if s.inserir { "As fórmulas que leem as células deslocadas acompanham." }
-                else { "Quem lia uma célula excluída passa a mostrar #REF!." })
+            .subtitulo(if s.inserir { tr!("As fórmulas que leem as células deslocadas acompanham.") }
+                else { tr!("Quem lia uma célula excluída passa a mostrar #REF!.") })
             .largura(420.0)
             .ao_fechar(Msg::Celulas(Evento::Fechar))
-            .secundario("Cancelar", Some(Msg::Celulas(Evento::Fechar)))
+            .secundario(tr!("Cancelar"), Some(Msg::Celulas(Evento::Fechar)))
             .primario("OK", Some(Msg::Celulas(Evento::Aplicar)))
     }
 

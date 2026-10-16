@@ -249,4 +249,53 @@ impl Sheet {
         self.tocar();
         self.rastro.borrow_mut().desconhecer();
     }
+
+    /// Carga do `.fshz`: uma coluna inteira de números, direto nos blocos.
+    /// Era um `set_cell_valor` por célula — 6 milhões de chamadas na
+    /// Planilha Pesada, cada uma acertando limites e procurando a coluna.
+    pub fn carregar_coluna_numeros(&mut self, col: u32, values: &[f64], bitmap: &[u8]) {
+        if col >= MAX_COLS {
+            return;
+        }
+        let linhas = (values.len() as u32).min(MAX_ROWS);
+        let Some((primeira, ultima)) = pontas_do_bitmap(bitmap, linhas) else { return };
+        self.data.carregar_coluna_num(col, values, bitmap, linhas);
+        self.cresce_limites(primeira, col);
+        self.cresce_limites(ultima, col);
+    }
+
+    /// Carga do `.fshz`: uma coluna inteira de texto, com o dicionário local
+    /// do arquivo traduzido para o pool da aba uma vez por texto distinto.
+    pub fn carregar_coluna_textos(&mut self, col: u32, indices: &[i32], bitmap: &[u8], dict: &[String]) {
+        if col >= MAX_COLS {
+            return;
+        }
+        let linhas = (indices.len() as u32).min(MAX_ROWS);
+        let Some((primeira, ultima)) = pontas_do_bitmap(bitmap, linhas) else { return };
+        let ids_pool: Vec<i32> = dict.iter().map(|t| self.pool.get_or_create(t)).collect();
+        let mut ids = vec![0i32; linhas as usize];
+        let mut mascara = bitmap[..((linhas as usize) + 7) >> 3].to_vec();
+        for (r, destino) in ids.iter_mut().enumerate() {
+            if mascara[r >> 3] & (1 << (r & 7)) == 0 {
+                continue;
+            }
+            match ids_pool.get(indices[r] as usize).copied() {
+                // Texto vazio ou pool cheio: a célula fica sem nada, como no
+                // `set_cell_value`.
+                Some(id) if id >= 0 && !self.pool.get(id).is_empty() => *destino = id,
+                _ => mascara[r >> 3] &= !(1 << (r & 7)),
+            }
+        }
+        self.data.carregar_coluna_txt(col, &ids, &mascara, linhas);
+        self.cresce_limites(primeira, col);
+        self.cresce_limites(ultima, col);
+    }
+}
+
+/// A primeira e a última linha presentes na máscara, se houver alguma.
+fn pontas_do_bitmap(bitmap: &[u8], linhas: u32) -> Option<(u32, u32)> {
+    let ligado = |r: u32| bitmap.get((r >> 3) as usize).is_some_and(|b| b & (1 << (r & 7)) != 0);
+    let primeira = (0..linhas).find(|&r| ligado(r))?;
+    let ultima = (0..linhas).rev().find(|&r| ligado(r)).unwrap_or(primeira);
+    Some((primeira, ultima))
 }

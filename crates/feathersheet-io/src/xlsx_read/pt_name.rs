@@ -6,7 +6,9 @@
 //! colar a saída aqui, senão o `.xlsx` aberto pelo app instalado traduz
 //! fórmula diferente do que `npm run dev` traduziria (ver CLAUDE.md,
 //! "Cuidados ao mexer").
-// Gerado por scripts/gerar-formula-pt-name.ts — não editar à mão.
+// Gerado por scripts/gerar-formula-pt-name.ts; desde 16/10/2026 editado à
+// mão (o motor TypeScript foi arquivado). O que não está aqui cai nos
+// apelidos de `functions.rs` (ver `pt_name_for`).
 // 142 entradas, a partir de core/functions.ts::CANONICAL.
 pub const PT_NAME: &[(&str, &str)] = &[
     ("ABS", "ABS"),
@@ -17,7 +19,7 @@ pub const PT_NAME: &[(&str, &str)] = &[
     ("AVERAGE", "MÉDIA"),
     ("AVERAGEIF", "MÉDIASE"),
     ("AVERAGEIFS", "MÉDIASES"),
-    ("CHISQ.DIST", "DIST.QUI"),
+    ("CHISQ.DIST", "DIST.QUIQUA"),
     ("CHISQ.TEST", "TESTE.QUI"),
     ("CHOOSE", "ESCOLHER"),
     ("COLUMN", "COL"),
@@ -89,8 +91,8 @@ pub const PT_NAME: &[(&str, &str)] = &[
     ("MONTH", "MÊS"),
     ("NA", "NÃODISP"),
     ("NETWORKDAYS", "DIATRABALHOTOTAL"),
-    ("NORM.DIST", "DIST.NORM"),
-    ("NORM.INV", "INV.NORM"),
+    ("NORM.DIST", "DIST.NORM.N"),
+    ("NORM.INV", "INV.NORM.N"),
     ("NORM.S.DIST", "DIST.NORMP"),
     ("NOT", "NÃO"),
     ("NOW", "AGORA"),

@@ -1,5 +1,6 @@
 //! A pasta de trabalho e a aba: guardar, recalcular, derramar, mover.
 
+pub mod agregado;
 pub mod assincrono;
 pub mod bloco;
 pub mod calculo_manual;

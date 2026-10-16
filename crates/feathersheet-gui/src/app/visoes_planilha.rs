@@ -13,7 +13,8 @@ impl App {
     }
 
     pub(super) fn icone_menu(nome: &str) -> &'static str {
-        match nome {
+        // O rótulo chega traduzido; o ícone é escolhido pelo texto em português.
+        match crate::idioma::original(nome) {
             "Nova aba" | "+ Linha" | "+ Coluna" | "Nova" => "file-plus",
             "Abrir" => "folder-open", "Salvar" | "Salvar como" => "device-floppy",
             "Desfazer" => "arrow-back-up", "Refazer" => "arrow-forward-up",
@@ -92,7 +93,7 @@ impl App {
             }
         }
         self.condicional_aberto = true;
-        self.status = format!("Editando regra {} de {}", indice + 1, regras.len());
+        self.status = trf!("Editando regra {} de {}", indice + 1, regras.len());
     }
 
     pub(super) fn adicionar_condicional(&mut self, cores_alternadas: bool) {
@@ -121,7 +122,7 @@ impl App {
                 }
             }
             if cores.iter().any(|cor|parse_color(cor).is_none()) {
-                self.status = "Cor condicional inválida: use #RGB ou #RRGGBB".into();
+                self.status = tr!("Cor condicional inválida: use #RGB ou #RRGGBB").into();
                 return;
             }
         }
@@ -196,7 +197,7 @@ impl App {
                     let op = tipo.operador().and_then(|nome|
                         serde_json::from_value::<CellOp>(serde_json::json!(nome)).ok());
                     let Some(op) = op else {
-                        self.status="Tipo de regra condicional inválido".into();return;
+                        self.status=tr!("Tipo de regra condicional inválido").into();return;
                     };
                     let mut values=Vec::new();
                     if tipo.aridade()>0 { values.push(self.condicional_valor.clone()); }
@@ -223,7 +224,7 @@ impl App {
         match condicional::gravar(&mut self.workbook,self.folha,lista) {
             Ok(()) => {
                 self.alterado=true;
-                self.status="Regras de formatação condicional atualizadas".into();
+                self.status=tr!("Regras de formatação condicional atualizadas").into();
             }
             Err(e) => self.status=e,
         }
@@ -312,7 +313,7 @@ impl App {
             let aba: Element<'_, Msg> = if editando {
                 let tamanho = ((self.nome_aba.chars().count().max(8) as f32 * 7.2) + 16.0)
                     .clamp(80.0, 240.0);
-                let campo = text_input("Nome da aba", &self.nome_aba)
+                let campo = text_input(tr!("Nome da aba"), &self.nome_aba)
                     .id(text_input::Id::new("feathersheet.renomear-aba"))
                     .on_input(Msg::NomearAba)
                     .on_submit(Msg::RenomearAba)

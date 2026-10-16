@@ -15,7 +15,7 @@ impl App {
                         (nome, area, registro::fonte_snapshot(&salva.dados)?)
                     } else {
                         let indice = self.workbook.indice_por_nome(&nome).ok_or_else(|| {
-                            format!("A origem '{nome}' foi removida; a consulta não pode ser atualizada")
+                            trf!("A origem '{nome}' foi removida; a consulta não pode ser atualizada")
                         })?;
                         let tabela = ler_tabela(&self.workbook, indice, area.clone())?;
                         (nome, area, tabela)
@@ -29,10 +29,10 @@ impl App {
                         0, 0, fonte.linhas.len() as u32,
                         fonte.cabecalho.len().saturating_sub(1) as u32,
                     );
-                    ("Snapshot TypeScript".into(), area, fonte)
+                    (tr!("Snapshot TypeScript").into(), area, fonte)
                 };
             let mut estado = Estado::novo(fonte, origem_aba, origem);
-            estado.nome = salva.dados["nome"].as_str().unwrap_or("Consulta").into();
+            estado.nome = salva.dados["nome"].as_str().unwrap_or(tr!("Consulta")).into();
             estado.edicao = Some(id.to_owned());
             estado.destino_modo = match salva.dados["destino"]["modo"].as_str() {
                 Some("apenas_conexao") => DestinoModo::ApenasConexao,
@@ -47,13 +47,13 @@ impl App {
                     tabelas_existentes(&self.workbook).into_iter()
                         .find(|(_, n, _)| n == tabela)
                         .map(|(i, _, a)| (i, a))
-                        .ok_or_else(|| format!("A tabela adicional '{tabela}' não existe mais"))?
+                        .ok_or_else(|| trf!("A tabela adicional '{tabela}' não existe mais"))?
                 } else {
                     // Compatibilidade com consultas antigas que mesclavam abas.
                     let indice = self.workbook.indice_por_nome(&nome).ok_or_else(|| {
-                        format!("A fonte adicional '{nome}' não existe mais")
+                        trf!("A fonte adicional '{nome}' não existe mais")
                     })?;
-                    let area = self.workbook.aba(indice).ok_or("Aba indisponível")?.sheet.used_rect();
+                    let area = self.workbook.aba(indice).ok_or(tr!("Aba indisponível"))?.sheet.used_rect();
                     (indice, area)
                 };
                 estado.fontes.insert(nome, ler_tabela(&self.workbook, indice, area)?);
@@ -75,7 +75,7 @@ impl App {
                 self.openquery = Some(estado);
                 self.contexto = None;
                 self.menu_aberto = false;
-                self.status = "OpenQuery: consulta carregada para edição".into();
+                self.status = tr!("OpenQuery: consulta carregada para edição").into();
                 true
             }
             Err(erro) => {
@@ -91,14 +91,14 @@ impl App {
     /// serialização FSHZ continue no contrato Sheet.oq do TypeScript.
     pub(super) fn salvar_conexao_openquery(&mut self) {
         let preparado = (|| -> Result<(usize, serde_json::Value, String), String> {
-            let editor = self.openquery.as_mut().ok_or("Editor de consulta não está aberto")?;
+            let editor = self.openquery.as_mut().ok_or(tr!("Editor de consulta não está aberto"))?;
             editor.sincronizar()?;
             editor.recalcular();
             if !editor.erro.is_empty() { return Err(editor.erro.clone()); }
             let id = if let Some(id) = &editor.edicao {
                 let anterior = registro::buscar(&self.workbook, id)?;
                 if registro::area_saida(&anterior.dados).is_some() {
-                    return Err("Para converter uma consulta materializada em conexão,                          desvincule primeiro sua tabela de resultado".into());
+                    return Err(tr!("Para converter uma consulta materializada em conexão,                          desvincule primeiro sua tabela de resultado").into());
                 }
                 id.to_owned()
             } else {
@@ -111,9 +111,9 @@ impl App {
                     .unwrap_or(self.folha)
             } else { self.folha };
             let nome_aba = self.workbook.aba(aba)
-                .ok_or("Aba escolhida para armazenar a conexão não existe")?
+                .ok_or(tr!("Aba escolhida para armazenar a conexão não existe"))?
                 .sheet.name.clone();
-            let nome = if editor.nome.trim().is_empty() { "Consulta" } else {
+            let nome = if editor.nome.trim().is_empty() { tr!("Consulta") } else {
                 editor.nome.trim()
             };
             let adicionais: Vec<String> = editor.fontes.keys().cloned().collect();
@@ -136,7 +136,7 @@ impl App {
                         registro::aplicar_gravacao(&mut self.workbook, plano);
                         self.alterado = true;
                         self.openquery = None;
-                        self.status = format!("OpenQuery '{id}': conexão salva sem escrever células");
+                        self.status = trf!("OpenQuery '{id}': conexão salva sem escrever células");
                     }
                     Err(erro) => {
                         if let Some(e) = &mut self.openquery { e.erro = erro.clone(); }
@@ -156,50 +156,50 @@ impl App {
         let preparado = (|| -> Result<
             (String, String, usize, Option<Rect>, DestinoModo, serde_json::Value, vinculo::Plano), String
         > {
-            let editor = self.openquery.as_mut().ok_or("Editor não está aberto")?;
+            let editor = self.openquery.as_mut().ok_or(tr!("Editor não está aberto"))?;
             editor.sincronizar()?;
             editor.recalcular();
             if !editor.erro.is_empty() { return Err(editor.erro.clone()); }
             let tabela = &editor.resultado;
             if tabela.cabecalho.is_empty() {
-                return Err("A consulta não tem colunas para carregar".into());
+                return Err(tr!("A consulta não tem colunas para carregar").into());
             }
             let linhas = tabela.linhas.len() as u64 + 1;
             let colunas = tabela.linhas.iter().map(Vec::len)
                 .max().unwrap_or(0).max(tabela.cabecalho.len()) as u64;
             if linhas > MAX_ROWS as u64 || colunas > MAX_COLS as u64 ||
                 linhas.saturating_mul(colunas) > MAX_CELULAS_SAIDA {
-                return Err("Resultado acima do orçamento OpenQuery".into());
+                return Err(tr!("Resultado acima do orçamento OpenQuery").into());
             }
             let id = match &editor.edicao {
                 Some(id) => id.clone(),
                 None => registro::proximo_id(&self.workbook)?,
             };
             let nome_consulta = editor.nome.trim();
-            let nome_consulta = if nome_consulta.is_empty() { "Consulta" } else { nome_consulta };
+            let nome_consulta = if nome_consulta.is_empty() { tr!("Consulta") } else { nome_consulta };
             let (aba, nome_aba, anterior) = if let Some(id) = &editor.edicao {
                 let salva = registro::buscar(&self.workbook, id)?;
                 // Legacy TS não registra a área de saída. É inseguro
                 // sobrescrevê-la, sobretudo com outras tabelas na aba.
                 let antigo = registro::area_saida(&salva.dados).ok_or(
-                    "Esta consulta TypeScript ainda não tem área de saída vinculada. \
-                     Não sobrescrevi a aba; crie uma consulta nativa."
+                    tr!("Esta consulta TypeScript ainda não tem área de saída vinculada. \
+                     Não sobrescrevi a aba; crie uma consulta nativa.")
                 )?;
-                let nome = registro::destino(&salva.dados).ok_or("Destino salvo inválido")?;
+                let nome = registro::destino(&salva.dados).ok_or(tr!("Destino salvo inválido"))?;
                 let indice = self.workbook.indice_por_nome(nome)
-                    .ok_or("A aba de resultado vinculada não existe mais")?;
+                    .ok_or(tr!("A aba de resultado vinculada não existe mais"))?;
                 if antigo.r0 != 0 || antigo.c0 != 0 {
-                    return Err("Somente atualizações ancoradas em A1 estão disponíveis".into());
+                    return Err(tr!("Somente atualizações ancoradas em A1 estão disponíveis").into());
                 }
                 // Crescimento não deve apagar valores manuais fora da antiga
                 // área gerada. Validar antes de escrever qualquer célula.
                 let planilha = &self.workbook.aba(indice)
-                    .ok_or("Aba de resultado indisponível")?.sheet;
+                    .ok_or(tr!("Aba de resultado indisponível"))?.sheet;
                 for linha in 0..linhas as u32 {
                     for coluna in 0..colunas as u32 {
                         if (linha > antigo.r1 || coluna > antigo.c1)
                             && planilha.snapshot(linha, coluna).is_some() {
-                            return Err(format!(
+                            return Err(trf!(
                                 "O resultado atingiria {} com dados fora da área anterior; \
                                  libere o destino antes de atualizar.",
                                 cell_name(linha, coluna),
@@ -213,12 +213,12 @@ impl App {
                 // valores nem células apenas formatadas sem confirmação.
                 let aba = self.folha;
                 let sheet = &self.workbook.aba(aba).ok_or(
-                    "Aba atual de destino não está disponível"
+                    tr!("Aba atual de destino não está disponível")
                 )?.sheet;
                 for r in 0..linhas as u32 {
                     for c in 0..colunas as u32 {
                         if sheet.snapshot(r,c).is_some() {
-                            return Err(format!(
+                            return Err(trf!(
                                 "A aba atual já contém dados em {}.                                  Escolha uma aba vazia ou 'Nova aba' para preservar seu trabalho.",
                                 cell_name(r,c),
                             ));
@@ -233,7 +233,7 @@ impl App {
                 let base: String = nome_consulta.chars().map(|c| {
                     if matches!(c, '/' | '\\' | '!' | '[' | ']') { '_' } else { c }
                 }).collect();
-                let base = if base.trim().is_empty() { "Consulta" } else { &base };
+                let base = if base.trim().is_empty() { tr!("Consulta") } else { &base };
                 let mut novo = base.to_owned();
                 let mut numero = 2;
                 while nomes.iter().any(|n| n.eq_ignore_ascii_case(&novo)) {
@@ -321,7 +321,7 @@ impl App {
         self.nome_aba = nome_aba.clone();
         self.endereco = "A1".into();
         self.alterado = true;
-        self.status = format!("OpenQuery '{id}': {linhas_geradas} linhas em {nome_aba}; consulta salva no FSHZ");
+        self.status = trf!("OpenQuery '{id}': {linhas_geradas} linhas em {nome_aba}; consulta salva no FSHZ");
     }
 
     pub(super) fn atualizar_consulta_salva(&mut self, id: &str) {

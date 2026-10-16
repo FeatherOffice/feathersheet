@@ -58,7 +58,7 @@ impl App {
             Evento::Abrir => {}
             Evento::Selecionar(i) => e.selecionado = i.min(e.niveis.len().saturating_sub(1)),
             Evento::Adicionar | Evento::Copiar if e.niveis.len() >= MAX_NIVEIS =>
-                e.erro = Some(format!("No máximo {MAX_NIVEIS} níveis.")),
+                e.erro = Some(trf!("No máximo {MAX_NIVEIS} níveis.")),
             Evento::Adicionar => {
                 // A próxima coluna ainda sem nível, como o Excel sugere.
                 let usada = |c: u32| e.niveis.iter().any(|n| n.coluna == c);
@@ -92,7 +92,7 @@ impl App {
             }
             Evento::Ordem(i, rotulo) => {
                 if let Some(n) = e.niveis.get_mut(i) {
-                    n.crescente = ORDENS.iter().any(|par| par[0] == rotulo);
+                    n.crescente = ORDENS.iter().any(|par| par[0] == rotulo || tr!(par[0]) == rotulo);
                 }
                 e.selecionado = i;
             }
@@ -111,14 +111,14 @@ impl App {
         if !self.confirmar() { return; }
         let Some(aba) = self.workbook.aba(self.folha) else { return };
         if self.tem_varias_areas() {
-            self.status = "Classificar não funciona com várias áreas selecionadas".into();
+            self.status = tr!("Classificar não funciona com várias áreas selecionadas").into();
             return;
         }
         let selecao = self.area_selecionada();
         let usada = aba.sheet.used_rect();
         let area = if selecao.r0 == selecao.r1 && selecao.c0 == selecao.c1 {
             if aba.sheet.is_empty() || selecao.r0 > usada.r1 || selecao.c0 > usada.c1 {
-                self.status = "Selecione os dados que deseja classificar".into();
+                self.status = tr!("Selecione os dados que deseja classificar").into();
                 return;
             }
             ops::regiao_atual(&aba.sheet, selecao)
@@ -127,7 +127,7 @@ impl App {
             Rect::new(selecao.r0, selecao.c0, selecao.r1.min(usada.r1), selecao.c1)
         };
         if area.r0 >= area.r1 {
-            self.status = "Selecione mais de uma linha para classificar".into();
+            self.status = tr!("Selecione mais de uma linha para classificar").into();
             return;
         }
         // Cabeçalho provável: primeira linha só texto e a segunda com algum
@@ -150,7 +150,7 @@ impl App {
             let titulo = feathersheet_core::celulas::values::to_text(
                 &self.workbook.valor(self.folha, e.area.r0, c));
             if e.cabecalho && !titulo.trim().is_empty() { titulo }
-            else { format!("Coluna {}", col_name(c)) }
+            else { trf!("Coluna {}", col_name(c)) }
         }).collect()
     }
 
@@ -178,9 +178,9 @@ impl App {
                 self.workbook.editar(self.folha, |sheet|
                     ops::aplicar_ordenacao(sheet, area.c0, area.c1, &plano));
                 self.alterado = true;
-                self.status = format!("Dados classificados por {} nível(is)", e.niveis.len());
+                self.status = trf!("Dados classificados por {} nível(is)", e.niveis.len());
             }
-            None => self.status = "Os dados já estão nessa ordem".into(),
+            None => self.status = tr!("Os dados já estão nessa ordem").into(),
         }
         self.trocar_selecao(area.r0, area.c0);
         self.fim_selecao = (area.r1, area.c1);
@@ -214,17 +214,17 @@ impl App {
         );
         let n = e.niveis.len();
         let barra = row![
-            botao_icone("plus", "Adicionar nível", "Mais uma coluna para desempatar",
+            botao_icone("plus", tr!("Adicionar nível"), tr!("Mais uma coluna para desempatar"),
                 (n < MAX_NIVEIS).then_some(ev(Evento::Adicionar))),
-            botao_icone("trash", "Excluir nível", "Remove o nível selecionado",
+            botao_icone("trash", tr!("Excluir nível"), tr!("Remove o nível selecionado"),
                 (n > 1).then_some(ev(Evento::Excluir))),
-            botao_icone("copy", "Copiar nível", "Duplica o nível selecionado",
+            botao_icone("copy", tr!("Copiar nível"), tr!("Duplica o nível selecionado"),
                 (n < MAX_NIVEIS).then_some(ev(Evento::Copiar))),
-            so_icone("arrow-up", "Subir nível", (e.selecionado > 0).then_some(ev(Evento::Mover(-1)))),
-            so_icone("arrow-down", "Descer nível",
+            so_icone("arrow-up", tr!("Subir nível"), (e.selecionado > 0).then_some(ev(Evento::Mover(-1)))),
+            so_icone("arrow-down", tr!("Descer nível"),
                 (e.selecionado + 1 < n).then_some(ev(Evento::Mover(1)))),
             Space::with_width(Length::Fill),
-            checkbox("Meus dados têm cabeçalhos", e.cabecalho)
+            checkbox(tr!("Meus dados têm cabeçalhos"), e.cabecalho)
                 .on_toggle(|v| Msg::Classificar(Evento::Cabecalho(v))).size(15).text_size(12.5),
         ].spacing(6).align_y(Alignment::Center);
 
@@ -233,7 +233,7 @@ impl App {
         let (w1, w2, w3, w4) = (Length::Fixed(118.0), Length::FillPortion(3),
             Length::FillPortion(2), Length::FillPortion(3));
         let mut linhas = column![
-            container(row![cab("", w1), cab("Coluna", w2), cab("Classificar em", w3), cab("Ordem", w4)]
+            container(row![cab("", w1), cab(tr!("Coluna"), w2), cab(tr!("Classificar em"), w3), cab(tr!("Ordem"), w4)]
                 .spacing(8)).padding([6, 10]).width(Length::Fill)
                 .style(|_| container::Style {
                     background: Some(iced::Background::Color(COR_PAINEL_FAIXA())),
@@ -244,18 +244,18 @@ impl App {
         for (i, nivel) in e.niveis.iter().enumerate() {
             let rotulo = rotulos.get((nivel.coluna - e.area.c0) as usize).cloned().unwrap_or_default();
             let par = ORDENS[usize::from(self.coluna_numerica(e, nivel.coluna))];
-            let ordem = if nivel.crescente { par[0] } else { par[1] };
-            let ordens: Vec<String> = par.iter().map(|s| s.to_string()).collect();
+            let ordem = tr!(if nivel.crescente { par[0] } else { par[1] });
+            let ordens: Vec<String> = par.iter().map(|s| tr!(*s).to_string()).collect();
             let selecionado = i == e.selecionado;
             let linha = row![
-                button(text(if i == 0 { "Classificar por" } else { "E depois por" }).size(12.5))
+                button(text(if i == 0 { tr!("Classificar por") } else { tr!("E depois por") }).size(12.5))
                     .width(w1).padding([6, 8]).style(estilo_botao_pequeno(selecionado))
                     .on_press(ev(Evento::Selecionar(i))),
                 pick_list(rotulos.clone(), Some(rotulo), move |r| Msg::Classificar(Evento::Coluna(i, r)))
                     .text_size(12.5).padding([4, 8]).width(w2),
                 container(tooltip(
-                    container(text("Valores").size(12.5)).padding([6, 8]).width(Length::Fill),
-                    container(text("Cor da célula, cor da fonte e ícone: em breve").size(11))
+                    container(text(tr!("Valores")).size(12.5)).padding([6, 8]).width(Length::Fill),
+                    container(text(tr!("Cor da célula, cor da fonte e ícone: em breve")).size(11))
                         .padding([4, 8]).style(estilo_dica),
                     tooltip::Position::Bottom,
                 )).width(w3),
@@ -270,19 +270,19 @@ impl App {
             container(rolagem(linhas)).max_height(260.0),
         ].spacing(14);
         let opcoes = button(row![
-            text("Opções").size(12.5),
+            text(tr!("Opções")).size(12.5),
             feather_ui::icones::icone(if e.opcoes { "chevron-up" } else { "chevron-down" }, 14.0),
         ].spacing(5).align_y(Alignment::Center))
             .padding([5, 10]).style(estilo_botao_pequeno(e.opcoes)).on_press(ev(Evento::AlternarOpcoes));
         if e.opcoes {
             corpo = corpo.push(column![
-                checkbox("Diferenciar maiúsculas e minúsculas", e.maiusculas)
+                checkbox(tr!("Diferenciar maiúsculas e minúsculas"), e.maiusculas)
                     .on_toggle(|v| Msg::Classificar(Evento::Maiusculas(v))).size(15).text_size(12.5),
                 tooltip(
                     row![feather_ui::icones::icone("info-circle", 14.0),
-                        text("Orientação: de cima para baixo (da esquerda para a direita em breve)")
+                        text(tr!("Orientação: de cima para baixo (da esquerda para a direita em breve)"))
                             .size(11.5).color(COR_TEXTO_MUTED())].spacing(6).align_y(Alignment::Center),
-                    container(text("Classificar colunas lado a lado ainda não está disponível").size(11))
+                    container(text(tr!("Classificar colunas lado a lado ainda não está disponível")).size(11))
                         .padding([4, 8]).style(estilo_dica),
                     tooltip::Position::Bottom,
                 ),
@@ -293,13 +293,13 @@ impl App {
                 feather_ui::icones::icone("info-circle", 15.0), text(erro.clone()).size(12).color(COR_ERRO()),
             ].spacing(6).align_y(Alignment::Center));
         }
-        self.dialogo("Classificar", corpo)
+        self.dialogo(tr!("Classificar"), corpo)
             .icone("sort-ascending")
-            .subtitulo(format!("Área {}:{}", cell_name(e.area.r0, e.area.c0), cell_name(e.area.r1, e.area.c1)))
+            .subtitulo(trf!("Área {}:{}", cell_name(e.area.r0, e.area.c0), cell_name(e.area.r1, e.area.c1)))
             .largura(680.0)
             .ao_fechar(ev(Evento::Fechar))
             .rodape_esquerda(opcoes)
-            .secundario("Cancelar", Some(ev(Evento::Fechar)))
+            .secundario(tr!("Cancelar"), Some(ev(Evento::Fechar)))
             .primario("OK", Some(ev(Evento::Confirmar)))
     }
 

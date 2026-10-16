@@ -21,13 +21,13 @@ use serde_json::{json, Value};
 fn listar(sheet: &Sheet) -> Result<Vec<Value>, String> {
     let Some(ref bruto) = sheet.tb else { return Ok(Vec::new()) };
     serde_json::from_str::<Vec<Value>>(bruto)
-        .map_err(|_| "Metadados de tabelas da aba estão inválidos; nada foi alterado.".into())
+        .map_err(|_| tr!("Metadados de tabelas da aba estão inválidos; nada foi alterado.").into())
 }
 
 fn area_valida(area: Rect) -> Result<Rect, String> {
     let a = area.normalized();
     if a.r1 >= MAX_ROWS || a.c1 >= MAX_COLS {
-        return Err("O intervalo está fora dos limites da grade.".into());
+        return Err(tr!("O intervalo está fora dos limites da grade.").into());
     }
     Ok(a)
 }
@@ -101,7 +101,7 @@ pub(super) fn nomes_usados(w: &Workbook) -> Result<Vec<String>, String> {
 }
 
 pub(super) fn nome_sugerido(w: &Workbook) -> Result<String, String> {
-    Ok(tabela::nome_disponivel(&nomes_usados(w)?, "Tabela"))
+    Ok(tabela::nome_disponivel(&nomes_usados(w)?, tr!("Tabela")))
 }
 
 /// Usa a região atual do motor existente quando só há uma célula marcada.
@@ -110,21 +110,21 @@ pub(super) fn nome_sugerido(w: &Workbook) -> Result<String, String> {
 pub(super) fn sugerir(w: &Workbook, aba: usize, selecao: Rect)
     -> Result<(Rect, bool, bool), String>
 {
-    let sheet = &w.aba(aba).ok_or("A aba selecionada não existe.")?.sheet;
+    let sheet = &w.aba(aba).ok_or(tr!("A aba selecionada não existe."))?.sheet;
     let a = area_valida(selecao)?;
     let unica = a.r0 == a.r1 && a.c0 == a.c1;
     let vazia = unica && sheet.get_raw(a.r0, a.c0).is_empty();
     if vazia {
         let (r1, c1) = (a.r0.checked_add(5), a.c0.checked_add(2));
         let (Some(r1), Some(c1)) = (r1, c1) else {
-            return Err("Selecione uma área para criar a tabela nessa posição.".into());
+            return Err(tr!("Selecione uma área para criar a tabela nessa posição.").into());
         };
         if r1 >= MAX_ROWS || c1 >= MAX_COLS {
-            return Err("Não há espaço para a tabela padrão 6×3.".into());
+            return Err(tr!("Não há espaço para a tabela padrão 6×3.").into());
         }
         let area = Rect::new(a.r0, a.c0, r1, c1);
         if (a.r0..=r1).any(|r| (a.c0..=c1).any(|c| !sheet.get_raw(r, c).is_empty())) {
-            return Err("Há dados vizinhos. Selecione o intervalo antes de criar a tabela.".into());
+            return Err(tr!("Há dados vizinhos. Selecione o intervalo antes de criar a tabela.").into());
         }
         return Ok((area, true, true));
     }
@@ -142,24 +142,24 @@ pub(super) fn criar(
     if nome.is_empty() || nome.len() > 64 ||
         !nome.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_') ||
         !nome.chars().all(|c| c.is_alphanumeric() || c == '_') {
-        return Err("Use um nome de tabela com letras, números e _, começando por letra.".into());
+        return Err(tr!("Use um nome de tabela com letras, números e _, começando por letra.").into());
     }
     if nomes_usados(w)?.iter().any(|n| n.eq_ignore_ascii_case(nome)) {
-        return Err("Já existe uma tabela com esse nome na pasta.".into());
+        return Err(tr!("Já existe uma tabela com esse nome na pasta.").into());
     }
-    let aba = w.aba(indice).ok_or("A aba selecionada não existe.")?;
+    let aba = w.aba(indice).ok_or(tr!("A aba selecionada não existe."))?;
     let mut tabelas = listar(&aba.sheet)?;
     if tabelas.iter().filter_map(area_de).any(|r| intersecta(&r, &area)) {
-        return Err("A seleção cruza outra tabela. Escolha um intervalo livre.".into());
+        return Err(tr!("A seleção cruza outra tabela. Escolha um intervalo livre.").into());
     }
     if vazia && (area.r0..=area.r1).any(|r|
         (area.c0..=area.c1).any(|c| !aba.sheet.get_raw(r,c).is_empty())) {
-        return Err("A região não está mais vazia; nenhum dado foi sobrescrito.".into());
+        return Err(tr!("A região não está mais vazia; nenhum dado foi sobrescrito.").into());
     }
     // A referência estruturada e o intervalo nomeado usam o MESMO nome.
     // Não sobrescrever um nome explícito que já existe na pasta.
     if w.nomeados().iter().any(|n| n.nome.eq_ignore_ascii_case(nome)) {
-        return Err("Já existe um intervalo nomeado com esse nome.".into());
+        return Err(tr!("Já existe um intervalo nomeado com esse nome.").into());
     }
     let id = format!("tab_{}", nome);
     tabelas.push(json!({
@@ -170,9 +170,9 @@ pub(super) fn criar(
         "filtros": []
     }));
     let dados = serde_json::to_string(&tabelas)
-        .map_err(|e| format!("Não foi possível armazenar tabela: {e}"))?;
+        .map_err(|e| trf!("Não foi possível armazenar tabela: {e}"))?;
     {
-        let aba = w.aba_mut(indice).ok_or("A aba selecionada não existe.")?;
+        let aba = w.aba_mut(indice).ok_or(tr!("A aba selecionada não existe."))?;
         // Registrar o objeto e os cabeçalhos criados numa só transação:
         // um Ctrl+Z remove a tabela e desfaz apenas os cabeçalhos gerados.
         aba.sheet.abrir_transacao();
@@ -187,11 +187,11 @@ pub(super) fn criar(
             w.escrever_celula(indice, area.r0, c, format!("Coluna{}", coluna + 1));
         }
     }
-    w.aba_mut(indice).ok_or("A aba selecionada não existe.")?
+    w.aba_mut(indice).ok_or(tr!("A aba selecionada não existe."))?
         .sheet.fechar_transacao();
     // O TS registra cada tabela como intervalo nomeado: fórmulas como
     // =SOMA(Tabela1) continuam funcionando no FeatherSheet nativo.
-    let nome_aba = w.aba(indice).ok_or("Aba selecionada não existe.")?.sheet.name.clone();
+    let nome_aba = w.aba(indice).ok_or(tr!("Aba selecionada não existe."))?.sheet.name.clone();
     w.definir_nome(nome, Rect::na_aba(area.r0, area.c0, area.r1, area.c1, nome_aba));
     Ok(())
 }

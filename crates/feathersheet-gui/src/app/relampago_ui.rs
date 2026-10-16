@@ -28,9 +28,9 @@ impl App {
         self.alterado = true;
         let n = plano.escrever.len();
         let sem = if plano.sem_padrao > 0 {
-            format!("; {} linha(s) sem o padrão ficaram vazias", plano.sem_padrao)
+            trf!("; {} linha(s) sem o padrão ficaram vazias", plano.sem_padrao)
         } else { String::new() };
-        self.status = format!(
+        self.status = trf!(
             "Preenchimento relâmpago: {n} linha(s) preenchida(s) em {}:{} a partir de {} exemplo(s){sem}. Ctrl+Z desfaz.",
             cell_name(plano.escrever[0].0, coluna),
             cell_name(plano.escrever[n - 1].0, coluna),

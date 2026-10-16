@@ -8,8 +8,15 @@
 
 use super::pt_name::PT_NAME;
 
+/// O nome em português: a tabela preferida e, fora dela, o primeiro apelido
+/// do motor (com acento), para nenhuma função do Excel ficar em inglês.
 fn pt_name_for(word_upper: &str) -> Option<&'static str> {
-    PT_NAME.iter().find(|(en, _)| *en == word_upper).map(|(_, pt)| *pt)
+    PT_NAME.iter().find(|(en, _)| *en == word_upper).map(|(_, pt)| *pt).or_else(|| {
+        feathersheet_core::funcoes::functions::aliases()
+            .iter()
+            .find(|(_, en)| *en == word_upper)
+            .map(|(pt, _)| *pt)
+    })
 }
 
 fn is_ident_start(c: char) -> bool {

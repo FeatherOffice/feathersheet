@@ -50,23 +50,23 @@ impl Grupo {
     ];
     fn nome(self) -> &'static str {
         match self {
-            Self::TipoEstilo => "Tipo e estilo",
-            Self::Dados => "Dados",
-            Self::Titulo => "Título",
-            Self::Legenda => "Legenda",
-            Self::Eixos => "Eixos",
-            Self::Grades => "Linhas de grade",
-            Self::Series => "Séries",
-            Self::Pontos => "Pontos",
-            Self::Rotulos => "Rótulos de dados",
-            Self::Area => "Área e fundo",
-            Self::Margens => "Margens e espaçamento",
-            Self::Fonte => "Fonte",
-            Self::Analiticos => "Elementos analíticos",
-            Self::Dica => "Dica do mouse",
-            Self::Formas => "Formas no gráfico",
-            Self::Tamanho => "Tamanho e posição",
-            Self::TextoAlt => "Texto alternativo",
+            Self::TipoEstilo => tr!("Tipo e estilo"),
+            Self::Dados => tr!("Dados"),
+            Self::Titulo => tr!("Título"),
+            Self::Legenda => tr!("Legenda"),
+            Self::Eixos => tr!("Eixos"),
+            Self::Grades => tr!("Linhas de grade"),
+            Self::Series => tr!("Séries"),
+            Self::Pontos => tr!("Pontos"),
+            Self::Rotulos => tr!("Rótulos de dados"),
+            Self::Area => tr!("Área e fundo"),
+            Self::Margens => tr!("Margens e espaçamento"),
+            Self::Fonte => tr!("Fonte"),
+            Self::Analiticos => tr!("Elementos analíticos"),
+            Self::Dica => tr!("Dica do mouse"),
+            Self::Formas => tr!("Formas no gráfico"),
+            Self::Tamanho => tr!("Tamanho e posição"),
+            Self::TextoAlt => tr!("Texto alternativo"),
         }
     }
     fn icone(self) -> &'static str {
@@ -93,7 +93,7 @@ impl Grupo {
     /// Sem motor ainda: aparece desabilitado com a dica.
     fn em_breve(self) -> Option<&'static str> {
         match self {
-            Self::Formas => Some("Em breve: círculo, seta e texto livre dentro do gráfico"),
+            Self::Formas => Some(tr!("Em breve: círculo, seta e texto livre dentro do gráfico")),
             _ => None,
         }
     }
@@ -948,7 +948,7 @@ impl App {
                 border: iced::Border { color: COR_BORDA(), width: 1.0, radius: 3.0.into() },
                 ..Default::default()
             }),
-            text(if atual.is_some() { "" } else { "Auto" }).size(11).color(COR_TEXTO_MUTED()),
+            text(if atual.is_some() { "" } else { tr!("Auto") }).size(11).color(COR_TEXTO_MUTED()),
             feather_ui::icones::icone("chevron-down", 12.0),
         ].spacing(5).align_y(Alignment::Center))
         .padding([4, 6])
@@ -961,9 +961,9 @@ impl App {
                 || TemaGrafico::pelo_id("padrao").map_or_else(Vec::new, |t| t.paleta.to_vec()),
                 |t| t.paleta.to_vec(),
             );
-            let mut grade = iced::widget::column![rotulo("Cores do tema").size(11)].spacing(5);
+            let mut grade = iced::widget::column![rotulo(tr!("Cores do tema")).size(11)].spacing(5);
             grade = grade.push(row(tema.iter().map(|c| amostra(*c, atual == Some(*c), ev(Evento::Cor(alvo, Some(c.texto())))))).spacing(5));
-            grade = grade.push(rotulo("Cores padrão").size(11));
+            grade = grade.push(rotulo(tr!("Cores padrão")).size(11));
             for fileira in PALETA_PADRAO.chunks(7) {
                 grade = grade.push(row(fileira.iter().map(|v| {
                     let c = CorEstilo::hex(*v);
@@ -972,13 +972,13 @@ impl App {
             }
             let mais = self.graficos.cor_ativa == Some(AlvoCorGrafico::Estilo(alvo));
             grade = grade.push(row![
-                button(text("Automática").size(12)).padding([4, 8]).style(estilo_botao_pequeno(atual.is_none()))
+                button(text(tr!("Automática")).size(12)).padding([4, 8]).style(estilo_botao_pequeno(atual.is_none()))
                     .on_press(ev(Evento::Cor(alvo, None))),
-                button(row![feather_ui::icones::icone("palette", 13.0), text("Mais cores…").size(12)].spacing(5).align_y(Alignment::Center))
+                button(row![feather_ui::icones::icone("palette", 13.0), text(tr!("Mais cores…")).size(12)].spacing(5).align_y(Alignment::Center))
                     .padding([4, 8]).style(estilo_botao_pequeno(mais)).on_press(ev(Evento::MaisCores(alvo))),
             ].spacing(6));
             if mais {
-                grade = grade.push(feather_ui::seletor_cor::painel("Mais cores", &mostra.texto(), self.graficos.cor_hsva, &self.graficos.cor_hex)
+                grade = grade.push(feather_ui::seletor_cor::painel(tr!("Mais cores"), &mostra.texto(), self.graficos.cor_hsva, &self.graficos.cor_hex)
                     .map(|evento| Msg::Grafico(Evento::SeletorCor(evento))));
             }
             col = col.push(container(grade).padding(8).width(Length::Fill).style(|_| container::Style {
@@ -993,11 +993,11 @@ impl App {
     fn seletor_eixo<'a>(&'a self, com_y2: bool) -> Element<'a, Msg> {
         let s = self.graficos.painel.eixo;
         let mut itens = vec![
-            ("Categorias (X)".to_owned(), s == EixoSel::X, ev(Evento::Selecionar(Selecao::Eixo(EixoSel::X)))),
-            ("Valores (Y)".to_owned(), s == EixoSel::Y, ev(Evento::Selecionar(Selecao::Eixo(EixoSel::Y)))),
+            (tr!("Categorias (X)").to_owned(), s == EixoSel::X, ev(Evento::Selecionar(Selecao::Eixo(EixoSel::X)))),
+            (tr!("Valores (Y)").to_owned(), s == EixoSel::Y, ev(Evento::Selecionar(Selecao::Eixo(EixoSel::Y)))),
         ];
         if com_y2 {
-            itens.push(("Secundário".to_owned(), s == EixoSel::Y2, ev(Evento::Selecionar(Selecao::Eixo(EixoSel::Y2)))));
+            itens.push((tr!("Secundário").to_owned(), s == EixoSel::Y2, ev(Evento::Selecionar(Selecao::Eixo(EixoSel::Y2)))));
         }
         escolhas(itens, 3)
     }
@@ -1020,7 +1020,7 @@ impl App {
             text(grupo.nome()).size(13).color(cor_txt)
                 .font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::DEFAULT }).width(Length::Fill),
             if breve.is_some() {
-                Element::from(text("Em breve").size(11).color(COR_TEXTO_MUTED()))
+                Element::from(text(tr!("Em breve")).size(11).color(COR_TEXTO_MUTED()))
             } else {
                 feather_ui::icones::icone(if aberto { "chevron-down" } else { "chevron-right" }, 14.0).into()
             },
@@ -1066,8 +1066,8 @@ impl App {
                 String::new()
             };
             if !texto.trim().is_empty() { texto }
-            else if g.colunas { format!("Coluna {}", feathersheet_core::celulas::refs::col_name(r.c0 + k)) }
-            else { format!("Linha {}", r.r0 + k + 1) }
+            else if g.colunas { trf!("Coluna {}", feathersheet_core::celulas::refs::col_name(r.c0 + k)) }
+            else { trf!("Linha {}", r.r0 + k + 1) }
         }).collect()
     }
 
@@ -1088,28 +1088,28 @@ impl App {
         let g = &self.graficos;
         let pizza = g.tipo == TipoUi::Pizza;
         let mut col = iced::widget::column![].spacing(8).padding([6, 4]);
-        col = col.push(secao_inicial("Tipo de gráfico"));
+        col = col.push(secao_inicial(tr!("Tipo de gráfico")));
         col = col.push(button(row![text(g.tipo.to_string()).size(12).width(Length::Fill), feather_ui::icones::icone("chevron-down", 14.0)]
             .align_y(Alignment::Center)).padding([6, 8]).width(Length::Fill)
             .style(estilo_botao_secundario).on_press(ev(Evento::AlternarSeletor)));
 
-        col = col.push(secao("Dados"));
-        col = col.push(rotulo("Intervalo"));
+        col = col.push(secao(tr!("Dados")));
+        col = col.push(rotulo(tr!("Intervalo")));
         col = col.push(row![
             text_input("A1:C10", &g.intervalo).size(12).padding([5, 6]).on_input(|s| ev(Evento::Intervalo(s))).width(Length::Fill),
             tooltip(
-                button(row![feather_ui::icones::icone("table", 14.0), text("Usar seleção").size(12)].spacing(5).align_y(Alignment::Center))
+                button(row![feather_ui::icones::icone("table", 14.0), text(tr!("Usar seleção")).size(12)].spacing(5).align_y(Alignment::Center))
                     .padding([5, 8]).style(estilo_botao_secundario).on_press(ev(Evento::UsarSelecao)),
-                container(text("Usa as células selecionadas na planilha").size(11)).padding([4, 8]).style(estilo_dica),
+                container(text(tr!("Usa as células selecionadas na planilha")).size(11)).padding([4, 8]).style(estilo_dica),
                 tooltip::Position::Bottom,
             ),
         ].spacing(6).align_y(Alignment::Center));
-        col = col.push(alternar("Primeira linha é cabeçalho", g.cabecalho, |v| ev(Evento::Cabecalho(v))));
-        col = col.push(alternar("Séries nas colunas", g.colunas, |v| ev(Evento::Colunas(v))));
+        col = col.push(alternar(tr!("Primeira linha é cabeçalho"), g.cabecalho, |v| ev(Evento::Cabecalho(v))));
+        col = col.push(alternar(tr!("Séries nas colunas"), g.colunas, |v| ev(Evento::Colunas(v))));
 
         let rotulos = self.rotulos_do_intervalo();
-        col = col.push(secao(if g.colunas { "Categorias (eixo X)" } else { "Categorias (eixo X), pela linha" }));
-        let mut opcoes = vec![Opcao { valor: None, nome: "Nenhuma".to_owned() }];
+        col = col.push(secao(if g.colunas { tr!("Categorias (eixo X)") } else { tr!("Categorias (eixo X), pela linha") }));
+        let mut opcoes = vec![Opcao { valor: None, nome: tr!("Nenhuma").to_owned() }];
         opcoes.extend(rotulos.iter().enumerate().map(|(i, n)| Opcao { valor: Some(i as u32), nome: n.clone() }));
         let atual = if g.categorias {
             opcoes.iter().find(|o| o.valor == Some(g.coluna_categoria)).cloned()
@@ -1119,17 +1119,17 @@ impl App {
         col = col.push(pick_list(opcoes, atual, |o: Opcao<Option<u32>>| ev(Evento::CategoriaColuna(o.valor)))
             .text_size(12).padding([5, 8]).width(Length::Fill));
 
-        col = col.push(secao("Séries"));
+        col = col.push(secao(tr!("Séries")));
         col = col.push(text(if pizza {
-            "A pizza mostra uma série: marque a que quer ver."
+            tr!("A pizza mostra uma série: marque a que quer ver.")
         } else {
-            "Marque as séries do gráfico. Nome em branco usa o cabeçalho."
+            tr!("Marque as séries do gráfico. Nome em branco usa o cabeçalho.")
         }).size(11).color(COR_TEXTO_MUTED()));
         let contas: Vec<Opcao<Option<AggregateFn>>> = CONTAS.iter()
-            .map(|&(nome, valor)| Opcao { valor, nome: nome.to_owned() }).collect();
+            .map(|&(nome, valor)| Opcao { valor, nome: tr!(nome).to_owned() }).collect();
         let series = self.series_da_origem();
         if series.is_empty() {
-            col = col.push(text("Escolha um intervalo com dados.").size(12).color(COR_TEXTO_MUTED()));
+            col = col.push(text(tr!("Escolha um intervalo com dados.")).size(12).color(COR_TEXTO_MUTED()));
         }
         for (n, nome) in series {
             let visivel = !g.ocultas.contains(&n);
@@ -1145,7 +1145,7 @@ impl App {
             ].spacing(6).align_y(Alignment::Center));
         }
         if g.agrupar {
-            col = col.push(text("Categorias iguais viram uma só, com a conta de cada série. \"Não resumir\" vale para todas.")
+            col = col.push(text(tr!("Categorias iguais viram uma só, com a conta de cada série. \"Não resumir\" vale para todas."))
                 .size(11).color(COR_TEXTO_MUTED()));
         }
         col.into()
@@ -1156,7 +1156,7 @@ impl App {
         let e = self.estilo_vista();
         let cabecalho = row![
             feather_ui::icones::icone("chart-bar", 18.0),
-            text("Gráfico").size(17).font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::DEFAULT }).width(Length::Fill),
+            text(tr!("Gráfico")).size(17).font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::DEFAULT }).width(Length::Fill),
             feather_ui::tema::botao_fechar(ev(Evento::Fechar)),
         ].spacing(8).align_y(Alignment::Center);
         let mut lista = iced::widget::column![].spacing(2);
@@ -1180,20 +1180,20 @@ impl App {
                 .on_press(ev(Evento::AbaPainel(aba)))
         };
         let abas = row![
-            aba_botao("Configurar", "table", AbaPainel::Configurar),
-            aba_botao("Personalizar", "palette", AbaPainel::Personalizar),
+            aba_botao(tr!("Configurar"), "table", AbaPainel::Configurar),
+            aba_botao(tr!("Personalizar"), "palette", AbaPainel::Personalizar),
         ].spacing(6);
-        let mut exportar = button(row![feather_ui::icones::icone("file-export", 14.0), text("Exportar SVG").size(12)].spacing(6).align_y(Alignment::Center))
+        let mut exportar = button(row![feather_ui::icones::icone("file-export", 14.0), text(tr!("Exportar SVG")).size(12)].spacing(6).align_y(Alignment::Center))
             .padding([6, 10]).style(estilo_botao_secundario);
         if g.svg.is_some() {
             exportar = exportar.on_press(ev(Evento::Exportar));
         }
         let mut acoes = row![exportar, Space::with_width(Length::Fill)].spacing(8).align_y(Alignment::Center);
         if let Some(id) = &g.id {
-            acoes = acoes.push(button(text("Excluir gráfico").size(12)).padding([6, 10]).style(estilo_botao_secundario)
+            acoes = acoes.push(button(text(tr!("Excluir gráfico")).size(12)).padding([6, 10]).style(estilo_botao_secundario)
                 .on_press(ev(Evento::Remover(id.clone()))));
         } else {
-            let mut inserir = button(text("Inserir na planilha").size(12)).padding([6, 10]).style(estilo_botao_primario);
+            let mut inserir = button(text(tr!("Inserir na planilha")).size(12)).padding([6, 10]).style(estilo_botao_primario);
             if g.svg.is_some() {
                 inserir = inserir.on_press(ev(Evento::Inserir));
             }
@@ -1236,9 +1236,9 @@ impl App {
         let n_series = g.series.len();
         match grupo {
             Grupo::TipoEstilo => {
-                let mut col = col.push(linha("Tipo de gráfico", button(text(g.tipo.to_string()).size(12)).padding([4, 8])
+                let mut col = col.push(linha(tr!("Tipo de gráfico"), button(text(g.tipo.to_string()).size(12)).padding([4, 8])
                     .width(Length::Fixed(150.0)).style(estilo_botao_secundario).on_press(ev(Evento::AlternarSeletor))));
-                col = col.push(secao("Temas prontos"));
+                col = col.push(secao(tr!("Temas prontos")));
                 let minis = miniaturas();
                 let mut grade = iced::widget::column![].spacing(6);
                 for (k, fileira) in feather_charts::estilo::temas().chunks(3).enumerate() {
@@ -1259,45 +1259,45 @@ impl App {
                     grade = grade.push(r);
                 }
                 col = col.push(grade);
-                col = col.push(button(text("Sem tema (aparência padrão)").size(12)).width(Length::Fill).padding([5, 8])
+                col = col.push(button(text(tr!("Sem tema (aparência padrão)")).size(12)).width(Length::Fill).padding([5, 8])
                     .style(estilo_botao_pequeno(e.tema.is_none())).on_press(mud(Mudanca::Tema(None))));
                 col.into()
             }
             Grupo::Dados => {
                 let mut col = col
-                    .push(rotulo("Intervalo da tabela"))
+                    .push(rotulo(tr!("Intervalo da tabela")))
                     .push(text_input("A1:C10", &g.intervalo).size(12).on_input(|s| ev(Evento::Intervalo(s))))
-                    .push(alternar("Usar cabeçalhos", g.cabecalho, |v| ev(Evento::Cabecalho(v))))
-                    .push(alternar("Usar categorias", g.categorias, |v| ev(Evento::Categorias(v))))
-                    .push(alternar("Séries em colunas", g.colunas, |v| ev(Evento::Colunas(v))))
-                    .push(alternar("Somar categorias iguais", g.agrupar, |v| ev(Evento::Agrupar(v))));
+                    .push(alternar(tr!("Usar cabeçalhos"), g.cabecalho, |v| ev(Evento::Cabecalho(v))))
+                    .push(alternar(tr!("Usar categorias"), g.categorias, |v| ev(Evento::Categorias(v))))
+                    .push(alternar(tr!("Séries em colunas"), g.colunas, |v| ev(Evento::Colunas(v))))
+                    .push(alternar(tr!("Somar categorias iguais"), g.agrupar, |v| ev(Evento::Agrupar(v))));
                 if pizza {
-                    col = col.push(rotulo("Série da pizza")).push(escolhas(
+                    col = col.push(rotulo(tr!("Série da pizza"))).push(escolhas(
                         g.series.iter().map(|s| (cortar(s, 14), g.serie.as_deref() == Some(s.as_str()), ev(Evento::Serie(s.clone())))).collect(), 2));
                 }
                 col.into()
             }
             Grupo::Titulo => col
-                .push(alternar("Mostrar título", e.titulo.visivel.unwrap_or(true), |v| mud(Mudanca::TituloVisivel(v))))
-                .push(rotulo("Texto do título"))
-                .push(text_input("Título do gráfico", &g.titulo).size(12).on_input(|s| ev(Evento::Titulo(s))))
-                .push(rotulo("Subtítulo"))
-                .push(text_input("Subtítulo", e.subtitulo.texto.as_deref().unwrap_or("")).size(12).on_input(|s| mud(Mudanca::Subtitulo(s))))
-                .push(rotulo("Alinhamento"))
-                .push(escolhas([("Esquerda", Alinhamento::Esquerda), ("Centro", Alinhamento::Centro), ("Direita", Alinhamento::Direita)].into_iter()
+                .push(alternar(tr!("Mostrar título"), e.titulo.visivel.unwrap_or(true), |v| mud(Mudanca::TituloVisivel(v))))
+                .push(rotulo(tr!("Texto do título")))
+                .push(text_input(tr!("Título do gráfico"), &g.titulo).size(12).on_input(|s| ev(Evento::Titulo(s))))
+                .push(rotulo(tr!("Subtítulo")))
+                .push(text_input(tr!("Subtítulo"), e.subtitulo.texto.as_deref().unwrap_or("")).size(12).on_input(|s| mud(Mudanca::Subtitulo(s))))
+                .push(rotulo(tr!("Alinhamento")))
+                .push(escolhas([(tr!("Esquerda"), Alinhamento::Esquerda), (tr!("Centro"), Alinhamento::Centro), (tr!("Direita"), Alinhamento::Direita)].into_iter()
                     .map(|(t, a)| (t.to_owned(), e.titulo.alinhamento.unwrap_or_default() == a, mud(Mudanca::TituloAlinhar(a)))).collect(), 3))
-                .push(alternar("Sobre a área do gráfico", e.titulo.sobreposto, |v| mud(Mudanca::TituloSobreposto(v))))
-                .push(linha("Tamanho da letra", self.campo_num("titulo.tamanho".into(), e.titulo.fonte.tamanho.map(f64::from), "Auto", Mudanca::TituloTamanho)))
-                .push(alternar("Negrito", e.titulo.fonte.negrito.unwrap_or(false), |v| mud(Mudanca::TituloNegrito(v))))
-                .push(self.campo_cor("Cor do título", AlvoCor::Titulo, e, texto_padrao))
+                .push(alternar(tr!("Sobre a área do gráfico"), e.titulo.sobreposto, |v| mud(Mudanca::TituloSobreposto(v))))
+                .push(linha(tr!("Tamanho da letra"), self.campo_num("titulo.tamanho".into(), e.titulo.fonte.tamanho.map(f64::from), tr!("Auto"), Mudanca::TituloTamanho)))
+                .push(alternar(tr!("Negrito"), e.titulo.fonte.negrito.unwrap_or(false), |v| mud(Mudanca::TituloNegrito(v))))
+                .push(self.campo_cor(tr!("Cor do título"), AlvoCor::Titulo, e, texto_padrao))
                 .into(),
             Grupo::Legenda => {
                 let mut col = col
-                    .push(rotulo("Posição"))
+                    .push(rotulo(tr!("Posição")))
                     .push(escolhas(PosicaoLegenda::TODAS.iter().map(|p| (p.nome().to_owned(), e.legenda.posicao.unwrap_or_default() == *p, mud(Mudanca::LegendaPosicao(*p)))).collect(), 3))
-                    .push(linha("Tamanho da letra", self.campo_num("legenda.tamanho".into(), e.legenda.fonte.tamanho.map(f64::from), "Auto", Mudanca::LegendaTamanho)))
-                    .push(self.campo_cor("Cor do texto", AlvoCor::Legenda, e, texto_padrao))
-                    .push(secao("Itens"));
+                    .push(linha(tr!("Tamanho da letra"), self.campo_num("legenda.tamanho".into(), e.legenda.fonte.tamanho.map(f64::from), tr!("Auto"), Mudanca::LegendaTamanho)))
+                    .push(self.campo_cor(tr!("Cor do texto"), AlvoCor::Legenda, e, texto_padrao))
+                    .push(secao(tr!("Itens")));
                 let nomes: Vec<String> = if pizza {
                     p.categorias.clone()
                 } else {
@@ -1316,13 +1316,13 @@ impl App {
                     col = col.push(row![
                         amostra(cor, aberto, ev(Evento::CorMenu(if aberto { None } else { Some(alvo) }))),
                         campo,
-                        icone_botao(if item.oculto { "eye-off" } else { "eye" }, if item.oculto { "Mostrar na legenda" } else { "Ocultar da legenda" },
+                        icone_botao(if item.oculto { "eye-off" } else { "eye" }, if item.oculto { tr!("Mostrar na legenda") } else { tr!("Ocultar da legenda") },
                             Some(mud(Mudanca::ItemOculto(i, !item.oculto)))),
-                        icone_botao("chevron-up", "Subir na legenda", Some(mud(Mudanca::ItemMover(i, -1, total)))),
-                        icone_botao("chevron-down", "Descer na legenda", Some(mud(Mudanca::ItemMover(i, 1, total)))),
+                        icone_botao("chevron-up", tr!("Subir na legenda"), Some(mud(Mudanca::ItemMover(i, -1, total)))),
+                        icone_botao("chevron-down", tr!("Descer na legenda"), Some(mud(Mudanca::ItemMover(i, 1, total)))),
                     ].spacing(4).align_y(Alignment::Center));
                     if aberto {
-                        col = col.push(self.campo_cor("Cor do item", alvo, e, padrao));
+                        col = col.push(self.campo_cor(tr!("Cor do item"), alvo, e, padrao));
                     }
                 }
                 col.into()
@@ -1333,119 +1333,119 @@ impl App {
                 let valores = s != EixoSel::X || g.tipo == TipoUi::Dispersao;
                 let k = |c: CampoEixo| format!("eixo{s:?}.{c:?}");
                 let mut col = col.push(self.seletor_eixo(true))
-                    .push(alternar("Mostrar eixo", x.visivel.unwrap_or(true), move |v| mud(Mudanca::EixoVisivel(s, v))));
+                    .push(alternar(tr!("Mostrar eixo"), x.visivel.unwrap_or(true), move |v| mud(Mudanca::EixoVisivel(s, v))));
                 if pizza {
-                    return col.push(rotulo("A pizza não tem eixos.")).into();
+                    return col.push(rotulo(tr!("A pizza não tem eixos."))).into();
                 }
                 if valores {
-                    col = col.push(secao("Escala"))
-                        .push(linha("Mínimo", self.campo_num(k(CampoEixo::Minimo), x.minimo, "Auto", move |t| Mudanca::EixoNum(s, CampoEixo::Minimo, t))))
-                        .push(linha("Máximo", self.campo_num(k(CampoEixo::Maximo), x.maximo, "Auto", move |t| Mudanca::EixoNum(s, CampoEixo::Maximo, t))))
-                        .push(linha("Unidade principal", self.campo_num(k(CampoEixo::Principal), x.unidade_principal, "Auto", move |t| Mudanca::EixoNum(s, CampoEixo::Principal, t))))
-                        .push(linha("Unidade secundária", self.campo_num(k(CampoEixo::Secundaria), x.unidade_secundaria, "Auto", move |t| Mudanca::EixoNum(s, CampoEixo::Secundaria, t))))
-                        .push(alternar("Escala logarítmica", x.logaritmica, move |v| mud(Mudanca::EixoLog(s, v))));
+                    col = col.push(secao(tr!("Escala")))
+                        .push(linha(tr!("Mínimo"), self.campo_num(k(CampoEixo::Minimo), x.minimo, tr!("Auto"), move |t| Mudanca::EixoNum(s, CampoEixo::Minimo, t))))
+                        .push(linha(tr!("Máximo"), self.campo_num(k(CampoEixo::Maximo), x.maximo, tr!("Auto"), move |t| Mudanca::EixoNum(s, CampoEixo::Maximo, t))))
+                        .push(linha(tr!("Unidade principal"), self.campo_num(k(CampoEixo::Principal), x.unidade_principal, tr!("Auto"), move |t| Mudanca::EixoNum(s, CampoEixo::Principal, t))))
+                        .push(linha(tr!("Unidade secundária"), self.campo_num(k(CampoEixo::Secundaria), x.unidade_secundaria, tr!("Auto"), move |t| Mudanca::EixoNum(s, CampoEixo::Secundaria, t))))
+                        .push(alternar(tr!("Escala logarítmica"), x.logaritmica, move |v| mud(Mudanca::EixoLog(s, v))));
                 }
-                col = col.push(alternar(if valores { "Valores em ordem inversa" } else { "Categorias em ordem inversa" }, x.invertido, move |v| mud(Mudanca::EixoInvertido(s, v))))
-                    .push(linha(if valores { "Outro eixo cruza em" } else { "Outro eixo cruza na categoria" },
-                        self.campo_num(k(CampoEixo::Cruzamento), x.cruzamento, "Auto", move |t| Mudanca::EixoNum(s, CampoEixo::Cruzamento, t))));
+                col = col.push(alternar(if valores { tr!("Valores em ordem inversa") } else { tr!("Categorias em ordem inversa") }, x.invertido, move |v| mud(Mudanca::EixoInvertido(s, v))))
+                    .push(linha(if valores { tr!("Outro eixo cruza em") } else { tr!("Outro eixo cruza na categoria") },
+                        self.campo_num(k(CampoEixo::Cruzamento), x.cruzamento, tr!("Auto"), move |t| Mudanca::EixoNum(s, CampoEixo::Cruzamento, t))));
                 if valores {
                     let f = x.formato.unwrap_or_default();
-                    col = col.push(secao("Número"))
+                    col = col.push(secao(tr!("Número")))
                         .push(escolhas([FormatoNum::Automatico, FormatoNum::Decimal { casas: 0 }, FormatoNum::Moeda { casas: 2 }, FormatoNum::Percentual { casas: 0 }]
                             .into_iter().map(|o| (o.nome().to_owned(), std::mem::discriminant(&o) == std::mem::discriminant(&f), mud(Mudanca::EixoFormato(s, o)))).collect(), 2))
-                        .push(linha("Casas decimais", self.campo_num(k(CampoEixo::Casas), x.formato.filter(|f| *f != FormatoNum::Automatico).map(|f| f64::from(f.casas())), "Auto", move |t| Mudanca::EixoNum(s, CampoEixo::Casas, t))));
+                        .push(linha(tr!("Casas decimais"), self.campo_num(k(CampoEixo::Casas), x.formato.filter(|f| *f != FormatoNum::Automatico).map(|f| f64::from(f.casas())), tr!("Auto"), move |t| Mudanca::EixoNum(s, CampoEixo::Casas, t))));
                 }
-                col = col.push(secao("Rótulos e título"))
-                    .push(linha("Giro dos rótulos (graus)", self.campo_num(k(CampoEixo::Rotacao), x.rotacao.map(f64::from), "0", move |t| Mudanca::EixoNum(s, CampoEixo::Rotacao, t))))
-                    .push(linha("Tamanho da letra", self.campo_num(k(CampoEixo::TamanhoRotulos), x.rotulos.tamanho.map(f64::from), "Auto", move |t| Mudanca::EixoNum(s, CampoEixo::TamanhoRotulos, t))))
-                    .push(self.campo_cor("Cor dos rótulos", AlvoCor::RotulosEixo(s), e, texto_padrao))
-                    .push(rotulo("Título do eixo"))
-                    .push(text_input("Sem título", x.titulo.as_deref().unwrap_or("")).size(12).on_input(move |t| mud(Mudanca::EixoTitulo(s, t))));
+                col = col.push(secao(tr!("Rótulos e título")))
+                    .push(linha(tr!("Giro dos rótulos (graus)"), self.campo_num(k(CampoEixo::Rotacao), x.rotacao.map(f64::from), "0", move |t| Mudanca::EixoNum(s, CampoEixo::Rotacao, t))))
+                    .push(linha(tr!("Tamanho da letra"), self.campo_num(k(CampoEixo::TamanhoRotulos), x.rotulos.tamanho.map(f64::from), tr!("Auto"), move |t| Mudanca::EixoNum(s, CampoEixo::TamanhoRotulos, t))))
+                    .push(self.campo_cor(tr!("Cor dos rótulos"), AlvoCor::RotulosEixo(s), e, texto_padrao))
+                    .push(rotulo(tr!("Título do eixo")))
+                    .push(text_input(tr!("Sem título"), x.titulo.as_deref().unwrap_or("")).size(12).on_input(move |t| mud(Mudanca::EixoTitulo(s, t))));
                 if s == EixoSel::Y {
-                    col = col.push(rotulo("Unidade (R$, kg…)"))
-                        .push(text_input("Sem unidade", e.eixo_y.unidade.as_deref().unwrap_or("")).size(12).on_input(|t| mud(Mudanca::EixoUnidade(t))));
+                    col = col.push(rotulo(tr!("Unidade (R$, kg…)")))
+                        .push(text_input(tr!("Sem unidade"), e.eixo_y.unidade.as_deref().unwrap_or("")).size(12).on_input(|t| mud(Mudanca::EixoUnidade(t))));
                 }
-                col.push(secao("Linha do eixo"))
-                    .push(alternar("Mostrar linha", x.linha.visivel.unwrap_or(true), move |v| mud(Mudanca::EixoLinha(s, v))))
-                    .push(linha("Espessura (px)", self.campo_num(k(CampoEixo::EspessuraLinha), x.linha.espessura.map(f64::from), "1", move |t| Mudanca::EixoNum(s, CampoEixo::EspessuraLinha, t))))
-                    .push(self.campo_cor("Cor da linha", AlvoCor::LinhaEixo(s), e, eixo_padrao))
+                col.push(secao(tr!("Linha do eixo")))
+                    .push(alternar(tr!("Mostrar linha"), x.linha.visivel.unwrap_or(true), move |v| mud(Mudanca::EixoLinha(s, v))))
+                    .push(linha(tr!("Espessura (px)"), self.campo_num(k(CampoEixo::EspessuraLinha), x.linha.espessura.map(f64::from), "1", move |t| Mudanca::EixoNum(s, CampoEixo::EspessuraLinha, t))))
+                    .push(self.campo_cor(tr!("Cor da linha"), AlvoCor::LinhaEixo(s), e, eixo_padrao))
                     .into()
             }
             Grupo::Grades => {
                 let s = p.eixo;
                 let mut col = col.push(self.seletor_eixo(true));
                 if pizza {
-                    return col.push(rotulo("A pizza não tem linhas de grade.")).into();
+                    return col.push(rotulo(tr!("A pizza não tem linhas de grade."))).into();
                 }
                 for principal in [true, false] {
                     let l = if principal { &eixo(e, s).grade_principal } else { &eixo(e, s).grade_secundaria };
                     let padrao_vis = principal && s == EixoSel::Y && tema.is_some_and(|t| t.grade_visivel);
-                    col = col.push(secao(if principal { "Grade principal" } else { "Grade secundária" }))
-                        .push(alternar("Mostrar", l.visivel.unwrap_or(padrao_vis), move |v| mud(Mudanca::GradeVisivel(s, principal, v))))
-                        .push(linha("Espessura (px)", self.campo_num(format!("grade{s:?}{principal}"), l.espessura.map(f64::from), if principal { "1" } else { "0,6" },
+                    col = col.push(secao(if principal { tr!("Grade principal") } else { tr!("Grade secundária") }))
+                        .push(alternar(tr!("Mostrar"), l.visivel.unwrap_or(padrao_vis), move |v| mud(Mudanca::GradeVisivel(s, principal, v))))
+                        .push(linha(tr!("Espessura (px)"), self.campo_num(format!("grade{s:?}{principal}"), l.espessura.map(f64::from), if principal { "1" } else { "0,6" },
                             move |t| Mudanca::GradeEspessura(s, principal, t))))
                         .push(escolhas(Traco::TODOS.iter().map(|t| (t.nome().to_owned(), l.traco.unwrap_or_default() == *t, mud(Mudanca::GradeTraco(s, principal, *t)))).collect(), 2))
-                        .push(self.campo_cor("Cor", AlvoCor::Grade(s, principal), e, grade_padrao));
+                        .push(self.campo_cor(tr!("Cor"), AlvoCor::Grade(s, principal), e, grade_padrao));
                 }
                 col.into()
             }
             Grupo::Series => {
                 if n_series == 0 {
-                    return col.push(rotulo("Sem séries nos dados.")).into();
+                    return col.push(rotulo(tr!("Sem séries nos dados."))).into();
                 }
                 let i = p.serie.min(n_series - 1);
                 let se = e.serie(i).cloned().unwrap_or_default();
                 let nome = g.aparencia.nomes.get(&i).cloned()
                     .unwrap_or_else(|| g.series[i].split_once(" — ").map_or(g.series[i].clone(), |(_, x)| x.to_owned()));
                 let mut col = col.push(self.seletor_serie())
-                    .push(rotulo("Nome da série"))
-                    .push(text_input("Nome", &nome).size(12).on_input(move |s| ev(Evento::NomeSerie(i, s))))
-                    .push(self.campo_cor("Cor", AlvoCor::Serie(i), e, cor_resolvida_serie(e, &p.cores_base, i)))
-                    .push(self.campo_cor("Contorno", AlvoCor::Contorno(i), e, CorEstilo::hex(0x202020)))
-                    .push(linha("Espessura do contorno", self.campo_num(format!("serie{i}.contorno"), se.espessura_contorno.map(f64::from), "1", move |t| Mudanca::SerieContornoEspessura(i, t))))
-                    .push(linha("Transparência (%)", self.campo_num(format!("serie{i}.transparencia"), se.opacidade.map(|o| f64::from(((1.0 - o) * 100.0).round())), "0", move |t| Mudanca::SerieTransparencia(i, t))));
+                    .push(rotulo(tr!("Nome da série")))
+                    .push(text_input(tr!("Nome"), &nome).size(12).on_input(move |s| ev(Evento::NomeSerie(i, s))))
+                    .push(self.campo_cor(tr!("Cor"), AlvoCor::Serie(i), e, cor_resolvida_serie(e, &p.cores_base, i)))
+                    .push(self.campo_cor(tr!("Contorno"), AlvoCor::Contorno(i), e, CorEstilo::hex(0x202020)))
+                    .push(linha(tr!("Espessura do contorno"), self.campo_num(format!("serie{i}.contorno"), se.espessura_contorno.map(f64::from), "1", move |t| Mudanca::SerieContornoEspessura(i, t))))
+                    .push(linha(tr!("Transparência (%)"), self.campo_num(format!("serie{i}.transparencia"), se.opacidade.map(|o| f64::from(((1.0 - o) * 100.0).round())), "0", move |t| Mudanca::SerieTransparencia(i, t))));
                 if !barras && !pizza {
-                    col = col.push(secao("Linha"))
-                        .push(linha("Espessura (px)", self.campo_num(format!("serie{i}.espessura"), se.espessura_linha.map(f64::from), "2", move |t| Mudanca::SerieEspessura(i, t))))
+                    col = col.push(secao(tr!("Linha")))
+                        .push(linha(tr!("Espessura (px)"), self.campo_num(format!("serie{i}.espessura"), se.espessura_linha.map(f64::from), "2", move |t| Mudanca::SerieEspessura(i, t))))
                         .push(escolhas(Traco::TODOS.iter().map(|t| (t.nome().to_owned(), se.traco.unwrap_or_default() == *t, mud(Mudanca::SerieTraco(i, *t)))).collect(), 2))
-                        .push(alternar("Linha suavizada", se.suavizar.unwrap_or(false), move |v| mud(Mudanca::SerieSuavizar(i, v))))
-                        .push(secao("Marcador"))
+                        .push(alternar(tr!("Linha suavizada"), se.suavizar.unwrap_or(false), move |v| mud(Mudanca::SerieSuavizar(i, v))))
+                        .push(secao(tr!("Marcador")))
                         .push(escolhas(FormaMarcador::TODAS.iter().map(|f| (f.nome().to_owned(),
                             se.marcador.unwrap_or(if g.tipo == TipoUi::Dispersao { FormaMarcador::Quadrado } else { FormaMarcador::Nenhum }) == *f,
                             mud(Mudanca::SerieMarcador(i, *f)))).collect(), 3))
-                        .push(linha("Tamanho do marcador", self.campo_num(format!("serie{i}.marcador"), se.tamanho_marcador.map(f64::from), "6", move |t| Mudanca::SerieTamanhoMarcador(i, t))));
+                        .push(linha(tr!("Tamanho do marcador"), self.campo_num(format!("serie{i}.marcador"), se.tamanho_marcador.map(f64::from), "6", move |t| Mudanca::SerieTamanhoMarcador(i, t))));
                 }
                 if !pizza {
-                    col = col.push(alternar("Eixo secundário (à direita)", se.eixo_secundario, move |v| mud(Mudanca::SerieSecundario(i, v))));
+                    col = col.push(alternar(tr!("Eixo secundário (à direita)"), se.eixo_secundario, move |v| mud(Mudanca::SerieSecundario(i, v))));
                 }
                 col.into()
             }
             Grupo::Pontos => {
                 if n_series == 0 {
-                    return col.push(rotulo("Sem séries nos dados.")).into();
+                    return col.push(rotulo(tr!("Sem séries nos dados."))).into();
                 }
                 let s = if pizza { 0 } else { p.serie.min(n_series - 1) };
-                let mut col = col.push(rotulo("Pinte só uma coluna, fatia, ponto ou trecho de linha."));
+                let mut col = col.push(rotulo(tr!("Pinte só uma coluna, fatia, ponto ou trecho de linha.")));
                 if !pizza {
                     col = col.push(self.seletor_serie());
                 }
                 let cats = &p.categorias;
                 if cats.is_empty() {
-                    return col.push(rotulo("Sem pontos nos dados.")).into();
+                    return col.push(rotulo(tr!("Sem pontos nos dados."))).into();
                 }
                 let k = p.ponto.min(cats.len() - 1);
                 let pintado = |j: usize| e.serie(s).is_some_and(|x| x.pontos.contains_key(&j));
-                col = col.push(secao("Ponto")).push(escolhas(cats.iter().enumerate().take(60).map(|(j, c)| {
+                col = col.push(secao(tr!("Ponto"))).push(escolhas(cats.iter().enumerate().take(60).map(|(j, c)| {
                     let marca = if pintado(j) { format!("{} *", cortar(c, 10)) } else { cortar(c, 12) };
                     (marca, j == k, ev(Evento::Selecionar(Selecao::Ponto(j))))
                 }).collect(), 3));
                 let padrao = if pizza { CorEstilo::hex(0x2b7a78) } else { cor_resolvida_serie(e, &p.cores_base, s) };
-                col = col.push(self.campo_cor("Cor do ponto", AlvoCor::Ponto(s, k), e, padrao));
+                col = col.push(self.campo_cor(tr!("Cor do ponto"), AlvoCor::Ponto(s, k), e, padrao));
                 if pizza {
                     let v = e.serie(s).and_then(|x| x.pontos.get(&k)).and_then(|q| q.destacar).map(f64::from);
-                    col = col.push(linha("Afastar a fatia (px)", self.campo_num(format!("ponto{s}.{k}.destacar"), v, "0", move |t| Mudanca::PontoDestacar(s, k, t))));
+                    col = col.push(linha(tr!("Afastar a fatia (px)"), self.campo_num(format!("ponto{s}.{k}.destacar"), v, "0", move |t| Mudanca::PontoDestacar(s, k, t))));
                 }
-                col.push(button(text("Voltar à cor da série").size(12)).padding([4, 8]).style(estilo_botao_secundario)
+                col.push(button(text(tr!("Voltar à cor da série")).size(12)).padding([4, 8]).style(estilo_botao_secundario)
                     .on_press_maybe(pintado(k).then(|| mud(Mudanca::PontoLimpar(s, k)))))
                     .into()
             }
@@ -1453,22 +1453,22 @@ impl App {
                 let r = &e.rotulos;
                 let f = r.formato.unwrap_or_default();
                 let mut col = col
-                    .push(alternar("Mostrar rótulos de dados", r.visivel.unwrap_or(pizza), |v| mud(Mudanca::RotulosVisivel(v))))
-                    .push(secao("Conteúdo"))
-                    .push(alternar("Valor", r.valor.unwrap_or(!pizza), |v| mud(Mudanca::RotulosValor(v))))
-                    .push(alternar("Nome da série", r.nome_serie.unwrap_or(false), |v| mud(Mudanca::RotulosSerie(v))))
-                    .push(alternar("Categoria", r.categoria.unwrap_or(pizza), |v| mud(Mudanca::RotulosCategoria(v))));
+                    .push(alternar(tr!("Mostrar rótulos de dados"), r.visivel.unwrap_or(pizza), |v| mud(Mudanca::RotulosVisivel(v))))
+                    .push(secao(tr!("Conteúdo")))
+                    .push(alternar(tr!("Valor"), r.valor.unwrap_or(!pizza), |v| mud(Mudanca::RotulosValor(v))))
+                    .push(alternar(tr!("Nome da série"), r.nome_serie.unwrap_or(false), |v| mud(Mudanca::RotulosSerie(v))))
+                    .push(alternar(tr!("Categoria"), r.categoria.unwrap_or(pizza), |v| mud(Mudanca::RotulosCategoria(v))));
                 if pizza {
-                    col = col.push(alternar("Porcentagem", r.percentual.unwrap_or(false), |v| mud(Mudanca::RotulosPercentual(v))));
+                    col = col.push(alternar(tr!("Porcentagem"), r.percentual.unwrap_or(false), |v| mud(Mudanca::RotulosPercentual(v))));
                 }
-                col.push(secao("Posição"))
+                col.push(secao(tr!("Posição")))
                     .push(escolhas(PosicaoRotulo::TODAS.iter().map(|q| (q.nome().to_owned(), r.posicao.unwrap_or_default() == *q, mud(Mudanca::RotulosPosicao(*q)))).collect(), 3))
-                    .push(secao("Número"))
+                    .push(secao(tr!("Número")))
                     .push(escolhas([FormatoNum::Automatico, FormatoNum::Decimal { casas: 0 }, FormatoNum::Moeda { casas: 2 }, FormatoNum::Percentual { casas: 0 }]
                         .into_iter().map(|o| (o.nome().to_owned(), std::mem::discriminant(&o) == std::mem::discriminant(&f), mud(Mudanca::RotulosFormato(o)))).collect(), 2))
-                    .push(linha("Casas decimais", self.campo_num("rotulos.casas".into(), r.formato.filter(|f| *f != FormatoNum::Automatico).map(|f| f64::from(f.casas())), "Auto", Mudanca::RotulosCasas)))
-                    .push(linha("Tamanho da letra", self.campo_num("rotulos.tamanho".into(), r.fonte.tamanho.map(f64::from), "Auto", Mudanca::RotulosTamanho)))
-                    .push(self.campo_cor("Cor", AlvoCor::Rotulos, e, texto_padrao))
+                    .push(linha(tr!("Casas decimais"), self.campo_num("rotulos.casas".into(), r.formato.filter(|f| *f != FormatoNum::Automatico).map(|f| f64::from(f.casas())), tr!("Auto"), Mudanca::RotulosCasas)))
+                    .push(linha(tr!("Tamanho da letra"), self.campo_num("rotulos.tamanho".into(), r.fonte.tamanho.map(f64::from), tr!("Auto"), Mudanca::RotulosTamanho)))
+                    .push(self.campo_cor(tr!("Cor"), AlvoCor::Rotulos, e, texto_padrao))
                     .into()
             }
             Grupo::Area => {
@@ -1483,95 +1483,95 @@ impl App {
                 let fundo_padrao = tema.map_or(CorEstilo::hex(0xffffff), |t| if a == AreaSel::Grafico { t.fundo } else { t.plotagem.unwrap_or(t.fundo) });
                 let mut col = col
                     .push(escolhas(vec![
-                        ("Área do gráfico".into(), a == AreaSel::Grafico, ev(Evento::Selecionar(Selecao::Area(AreaSel::Grafico)))),
-                        ("Área de plotagem".into(), a == AreaSel::Plotagem, ev(Evento::Selecionar(Selecao::Area(AreaSel::Plotagem)))),
+                        (tr!("Área do gráfico").into(), a == AreaSel::Grafico, ev(Evento::Selecionar(Selecao::Area(AreaSel::Grafico)))),
+                        (tr!("Área de plotagem").into(), a == AreaSel::Plotagem, ev(Evento::Selecionar(Selecao::Area(AreaSel::Plotagem)))),
                     ], 2))
-                    .push(secao("Preenchimento"))
-                    .push(escolhas([("Automático", TipoPreench::Automatico), ("Nenhum", TipoPreench::Nenhum), ("Sólido", TipoPreench::Solido), ("Degradê", TipoPreench::Degrade)]
+                    .push(secao(tr!("Preenchimento")))
+                    .push(escolhas([(tr!("Automático"), TipoPreench::Automatico), (tr!("Nenhum"), TipoPreench::Nenhum), (tr!("Sólido"), TipoPreench::Solido), (tr!("Degradê"), TipoPreench::Degrade)]
                         .into_iter().map(|(t, v)| (t.to_owned(), tipo == v, mud(Mudanca::AreaTipo(a, v)))).collect(), 2))
-                    .push(self.campo_cor(if tipo == TipoPreench::Degrade { "Cor inicial" } else { "Cor" }, AlvoCor::Fundo(a), e, fundo_padrao));
+                    .push(self.campo_cor(if tipo == TipoPreench::Degrade { tr!("Cor inicial") } else { tr!("Cor") }, AlvoCor::Fundo(a), e, fundo_padrao));
                 if let Some(Preenchimento::Degrade { angulo, .. }) = &ar.preenchimento {
-                    col = col.push(self.campo_cor("Cor final", AlvoCor::DegradeFim(a), e, CorEstilo::hex(0xdfe7f2)))
-                        .push(linha("Ângulo (graus)", self.campo_num(format!("area{a:?}.angulo"), Some(f64::from(*angulo)), "90", move |t| Mudanca::AreaAngulo(a, t))));
+                    col = col.push(self.campo_cor(tr!("Cor final"), AlvoCor::DegradeFim(a), e, CorEstilo::hex(0xdfe7f2)))
+                        .push(linha(tr!("Ângulo (graus)"), self.campo_num(format!("area{a:?}.angulo"), Some(f64::from(*angulo)), "90", move |t| Mudanca::AreaAngulo(a, t))));
                 }
                 let borda_padrao = a == AreaSel::Grafico && tema.and_then(|t| t.borda).is_some();
-                col.push(secao("Borda"))
-                    .push(alternar("Mostrar borda", ar.borda.visivel.unwrap_or(borda_padrao), move |v| mud(Mudanca::AreaBorda(a, v))))
-                    .push(self.campo_cor("Cor da borda", AlvoCor::Borda(a), e, tema.and_then(|t| t.borda).unwrap_or(eixo_padrao)))
-                    .push(linha("Espessura (px)", self.campo_num(format!("area{a:?}.borda"), ar.borda.espessura.map(f64::from), "1", move |t| Mudanca::AreaBordaEspessura(a, t))))
+                col.push(secao(tr!("Borda")))
+                    .push(alternar(tr!("Mostrar borda"), ar.borda.visivel.unwrap_or(borda_padrao), move |v| mud(Mudanca::AreaBorda(a, v))))
+                    .push(self.campo_cor(tr!("Cor da borda"), AlvoCor::Borda(a), e, tema.and_then(|t| t.borda).unwrap_or(eixo_padrao)))
+                    .push(linha(tr!("Espessura (px)"), self.campo_num(format!("area{a:?}.borda"), ar.borda.espessura.map(f64::from), "1", move |t| Mudanca::AreaBordaEspessura(a, t))))
                     .push(escolhas(Traco::TODOS.iter().map(|t| (t.nome().to_owned(), ar.borda.traco.unwrap_or_default() == *t, mud(Mudanca::AreaBordaTraco(a, *t)))).collect(), 2))
-                    .push(secao("Efeitos"))
-                    .push(alternar("Sombra", ar.sombra.is_some() || (a == AreaSel::Grafico && ar.sombra.is_none() && tema.is_some_and(|t| t.sombra)), move |v| mud(Mudanca::AreaSombra(a, v))))
-                    .push(linha("Cantos arredondados (px)", self.campo_num(format!("area{a:?}.raio"), ar.raio.map(f64::from), "0", move |t| Mudanca::AreaRaio(a, t))))
+                    .push(secao(tr!("Efeitos")))
+                    .push(alternar(tr!("Sombra"), ar.sombra.is_some() || (a == AreaSel::Grafico && ar.sombra.is_none() && tema.is_some_and(|t| t.sombra)), move |v| mud(Mudanca::AreaSombra(a, v))))
+                    .push(linha(tr!("Cantos arredondados (px)"), self.campo_num(format!("area{a:?}.raio"), ar.raio.map(f64::from), "0", move |t| Mudanca::AreaRaio(a, t))))
                     .into()
             }
             Grupo::Margens => {
                 let mut col = col;
-                for (titulo, a, m) in [("Margens do gráfico (px)", AreaSel::Grafico, &e.margens_grafico), ("Margens da área de plotagem (px)", AreaSel::Plotagem, &e.margens_plotagem)] {
+                for (titulo, a, m) in [(tr!("Margens do gráfico (px)"), AreaSel::Grafico, &e.margens_grafico), (tr!("Margens da área de plotagem (px)"), AreaSel::Plotagem, &e.margens_plotagem)] {
                     let padrao = if a == AreaSel::Grafico { "10" } else { "0" };
                     let campo = |l: Lado, v: Option<f32>| self.campo_num(format!("margem{a:?}{l:?}"), v.map(f64::from), padrao, move |t| Mudanca::Margem(a, l, t));
                     col = col.push(secao(titulo))
-                        .push(linha("Em cima", campo(Lado::Superior, m.superior)))
-                        .push(linha("Embaixo", campo(Lado::Inferior, m.inferior)))
-                        .push(linha("À esquerda", campo(Lado::Esquerda, m.esquerda)))
-                        .push(linha("À direita", campo(Lado::Direita, m.direita)));
+                        .push(linha(tr!("Em cima"), campo(Lado::Superior, m.superior)))
+                        .push(linha(tr!("Embaixo"), campo(Lado::Inferior, m.inferior)))
+                        .push(linha(tr!("À esquerda"), campo(Lado::Esquerda, m.esquerda)))
+                        .push(linha(tr!("À direita"), campo(Lado::Direita, m.direita)));
                 }
                 if barras {
-                    col = col.push(secao("Colunas e barras"))
-                        .push(linha("Espaço entre grupos (%)", self.campo_num("barras.espaco".into(), e.barras.espacamento.map(f64::from), "Auto", Mudanca::BarrasEspaco)))
-                        .push(linha("Sobreposição (%)", self.campo_num("barras.sobrepor".into(), e.barras.sobreposicao.map(f64::from), "0", Mudanca::BarrasSobrepor)))
-                        .push(linha("Cantos das barras (px)", self.campo_num("barras.raio".into(), e.barras.raio.map(f64::from), "0", Mudanca::BarrasRaio)));
+                    col = col.push(secao(tr!("Colunas e barras")))
+                        .push(linha(tr!("Espaço entre grupos (%)"), self.campo_num("barras.espaco".into(), e.barras.espacamento.map(f64::from), tr!("Auto"), Mudanca::BarrasEspaco)))
+                        .push(linha(tr!("Sobreposição (%)"), self.campo_num("barras.sobrepor".into(), e.barras.sobreposicao.map(f64::from), "0", Mudanca::BarrasSobrepor)))
+                        .push(linha(tr!("Cantos das barras (px)"), self.campo_num("barras.raio".into(), e.barras.raio.map(f64::from), "0", Mudanca::BarrasRaio)));
                 }
                 col.into()
             }
             Grupo::Fonte => col
-                .push(rotulo("Família"))
-                .push(escolhas(FAMILIAS.iter().map(|(n, f)| ((*n).to_owned(), e.fonte.familia.as_deref() == *f, mud(Mudanca::FonteFamilia(*f)))).collect(), 2))
-                .push(linha("Tamanho base", self.campo_num("fonte.tamanho".into(), e.fonte.tamanho.map(f64::from), "12", Mudanca::FonteTamanho)))
-                .push(alternar("Negrito", e.fonte.negrito.unwrap_or(false), |v| mud(Mudanca::FonteNegrito(v))))
-                .push(alternar("Itálico", e.fonte.italico.unwrap_or(false), |v| mud(Mudanca::FonteItalico(v))))
-                .push(self.campo_cor("Cor do texto", AlvoCor::FonteGeral, e, texto_padrao))
+                .push(rotulo(tr!("Família")))
+                .push(escolhas(FAMILIAS.iter().map(|(n, f)| (tr!(*n).to_owned(), e.fonte.familia.as_deref() == *f, mud(Mudanca::FonteFamilia(*f)))).collect(), 2))
+                .push(linha(tr!("Tamanho base"), self.campo_num("fonte.tamanho".into(), e.fonte.tamanho.map(f64::from), "12", Mudanca::FonteTamanho)))
+                .push(alternar(tr!("Negrito"), e.fonte.negrito.unwrap_or(false), |v| mud(Mudanca::FonteNegrito(v))))
+                .push(alternar(tr!("Itálico"), e.fonte.italico.unwrap_or(false), |v| mud(Mudanca::FonteItalico(v))))
+                .push(self.campo_cor(tr!("Cor do texto"), AlvoCor::FonteGeral, e, texto_padrao))
                 .into(),
             Grupo::Analiticos => {
                 if n_series == 0 || pizza {
-                    return col.push(rotulo(if pizza { "A pizza não tem elementos analíticos." } else { "Sem séries nos dados." })).into();
+                    return col.push(rotulo(if pizza { tr!("A pizza não tem elementos analíticos.") } else { tr!("Sem séries nos dados.") })).into();
                 }
                 let i = p.serie.min(n_series - 1);
                 let an = e.serie(i).map(|x| x.analise.clone()).unwrap_or_default();
-                let mut col = col.push(self.seletor_serie()).push(secao("Linha de tendência"));
+                let mut col = col.push(self.seletor_serie()).push(secao(tr!("Linha de tendência")));
                 let atual = an.tendencia.as_ref().map(|t| t.tipo);
-                let mut opcoes = vec![("Nenhuma".to_owned(), atual.is_none(), mud(Mudanca::Tendencia(i, None)))];
+                let mut opcoes = vec![(tr!("Nenhuma").to_owned(), atual.is_none(), mud(Mudanca::Tendencia(i, None)))];
                 opcoes.extend(TipoTendencia::TODOS.iter().map(|t| (t.nome().to_owned(), atual == Some(*t), mud(Mudanca::Tendencia(i, Some(*t))))));
                 col = col.push(escolhas(opcoes, 2));
                 if let Some(t) = &an.tendencia {
                     match t.tipo {
-                        TipoTendencia::Polinomial => col = col.push(linha("Grau (2 a 6)", self.campo_num(format!("tendencia{i}.grau"), Some(f64::from(t.grau)), "2", move |s| Mudanca::TendenciaGrau(i, s)))),
-                        TipoTendencia::MediaMovel => col = col.push(linha("Período", self.campo_num(format!("tendencia{i}.periodo"), Some(f64::from(t.periodo)), "2", move |s| Mudanca::TendenciaPeriodo(i, s)))),
+                        TipoTendencia::Polinomial => col = col.push(linha(tr!("Grau (2 a 6)"), self.campo_num(format!("tendencia{i}.grau"), Some(f64::from(t.grau)), "2", move |s| Mudanca::TendenciaGrau(i, s)))),
+                        TipoTendencia::MediaMovel => col = col.push(linha(tr!("Período"), self.campo_num(format!("tendencia{i}.periodo"), Some(f64::from(t.periodo)), "2", move |s| Mudanca::TendenciaPeriodo(i, s)))),
                         _ => {
                             col = col
-                                .push(linha("Prever para a frente", self.campo_num(format!("tendencia{i}.avancar"), Some(t.avancar).filter(|v| *v > 0.0), "0", move |s| Mudanca::TendenciaAvancar(i, s))))
-                                .push(linha("Prever para trás", self.campo_num(format!("tendencia{i}.recuar"), Some(t.recuar).filter(|v| *v > 0.0), "0", move |s| Mudanca::TendenciaRecuar(i, s))))
-                                .push(alternar("Mostrar a equação", t.mostrar_equacao, move |v| mud(Mudanca::TendenciaEquacao(i, v))))
-                                .push(alternar("Mostrar o R²", t.mostrar_r2, move |v| mud(Mudanca::TendenciaR2(i, v))));
+                                .push(linha(tr!("Prever para a frente"), self.campo_num(format!("tendencia{i}.avancar"), Some(t.avancar).filter(|v| *v > 0.0), "0", move |s| Mudanca::TendenciaAvancar(i, s))))
+                                .push(linha(tr!("Prever para trás"), self.campo_num(format!("tendencia{i}.recuar"), Some(t.recuar).filter(|v| *v > 0.0), "0", move |s| Mudanca::TendenciaRecuar(i, s))))
+                                .push(alternar(tr!("Mostrar a equação"), t.mostrar_equacao, move |v| mud(Mudanca::TendenciaEquacao(i, v))))
+                                .push(alternar(tr!("Mostrar o R²"), t.mostrar_r2, move |v| mud(Mudanca::TendenciaR2(i, v))));
                         }
                     }
                 }
-                col = col.push(secao("Barras de erro"));
+                col = col.push(secao(tr!("Barras de erro")));
                 let tipo_erro = an.erro.as_ref().map(|b| match b.quantia {
                     QuantiaErro::Fixo(_) => 0u8,
                     QuantiaErro::Percentual(_) => 1,
                     QuantiaErro::DesvioPadrao(_) => 2,
                     QuantiaErro::ErroPadrao => 3,
                 });
-                let nomes = ["Valor fixo", "Porcentagem", "Desvio-padrão", "Erro-padrão"];
-                let mut opcoes = vec![("Nenhuma".to_owned(), tipo_erro.is_none(), mud(Mudanca::Erro(i, None)))];
+                let nomes = [tr!("Valor fixo"), tr!("Porcentagem"), tr!("Desvio-padrão"), tr!("Erro-padrão")];
+                let mut opcoes = vec![(tr!("Nenhuma").to_owned(), tipo_erro.is_none(), mud(Mudanca::Erro(i, None)))];
                 opcoes.extend(nomes.iter().enumerate().map(|(k, n)| (n.to_string(), tipo_erro == Some(k as u8), mud(Mudanca::Erro(i, Some(k as u8))))));
                 col = col.push(escolhas(opcoes, 2));
                 if let Some(b) = &an.erro {
                     let valor = match b.quantia {
-                        QuantiaErro::Fixo(v) => Some(("Valor", v)),
-                        QuantiaErro::Percentual(v) => Some(("Porcentagem (%)", v)),
-                        QuantiaErro::DesvioPadrao(v) => Some(("Quantos desvios", v)),
+                        QuantiaErro::Fixo(v) => Some((tr!("Valor"), v)),
+                        QuantiaErro::Percentual(v) => Some((tr!("Porcentagem (%)"), v)),
+                        QuantiaErro::DesvioPadrao(v) => Some((tr!("Quantos desvios"), v)),
                         QuantiaErro::ErroPadrao => None,
                     };
                     if let Some((r, v)) = valor {
@@ -1579,49 +1579,49 @@ impl App {
                     }
                     col = col
                         .push(escolhas(DirecaoErro::TODAS.iter().map(|d| (d.nome().to_owned(), b.direcao == *d, mud(Mudanca::ErroDirecao(i, *d)))).collect(), 3))
-                        .push(alternar("Sem ponta", b.sem_ponta, move |v| mud(Mudanca::ErroSemPonta(i, v))));
+                        .push(alternar(tr!("Sem ponta"), b.sem_ponta, move |v| mud(Mudanca::ErroSemPonta(i, v))));
                 }
-                col.push(secao("Linhas de referência"))
-                    .push(alternar("Máximo", an.maximo, move |v| mud(Mudanca::Referencia(i, 0, v))))
-                    .push(alternar("Mínimo", an.minimo, move |v| mud(Mudanca::Referencia(i, 1, v))))
-                    .push(alternar("Média", an.media, move |v| mud(Mudanca::Referencia(i, 2, v))))
+                col.push(secao(tr!("Linhas de referência")))
+                    .push(alternar(tr!("Máximo"), an.maximo, move |v| mud(Mudanca::Referencia(i, 0, v))))
+                    .push(alternar(tr!("Mínimo"), an.minimo, move |v| mud(Mudanca::Referencia(i, 1, v))))
+                    .push(alternar(tr!("Média"), an.media, move |v| mud(Mudanca::Referencia(i, 2, v))))
                     .into()
             }
             Grupo::Dica => {
                 let d = &e.dica;
                 let atual = d.formato;
-                let mut formatos = vec![("Como os rótulos".to_owned(), atual.is_none(), mud(Mudanca::DicaFormato(None)))];
+                let mut formatos = vec![(tr!("Como os rótulos").to_owned(), atual.is_none(), mud(Mudanca::DicaFormato(None)))];
                 formatos.extend([FormatoNum::Automatico, FormatoNum::Decimal { casas: 2 }, FormatoNum::Moeda { casas: 2 }, FormatoNum::Percentual { casas: 1 }]
                     .into_iter().map(|o| (o.nome().to_owned(), atual.is_some_and(|a| std::mem::discriminant(&a) == std::mem::discriminant(&o)), mud(Mudanca::DicaFormato(Some(o))))));
-                col.push(rotulo("Aparece ao passar o mouse sobre um ponto do gráfico na planilha."))
-                    .push(alternar("Mostrar a dica", d.visivel.unwrap_or(true), |v| mud(Mudanca::DicaVisivel(v))))
-                    .push(secao("Conteúdo"))
-                    .push(alternar("Categoria no título", d.categoria.unwrap_or(true), |v| mud(Mudanca::DicaCategoria(v))))
-                    .push(alternar("Nome da série", d.serie.unwrap_or(true), |v| mud(Mudanca::DicaSerie(v))))
-                    .push(alternar(if pizza { "Porcentagem do total" } else { "Porcentagem da categoria" }, d.percentual, |v| mud(Mudanca::DicaPercentual(v))))
-                    .push(secao("Número"))
+                col.push(rotulo(tr!("Aparece ao passar o mouse sobre um ponto do gráfico na planilha.")))
+                    .push(alternar(tr!("Mostrar a dica"), d.visivel.unwrap_or(true), |v| mud(Mudanca::DicaVisivel(v))))
+                    .push(secao(tr!("Conteúdo")))
+                    .push(alternar(tr!("Categoria no título"), d.categoria.unwrap_or(true), |v| mud(Mudanca::DicaCategoria(v))))
+                    .push(alternar(tr!("Nome da série"), d.serie.unwrap_or(true), |v| mud(Mudanca::DicaSerie(v))))
+                    .push(alternar(if pizza { tr!("Porcentagem do total") } else { tr!("Porcentagem da categoria") }, d.percentual, |v| mud(Mudanca::DicaPercentual(v))))
+                    .push(secao(tr!("Número")))
                     .push(escolhas(formatos, 2))
-                    .push(rotulo("Antes do valor"))
-                    .push(text_input("Ex.: R$ ", &d.prefixo).size(12).on_input(|t| mud(Mudanca::DicaPrefixo(t))))
-                    .push(rotulo("Depois do valor"))
-                    .push(text_input("Ex.:  kg", &d.sufixo).size(12).on_input(|t| mud(Mudanca::DicaSufixo(t))))
-                    .push(secao("Aparência"))
-                    .push(linha("Tamanho da letra", self.campo_num("dica.tamanho".into(), d.tamanho.map(f64::from), "12", Mudanca::DicaTamanho)))
-                    .push(self.campo_cor("Fundo", AlvoCor::DicaFundo, e, CorEstilo::hex(0xffffff)))
-                    .push(self.campo_cor("Texto", AlvoCor::DicaTexto, e, CorEstilo::hex(0x202020)))
+                    .push(rotulo(tr!("Antes do valor")))
+                    .push(text_input(tr!("Ex.: R$ "), &d.prefixo).size(12).on_input(|t| mud(Mudanca::DicaPrefixo(t))))
+                    .push(rotulo(tr!("Depois do valor")))
+                    .push(text_input(tr!("Ex.:  kg"), &d.sufixo).size(12).on_input(|t| mud(Mudanca::DicaSufixo(t))))
+                    .push(secao(tr!("Aparência")))
+                    .push(linha(tr!("Tamanho da letra"), self.campo_num("dica.tamanho".into(), d.tamanho.map(f64::from), "12", Mudanca::DicaTamanho)))
+                    .push(self.campo_cor(tr!("Fundo"), AlvoCor::DicaFundo, e, CorEstilo::hex(0xffffff)))
+                    .push(self.campo_cor(tr!("Texto"), AlvoCor::DicaTexto, e, CorEstilo::hex(0x202020)))
                     .into()
             }
             Grupo::Formas => col.into(),
             Grupo::Tamanho => col
-                .push(linha("Largura (px)", text_input("480", &g.aparencia.largura).size(12).width(Length::Fixed(96.0))
+                .push(linha(tr!("Largura (px)"), text_input("480", &g.aparencia.largura).size(12).width(Length::Fixed(96.0))
                     .on_input(|s| ev(Evento::Estilo(CampoEstilo::Largura, s)))))
-                .push(linha("Altura (px)", text_input("300", &g.aparencia.altura).size(12).width(Length::Fixed(96.0))
+                .push(linha(tr!("Altura (px)"), text_input("300", &g.aparencia.altura).size(12).width(Length::Fixed(96.0))
                     .on_input(|s| ev(Evento::Estilo(CampoEstilo::Altura, s)))))
-                .push(rotulo("Arraste o gráfico na planilha para mudar a posição."))
+                .push(rotulo(tr!("Arraste o gráfico na planilha para mudar a posição.")))
                 .into(),
             Grupo::TextoAlt => col
-                .push(rotulo("Descrição para leitores de tela"))
-                .push(text_input("Ex.: vendas por mês, 2026", &e.texto_alternativo).size(12).on_input(|s| mud(Mudanca::TextoAlt(s))))
+                .push(rotulo(tr!("Descrição para leitores de tela")))
+                .push(text_input(tr!("Ex.: vendas por mês, 2026"), &e.texto_alternativo).size(12).on_input(|s| mud(Mudanca::TextoAlt(s))))
                 .into(),
         }
     }
@@ -1698,7 +1698,7 @@ impl App {
             return;
         }
         if !e.valido() {
-            self.graficos.mensagem = "Valor fora da faixa (mínimo deve ser menor que o máximo).".into();
+            self.graficos.mensagem = tr!("Valor fora da faixa (mínimo deve ser menor que o máximo).").into();
             return;
         }
         self.graficos.aparencia.estilo = Some(e);
@@ -1732,7 +1732,7 @@ impl App {
             let _ = self.evento_grafico(Evento::Abrir);
             let pizza = modo == "boletim-pizza";
             let _ = self.evento_grafico(Evento::Tipo(if pizza { TipoUi::Pizza } else { TipoUi::ColunasEmpilhadas }));
-            let _ = self.evento_grafico(Evento::Titulo(if pizza { "Alunos por situação" } else { "Notas por aluno" }.into()));
+            let _ = self.evento_grafico(Evento::Titulo(if pizza { tr!("Alunos por situação") } else { tr!("Notas por aluno") }.into()));
             if pizza {
                 let _ = self.evento_grafico(Evento::CategoriaColuna(Some(6)));
                 let _ = self.evento_grafico(Evento::SerieVisivel(1, true));
@@ -1741,7 +1741,7 @@ impl App {
                 for n in [0, 4, 5] {
                     let _ = self.evento_grafico(Evento::SerieVisivel(n, false));
                 }
-                let _ = self.evento_grafico(Evento::SerieNome(3, "Trabalho em grupo".into()));
+                let _ = self.evento_grafico(Evento::SerieNome(3, tr!("Trabalho em grupo").into()));
             }
             self.graficos.painel.aba = AbaPainel::Configurar;
             return Task::none();
@@ -1752,16 +1752,16 @@ impl App {
         self.fim_selecao = (0, 0);
         let _ = self.evento_grafico(Evento::Abrir);
         let _ = self.evento_grafico(Evento::Tipo(TipoUi::Colunas));
-        let _ = self.evento_grafico(Evento::Titulo("Vendas por mês".into()));
+        let _ = self.evento_grafico(Evento::Titulo(tr!("Vendas por mês").into()));
         for m in [
             Mudanca::Tema(Some("oceano")),
             Mudanca::Margem(AreaSel::Grafico, Lado::Superior, "22".into()),
             Mudanca::Margem(AreaSel::Grafico, Lado::Esquerda, "22".into()),
             Mudanca::Margem(AreaSel::Grafico, Lado::Direita, "22".into()),
             Mudanca::Margem(AreaSel::Plotagem, Lado::Esquerda, "10".into()),
-            Mudanca::Subtitulo("1º semestre de 2026".into()),
+            Mudanca::Subtitulo(tr!("1º semestre de 2026").into()),
             Mudanca::RotulosVisivel(true),
-            Mudanca::EixoTitulo(EixoSel::Y, "R$ mil".into()),
+            Mudanca::EixoTitulo(EixoSel::Y, tr!("R$ mil").into()),
         ] {
             let _ = self.evento_grafico(Evento::Formatar(m));
         }

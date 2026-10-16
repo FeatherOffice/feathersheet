@@ -73,7 +73,7 @@ impl App {
             "serie" | "serie_data" => self.preparar_captura_serie(nome),
             n if n.starts_with("validacao") => self.preparar_captura_validacao(n),
             "macro" => {
-                self.macro_mensagens.push("Relatório gerado com 12 linhas.".into());
+                self.macro_mensagens.push(tr!("Relatório gerado com 12 linhas.").into());
                 Task::none()
             }
             _ => Task::none(),

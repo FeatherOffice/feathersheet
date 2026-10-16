@@ -22,17 +22,17 @@ pub(super) struct Editor {
 fn listar(sheet: &feathersheet_core::planilha::sheet::Sheet) -> Result<Vec<Value>, String> {
     let Some(data) = sheet.bt.as_deref() else { return Ok(Vec::new()) };
     let itens: Vec<Value> = serde_json::from_str(data)
-        .map_err(|e| format!("Metadados dos botões inválidos: {e}"))?;
-    if itens.len() > MAX_BOTOES { return Err("Limite de 128 botões por aba".into()); }
+        .map_err(|e| trf!("Metadados dos botões inválidos: {e}"))?;
+    if itens.len() > MAX_BOTOES { return Err(tr!("Limite de 128 botões por aba").into()); }
     Ok(itens)
 }
 
 fn guardar(sheet: &mut feathersheet_core::planilha::sheet::Sheet,
     itens: &[Value]) -> Result<(), String>
 {
-    if itens.len() > MAX_BOTOES { return Err("Limite de 128 botões por aba".into()); }
+    if itens.len() > MAX_BOTOES { return Err(tr!("Limite de 128 botões por aba").into()); }
     let dados = serde_json::to_string(itens)
-        .map_err(|e| format!("Falha ao guardar os botões: {e}"))?;
+        .map_err(|e| trf!("Falha ao guardar os botões: {e}"))?;
     sheet.alterar_botoes(if itens.is_empty() { None } else { Some(dados) });
     Ok(())
 }
@@ -123,8 +123,8 @@ fn salvar_posicao(sheet: &mut feathersheet_core::planilha::sheet::Sheet,
 {
     let mut itens = listar(sheet)?;
     let item = itens.iter_mut().find(|v| v["id"].as_str() == Some(id))
-        .ok_or("O botão não existe mais.")?;
-    let anterior = Posicao::ler(item).ok_or("Posição do botão inválida.")?;
+        .ok_or(tr!("O botão não existe mais."))?;
+    let anterior = Posicao::ler(item).ok_or(tr!("Posição do botão inválida."))?;
     if anterior == nova { return Ok(false); }
     for (k,v) in [("x",nova.x),("y",nova.y),
                   ("width",nova.width),("height",nova.height)] {
@@ -138,12 +138,12 @@ impl App {
     pub(super) fn novo_botao_macro(&mut self) {
         if !self.confirmar() { return; }
         let Some(primeira) = self.macro_catalogo.macros.first() else {
-            self.status = "Crie e salve uma macro JavaScript antes de inserir um botão.".into();
+            self.status = tr!("Crie e salve uma macro JavaScript antes de inserir um botão.").into();
             return;
         };
         self.botao_macro_modal = Some(Editor {
             id: None,
-            rotulo: "Executar macro".into(),
+            rotulo: tr!("Executar macro").into(),
             macro_nome: primeira.name.clone(),
         });
     }
@@ -155,7 +155,7 @@ impl App {
                 if let Some(item) = lista.iter().find(|v| v["id"].as_str() == Some(id)) {
                     self.botao_macro_modal = Some(Editor {
                         id: Some(id.to_owned()),
-                        rotulo: item["label"].as_str().unwrap_or("Botão").to_owned(),
+                        rotulo: item["label"].as_str().unwrap_or(tr!("Botão")).to_owned(),
                         macro_nome: item["macroName"].as_str().unwrap_or("").to_owned(),
                     });
                 }
@@ -168,7 +168,7 @@ impl App {
         if !self.confirmar() { return; }
         let Some(editor) = self.botao_macro_modal.clone() else { return };
         if self.macro_catalogo.obter(&editor.macro_nome).is_none() {
-            self.status = "A macro selecionada não existe mais. Salve o módulo antes.".into();
+            self.status = tr!("A macro selecionada não existe mais. Salve o módulo antes.").into();
             return;
         }
         let Some(aba) = self.workbook.aba(self.folha) else { return };
@@ -179,13 +179,13 @@ impl App {
         let novo = editor.id.is_none();
         let indice = if let Some(id) = &editor.id {
             let Some(pos) = itens.iter().position(|v| v["id"].as_str() == Some(id)) else {
-                self.status = "O botão não existe mais nesta aba.".into();
+                self.status = tr!("O botão não existe mais nesta aba.").into();
                 return;
             };
             pos
         } else {
             if itens.len() >= MAX_BOTOES {
-                self.status = "Limite de 128 botões por aba.".into();
+                self.status = tr!("Limite de 128 botões por aba.").into();
                 return;
             }
             let id = format!("rust-btn-{}-{}",std::process::id(),
@@ -211,8 +211,8 @@ impl App {
                 Ok(()) => {
                     self.alterado = true;
                     self.botao_macro_modal = None;
-                    self.status = if novo { "Botão de macro inserido na planilha.".into() }
-                        else { "Botão de macro atualizado.".into() };
+                    self.status = if novo { tr!("Botão de macro inserido na planilha.").into() }
+                        else { tr!("Botão de macro atualizado.").into() };
                 },
                 Err(erro) => self.status = erro,
             }
@@ -233,7 +233,7 @@ impl App {
         let antes = itens.len();
         itens.retain(|v| v["id"].as_str() != Some(id.as_str()));
         if itens.len() == antes {
-            self.status = "O botão não existe mais.".into();
+            self.status = tr!("O botão não existe mais.").into();
             return;
         }
         if let Some(aba) = self.workbook.aba_mut(self.folha) {
@@ -243,7 +243,7 @@ impl App {
                     self.botao_macro_modal = None;
                     self.botao_macro_selecionado = None;
                     self.arraste_botao_macro = None;
-                    self.status = "Botão removido sem excluir a macro (Ctrl+Z desfaz).".into();
+                    self.status = tr!("Botão removido sem excluir a macro (Ctrl+Z desfaz).").into();
                 },
                 Err(erro) => self.status = erro,
             }
@@ -270,13 +270,13 @@ impl App {
             Err(erro) => { self.status = erro; return }
         };
         let item = lista.iter().find(|v| v["id"].as_str() == Some(id.as_str()));
-        let rotulo = item.and_then(|v| v["label"].as_str()).unwrap_or("Botão").to_owned();
+        let rotulo = item.and_then(|v| v["label"].as_str()).unwrap_or(tr!("Botão")).to_owned();
         let Some(nome) = item.and_then(|v| v["macroName"].as_str()) else {
-            self.status = "Este botão não possui uma macro atribuída.".into();
+            self.status = tr!("Este botão não possui uma macro atribuída.").into();
             return;
         };
         let Some(macro_atual) = self.macro_catalogo.obter(nome) else {
-            self.status = format!("Macro \"{nome}\" não encontrada na biblioteca.");
+            self.status = trf!("Macro \"{nome}\" não encontrada na biblioteca.");
             return;
         };
         let codigo = macro_atual.code.clone();
@@ -285,8 +285,8 @@ impl App {
         let Some(resultado) = self.rodar_macro(historico_macros::GatilhoMacro::Botao { rotulo }, &nome, &codigo, Vec::new()) else { return };
         self.macro_saida = resultado.saida.join("\n");
         self.status = if let Some(erro) = resultado.erro {
-            format!("Erro ao executar {nome}: {erro}. Escritas revertidas.")
-        } else { format!("Macro {nome} executada pelo botão.") };
+            trf!("Erro ao executar {nome}: {erro}. Escritas revertidas.")
+        } else { trf!("Macro {nome} executada pelo botão.") };
         self.trocar_selecao(self.linha, self.coluna);
     }
 
@@ -330,8 +330,8 @@ impl App {
             Ok(true) => {
                 self.alterado = true;
                 self.status = match drag.gesto {
-                    Gesto::Mover => "Botão movido; Ctrl+Z desfaz.",
-                    Gesto::Alca(_) => "Botão redimensionado; Ctrl+Z desfaz.",
+                    Gesto::Mover => tr!("Botão movido; Ctrl+Z desfaz."),
+                    Gesto::Alca(_) => tr!("Botão redimensionado; Ctrl+Z desfaz."),
                 }.into();
             },
             Ok(false) => {},
@@ -375,7 +375,7 @@ impl App {
                 || x > 10_000. || y > 10_000. { continue; }
             // O corpo inteiro captura o press e aguarda mouse-up global antes
             // de decidir entre clique/executar e mover. Não executa no drag.
-            let rotulo = item["label"].as_str().unwrap_or("Botão").to_owned();
+            let rotulo = item["label"].as_str().unwrap_or(tr!("Botão")).to_owned();
             // Cor da forma do Excel ("#548135"); sem ela, o verde do botão.
             let (fundo, borda) = item["color"].as_str().and_then(cor_hex)
                 .map(|c| (c, Color::from_rgb(c.r * 0.82, c.g * 0.82, c.b * 0.82)))
@@ -439,12 +439,12 @@ impl App {
     ) -> Element<'a, Msg> {
         let Some(editor) = &self.botao_macro_modal else { return base };
         let mut conteudo = column![
-            text(if editor.id.is_some() { "Editar botão de macro" }
-                else { "Inserir botão de macro" }).size(19),
-            text("Rótulo do botão").size(12),
-            text_input("Executar macro", &editor.rotulo)
+            text(if editor.id.is_some() { tr!("Editar botão de macro") }
+                else { tr!("Inserir botão de macro") }).size(19),
+            text(tr!("Rótulo do botão")).size(12),
+            text_input(tr!("Executar macro"), &editor.rotulo)
                 .on_input(Msg::BotaoMacroRotulo),
-            text("Macro a executar").size(12),
+            text(tr!("Macro a executar")).size(12),
         ].spacing(10);
         for item in self.macro_catalogo.macros.iter().take(50) {
             let nome = item.name.clone();
@@ -456,13 +456,13 @@ impl App {
             );
         }
         let mut botoes = row![
-            button("Cancelar").on_press(Msg::BotaoMacroCancelar)
+            button(tr!("Cancelar")).on_press(Msg::BotaoMacroCancelar)
                 .style(estilo_botao_secundario),
-            button("Salvar botão").on_press(Msg::BotaoMacroSalvar)
+            button(tr!("Salvar botão")).on_press(Msg::BotaoMacroSalvar)
                 .style(estilo_botao_primario),
         ].spacing(10);
         if editor.id.is_some() {
-            botoes = botoes.push(button("Excluir botão")
+            botoes = botoes.push(button(tr!("Excluir botão"))
                 .on_press(Msg::BotaoMacroExcluir).style(estilo_botao_secundario));
         }
         conteudo = conteudo.push(botoes);

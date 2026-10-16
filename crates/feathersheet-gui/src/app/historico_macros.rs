@@ -44,10 +44,10 @@ impl TipoGatilho {
 
     pub(super) fn rotulo(self) -> &'static str {
         match self {
-            TipoGatilho::Manual => "À mão",
-            TipoGatilho::Botao => "Botão",
-            TipoGatilho::Evento => "Evento",
-            TipoGatilho::Mcp => "MCP / IA",
+            TipoGatilho::Manual => tr!("À mão"),
+            TipoGatilho::Botao => tr!("Botão"),
+            TipoGatilho::Evento => tr!("Evento"),
+            TipoGatilho::Mcp => tr!("MCP / IA"),
         }
     }
 
@@ -76,20 +76,20 @@ impl GatilhoMacro {
     /// Frase curta: "Botão “Gerar”", "Ao mudar células · Planilha1!B19".
     pub(super) fn descricao(&self) -> String {
         match self {
-            GatilhoMacro::Manual { origem } => format!("À mão · {origem}"),
-            GatilhoMacro::Botao { rotulo } => format!("Botão “{rotulo}”"),
+            GatilhoMacro::Manual { origem } => trf!("À mão · {origem}"),
+            GatilhoMacro::Botao { rotulo } => trf!("Botão “{rotulo}”"),
             GatilhoMacro::Evento { evento, aba, intervalo } => {
                 let nome = match evento.as_str() {
-                    "aoMudar" => "Ao mudar células",
-                    "aoAtivar" => "Ao ativar aba",
+                    "aoMudar" => tr!("Ao mudar células"),
+                    "aoAtivar" => tr!("Ao ativar aba"),
                     outro => outro,
                 };
                 match intervalo {
-                    Some(i) => format!("{nome} · {aba}!{i}"),
-                    None => format!("{nome} · {aba}"),
+                    Some(i) => trf!("{nome} · {aba}!{i}"),
+                    None => trf!("{nome} · {aba}"),
                 }
             }
-            GatilhoMacro::Mcp => "MCP / IA (sheet_macro)".into(),
+            GatilhoMacro::Mcp => tr!("MCP / IA (sheet_macro)").into(),
         }
     }
 }
@@ -108,10 +108,10 @@ pub(super) enum ResultadoExecucao {
 impl ResultadoExecucao {
     pub(super) fn rotulo(&self) -> &'static str {
         match self {
-            ResultadoExecucao::Ok => "Concluída",
-            ResultadoExecucao::Erro(_) => "Erro",
-            ResultadoExecucao::Cancelada => "Cancelada (Não)",
-            ResultadoExecucao::Esperando(_) => "Esperando Sim/Não",
+            ResultadoExecucao::Ok => tr!("Concluída"),
+            ResultadoExecucao::Erro(_) => tr!("Erro"),
+            ResultadoExecucao::Cancelada => tr!("Cancelada (Não)"),
+            ResultadoExecucao::Esperando(_) => tr!("Esperando Sim/Não"),
         }
     }
 
@@ -164,7 +164,7 @@ impl Execucao {
             s.push_str(&format!(": {}", e.lines().next().unwrap_or("")));
         }
         if !self.respostas.is_empty() {
-            s.push_str(&format!(" · respostas {}", respostas_texto(&self.respostas)));
+            s.push_str(&trf!(" · respostas {}", respostas_texto(&self.respostas)));
         }
         s.push_str(&format!(" · {} ms", self.ms));
         s
@@ -172,7 +172,7 @@ impl Execucao {
 }
 
 pub(super) fn respostas_texto(respostas: &[bool]) -> String {
-    respostas.iter().map(|&r| if r { "Sim" } else { "Não" }).collect::<Vec<_>>().join(", ")
+    respostas.iter().map(|&r| if r { tr!("Sim") } else { tr!("Não") }).collect::<Vec<_>>().join(", ")
 }
 
 /// O anel de execuções e o estado do painel (filtros, linha escolhida).
@@ -269,9 +269,9 @@ impl App {
     /// de exemplo, cada uma por um gatilho, escolhe a que deu erro e abre o
     /// editor (Alt+F11) com o Histórico à vista, para a foto.
     pub(super) fn preparar_captura_historico_macros(&mut self) -> Task<Msg> {
-        let _ = self.rodar_macro(GatilhoMacro::manual("Executar macro"), "Preencher",
+        let _ = self.rodar_macro(GatilhoMacro::manual(tr!("Executar macro")), tr!("Preencher"),
             "sheet.set('A1', 10); sheet.set('A2', 20);", vec![]);
-        let _ = self.rodar_macro(GatilhoMacro::Botao { rotulo: "Gerar relatório".into() }, "Relatorio",
+        let _ = self.rodar_macro(GatilhoMacro::Botao { rotulo: tr!("Gerar relatório").into() }, "Relatorio",
             "log('relatório');", vec![]);
         let _ = self.rodar_macro(GatilhoMacro::Evento {
             evento: "aoMudar".into(), aba: "Planilha1".into(), intervalo: Some("B19".into()) },
@@ -279,9 +279,9 @@ impl App {
         let _ = self.rodar_macro(GatilhoMacro::Evento {
             evento: "aoAtivar".into(), aba: "Planilha1".into(), intervalo: None },
             "Worksheet_Activate", "log('ativou');", vec![]);
-        let _ = self.rodar_macro(GatilhoMacro::manual("Executar macro"), "Importar",
+        let _ = self.rodar_macro(GatilhoMacro::manual(tr!("Executar macro")), tr!("Importar"),
             "sheet.set('D1', 1);\nthrow new Error('Coluna \"Valor\" não encontrada na aba Dados');", vec![]);
-        let _ = self.rodar_macro(GatilhoMacro::Botao { rotulo: "Limpar".into() }, "LimparTudo",
+        let _ = self.rodar_macro(GatilhoMacro::Botao { rotulo: tr!("Limpar").into() }, "LimparTudo",
             "if (confirm('Apagar tudo?')) sheet.clear('A1:D10');", vec![]);
         self.responder_macro(false);
         self.macro_mensagens.clear();

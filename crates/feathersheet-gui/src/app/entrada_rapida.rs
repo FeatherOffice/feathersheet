@@ -25,7 +25,7 @@ impl App {
         let celulas: u64 = areas.iter().map(|a|
             u64::from(a.r1 - a.r0 + 1) * u64::from(a.c1 - a.c0 + 1)).sum();
         if celulas > TETO_CTRL_ENTER {
-            self.status = format!(
+            self.status = trf!(
                 "Ctrl+Enter vale para até {} células; selecione uma área menor.",
                 TETO_CTRL_ENTER);
             return true;
@@ -55,7 +55,7 @@ impl App {
             .map(|a| feathersheet_core::celulas::locale::apresentar_formula(
                 &a.sheet.get_raw(self.linha, self.coluna), &self.regionalizacao()))
             .unwrap_or_default();
-        self.status = format!("{celulas} célula(s) preenchida(s) com Ctrl+Enter.");
+        self.status = trf!("{celulas} célula(s) preenchida(s) com Ctrl+Enter.");
         true
     }
 
@@ -84,7 +84,7 @@ impl App {
         }
         vistos.retain(|t| !t.trim().is_empty());
         if vistos.is_empty() {
-            self.status = "Não há valores acima ou abaixo nesta coluna para escolher.".into();
+            self.status = tr!("Não há valores acima ou abaixo nesta coluna para escolher.").into();
             return;
         }
         // Sem diferenciar maiúsculas na ordem, como a lista do Excel.

@@ -73,6 +73,14 @@ struct Column {
     invalidada: AtomicBool,
 }
 
+/// As três fatias de uma coluna salva, emprestadas (ver
+/// [`FormulaTable::load_column_partes`]).
+struct PartesColuna<'a> {
+    slots: &'a [i32],
+    payload: &'a [f64],
+    bitmap: &'a [u8],
+}
+
 /// Uma coluna de fórmula em forma de bytes, pronta para gravar.
 pub struct ColunaSalva {
     /// Número do padrão nos 24 bits altos, tipo do valor nos 8 baixos.
@@ -217,6 +225,13 @@ impl FormulaTable {
             .filter(|&r| entry.slot.has(r)
                 && (toda || entry.slot.get(r).unwrap_or(0) & KIND_MASK == KIND_DIRTY))
             .collect()
+    }
+
+    /// Se o padrão lê a célula imediatamente acima na mesma coluna
+    /// (`K3=K2+I3`): é uma corrente, calculada de cima para baixo.
+    pub(crate) fn padrao_le_linha_acima(&self, id: usize) -> bool {
+        self.pattern_refs.get(id).is_some_and(|refs| refs.iter().any(|r|
+            r.row == -1 && r.col == 0 && !r.row_lock && !r.col_lock && r.sheet.is_none()))
     }
 
     pub fn le_de_fora_em(&self, row: u32, col: u32) -> bool {
@@ -825,20 +840,29 @@ impl FormulaTable {
     /// Carrega uma coluna inteira, **já calculada**. O texto e o erro voltam
     /// do dicionário local para as tabelas desta execução.
     pub fn load_column(&mut self, col: u32, salva: &ColunaSalva, length: u32, pool: &mut StringPool) {
-        let length = length as usize;
-        let pool_ids: Vec<i32> = salva.dict.iter().map(|t| pool.get_or_create(t)).collect();
-        let erros_locais: Vec<i32> = salva
-            .erros
+        let erros: Vec<(&str, Option<&str>)> = salva.erros.iter().map(|e| (e.code.as_str(), e.detail.as_deref())).collect();
+        self.load_column_partes(col, &salva.slots, &salva.payload, &salva.bitmap, &salva.dict, &erros, length, pool);
+    }
+
+    /// [`Self::load_column`] com as partes emprestadas de quem leu o arquivo,
+    /// sem copiar os vetores de 1 milhão de linhas para um `ColunaSalva`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn load_column_partes(&mut self, col: u32, slots: &[i32], payload: &[f64], bitmap: &[u8],
+        dict: &[String], erros: &[(&str, Option<&str>)], length: u32, pool: &mut StringPool) {
+        let length = (length as usize).min(slots.len()).min(payload.len()).min(bitmap.len() * 8);
+        let pool_ids: Vec<i32> = dict.iter().map(|t| pool.get_or_create(t)).collect();
+        let erros_locais: Vec<i32> = erros
             .iter()
-            .map(|e| {
-                let code = ErrorCode::from_code(&e.code).unwrap_or(ErrorCode::Error);
-                let err = match &e.detail {
-                    Some(d) => CellError::com_motivo(code, d.clone()),
+            .map(|(code, detail)| {
+                let code = ErrorCode::from_code(code).unwrap_or(ErrorCode::Error);
+                let err = match detail {
+                    Some(d) => CellError::com_motivo(code, d.to_string()),
                     None => CellError::new(code),
                 };
                 self.error_id(&err)
             })
             .collect();
+        let salva = PartesColuna { slots, payload, bitmap };
         let mut novos_slots = vec![0i32; length];
         let mut novo_payload = vec![0.0f64; length];
         let usados = self.used_by_col.entry(col).or_default();

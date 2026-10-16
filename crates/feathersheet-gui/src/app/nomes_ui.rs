@@ -51,13 +51,13 @@ pub enum Evento {
 pub(super) fn validar_nome(nome: &str) -> Result<(), &'static str> {
     let nome = nome.trim();
     if nome.is_empty() || nome.chars().count() > 60 {
-        return Err("O nome precisa ter entre 1 e 60 caracteres.");
+        return Err(tr!("O nome precisa ter entre 1 e 60 caracteres."));
     }
     let mut caracteres = nome.chars();
     if !caracteres.next().is_some_and(|c| c.is_alphabetic() || c == '_')
         || !caracteres.all(|c| c.is_alphanumeric() || c == '_' || c == '.')
     {
-        return Err("Use letras, números, _ ou .; comece por letra ou _.");
+        return Err(tr!("Use letras, números, _ ou .; comece por letra ou _."));
     }
     let posicao_numero = nome.find(|c: char| c.is_ascii_digit());
     if let Some(pos) = posicao_numero {
@@ -65,7 +65,7 @@ pub(super) fn validar_nome(nome: &str) -> Result<(), &'static str> {
         let linha = &nome[pos..];
         if let (Some(_), Ok(linha)) = (col_index(coluna), linha.parse::<u32>()) {
             if (1..=MAX_ROWS).contains(&linha) {
-                return Err("Esse nome é um endereço de célula, como A1.");
+                return Err(tr!("Esse nome é um endereço de célula, como A1."));
             }
         }
     }
@@ -101,7 +101,7 @@ pub(super) fn ler_refere(
     let t = texto.trim();
     let t = t.strip_prefix('=').unwrap_or(t).trim();
     if t.is_empty() {
-        return Err("Escreva a referência, como =Planilha1!$A$1:$B$10.");
+        return Err(tr!("Escreva a referência, como =Planilha1!$A$1:$B$10."));
     }
     // O ! que separa a aba é o último fora de aspas.
     let mut em_aspas = false;
@@ -131,12 +131,12 @@ pub(super) fn ler_refere(
         None => (padrao.to_owned(), t),
     };
     let Some(indice) = workbook.indice_por_nome(&aba) else {
-        return Err("A aba dessa referência não existe.");
+        return Err(tr!("A aba dessa referência não existe."));
     };
     let real = workbook.nomes().get(indice).cloned().unwrap_or(aba);
     let limpo: String = endereco.chars().filter(|c| *c != '$').collect();
     let Some(mut area) = feathersheet_core::celulas::refs::parse_range_ref(&limpo) else {
-        return Err("Referência inválida. Use, por exemplo, =Planilha1!$A$1:$B$10.");
+        return Err(tr!("Referência inválida. Use, por exemplo, =Planilha1!$A$1:$B$10."));
     };
     area.sheet = Some(real);
     Ok(area)
@@ -201,7 +201,7 @@ impl App {
                 && original.as_ref().is_none_or(|o| o.to_uppercase() != nome.to_uppercase())
         });
         if duplicado {
-            return erro(self, "Esse nome já existe. Escolha outro.");
+            return erro(self, tr!("Esse nome já existe. Escolha outro."));
         }
         let area = if matches!(modo, Modo::Lista) || refere.trim().is_empty() {
             self.area_selecionada_na_aba()
@@ -220,9 +220,9 @@ impl App {
         self.workbook.definir_nome(&nome, area.clone());
         self.alterado = true;
         self.status = if original.is_some() {
-            format!("Nome \"{nome}\" alterado.")
+            trf!("Nome \"{nome}\" alterado.")
         } else {
-            format!("Intervalo \"{nome}\" criado.")
+            trf!("Intervalo \"{nome}\" criado.")
         };
         self.endereco = nome.clone();
         // Volta para a tabela com o nome criado escolhido.
@@ -239,7 +239,7 @@ impl App {
     pub(super) fn excluir_nome(&mut self, nome: &str) -> Task<Msg> {
         if self.workbook.remover_nome(nome) {
             self.alterado = true;
-            self.status = format!("Intervalo \"{nome}\" removido.");
+            self.status = trf!("Intervalo \"{nome}\" removido.");
             if self.endereco.to_uppercase() == nome.to_uppercase() {
                 self.endereco = cell_name(self.linha, self.coluna);
             }
@@ -256,13 +256,13 @@ impl App {
     pub(super) fn ir_para_nome(&mut self, nome: &str) -> Task<Msg> {
         let Some(alvo) = self.workbook.nomeados().into_iter()
             .find(|e| e.nome.to_uppercase() == nome.to_uppercase()) else {
-            self.status = format!("O intervalo \"{nome}\" não existe.");
+            self.status = trf!("O intervalo \"{nome}\" não existe.");
             return Task::none();
         };
         let folha = if let Some(nome_aba) = alvo.area.sheet.as_deref() {
             let Some(i) = self.workbook.nomes().iter()
                 .position(|s| s.to_lowercase() == nome_aba.to_lowercase()) else {
-                self.status = format!("A aba do intervalo \"{nome}\" não existe.");
+                self.status = trf!("A aba do intervalo \"{nome}\" não existe.");
                 return Task::none();
             };
             i
@@ -270,7 +270,7 @@ impl App {
             self.folha
         };
         if alvo.area.r1 >= MAX_ROWS || alvo.area.c1 >= MAX_COLS {
-            self.status = "Esse intervalo excede os limites da planilha.".into();
+            self.status = tr!("Esse intervalo excede os limites da planilha.").into();
             return Task::none();
         }
         if !self.confirmar() { return Task::none(); }
@@ -281,7 +281,7 @@ impl App {
         self.fim_selecao = (area.r1, area.c1);
         self.endereco = alvo.nome.clone();
         self.nomes_modal = None;
-        self.status = format!("Selecionado: {}", alvo.nome);
+        self.status = trf!("Selecionado: {}", alvo.nome);
         Task::none()
     }
 
@@ -341,7 +341,7 @@ impl App {
                         let grafia = achar(&nome).map(|n| n.nome).unwrap_or(nome);
                         self.workbook.definir_nome(&grafia, area.clone());
                         self.alterado = true;
-                        self.status = format!("Nome \"{grafia}\" agora se refere a {}.", texto_refere(&area));
+                        self.status = trf!("Nome \"{grafia}\" agora se refere a {}.", texto_refere(&area));
                         if let Some(e) = &mut self.nomes_modal { e.refere = texto_refere(&area); }
                     }
                     Err(msg) => {
@@ -393,14 +393,14 @@ impl App {
     fn tabela_nomes(&self, estado: &Estado) -> Element<'_, Msg> {
         let nomes = self.workbook.nomeados();
         if nomes.is_empty() {
-            return dlg::aviso_vazio("Nenhum nome definido. Use Novo para dar um nome à seleção atual.");
+            return dlg::aviso_vazio(tr!("Nenhum nome definido. Use Novo para dar um nome à seleção atual."));
         }
         let semibold = iced::Font { weight: iced::font::Weight::Semibold, ..Default::default() };
         let cabecalho = |t: &str| text(t.to_uppercase()).size(10.5).font(semibold).color(COR_TEXTO_MUTED());
         let titulo = container(row![
-            cabecalho("Nome").width(Length::FillPortion(3)),
-            cabecalho("Valor").width(Length::FillPortion(3)),
-            cabecalho("Refere-se a").width(Length::FillPortion(4)),
+            cabecalho(tr!("Nome")).width(Length::FillPortion(3)),
+            cabecalho(tr!("Valor")).width(Length::FillPortion(3)),
+            cabecalho(tr!("Refere-se a")).width(Length::FillPortion(4)),
         ].spacing(10)).padding([4, 10]);
         let mut linhas = iced::widget::column![].spacing(1);
         for n in nomes {
@@ -435,9 +435,9 @@ impl App {
         };
         let em_lista = matches!(estado.modo, Modo::Lista);
         let barra = row![
-            acao("plus", "Novo…", Some(Msg::NomesEvento(Evento::Novo))),
-            acao("edit", "Editar…", (tem && em_lista).then_some(Msg::NomesEvento(Evento::Editar))),
-            acao("trash", "Excluir", (tem && em_lista).then_some(Msg::NomesEvento(Evento::Excluir))),
+            acao("plus", tr!("Novo…"), Some(Msg::NomesEvento(Evento::Novo))),
+            acao("edit", tr!("Editar…"), (tem && em_lista).then_some(Msg::NomesEvento(Evento::Editar))),
+            acao("trash", tr!("Excluir"), (tem && em_lista).then_some(Msg::NomesEvento(Evento::Excluir))),
         ].spacing(6);
 
         let rotulo = |t: &str| text(t.to_owned()).size(12).color(COR_TEXTO_MUTED());
@@ -449,50 +449,50 @@ impl App {
         let mut corpo = iced::widget::column![barra, self.tabela_nomes(estado)].spacing(10);
         let d = match &estado.modo {
             Modo::Lista => {
-                let mut campo = text_input("Escolha um nome na tabela", &estado.refere).padding(8).size(13);
+                let mut campo = text_input(tr!("Escolha um nome na tabela"), &estado.refere).padding(8).size(13);
                 if tem {
                     campo = campo.on_input(|t| Msg::NomesEvento(Evento::Refere(t)))
                         .on_submit(Msg::NomesEvento(Evento::Aplicar));
                 }
-                corpo = corpo.push(iced::widget::column![rotulo("Refere-se a"), campo].spacing(5));
+                corpo = corpo.push(iced::widget::column![rotulo(tr!("Refere-se a")), campo].spacing(5));
                 if let Some(e) = erro { corpo = corpo.push(e); }
                 let atual = estado.selecionado.as_ref().and_then(|s| {
                     self.workbook.nomeados().into_iter().find(|n| n.nome.to_uppercase() == s.to_uppercase())
                 }).map(|n| texto_refere(&n.area));
                 let mudou = atual.is_some_and(|a| a != estado.refere.trim());
-                self.dialogo("Gerenciador de nomes", corpo)
-                    .rodape_esquerda(dlg::botao_secundario("Ir para",
+                self.dialogo(tr!("Gerenciador de nomes"), corpo)
+                    .rodape_esquerda(dlg::botao_secundario(tr!("Ir para"),
                         estado.selecionado.clone().map(Msg::NomeIrPara)))
-                    .primario("Aplicar", mudou.then_some(Msg::NomesEvento(Evento::Aplicar)))
+                    .primario(tr!("Aplicar"), mudou.then_some(Msg::NomesEvento(Evento::Aplicar)))
             }
             Modo::Novo | Modo::Editar(_) => {
                 let novo = matches!(estado.modo, Modo::Novo);
                 let form = iced::widget::column![
-                    dlg::secao(if novo { "Novo nome" } else { "Editar nome" }),
-                    rotulo("Nome"),
-                    text_input("Ex.: receitas_2026", &estado.nome)
+                    dlg::secao(if novo { tr!("Novo nome") } else { tr!("Editar nome") }),
+                    rotulo(tr!("Nome")),
+                    text_input(tr!("Ex.: receitas_2026"), &estado.nome)
                         .on_input(Msg::NomeAtualizar).on_submit(Msg::NomeCriar).padding(8).size(13),
-                    rotulo("Refere-se a"),
+                    rotulo(tr!("Refere-se a")),
                     text_input("=Planilha1!$A$1:$B$10", &estado.refere)
                         .on_input(|t| Msg::NomesEvento(Evento::Refere(t)))
                         .on_submit(Msg::NomeCriar).padding(8).size(13),
                 ].spacing(6);
                 corpo = corpo.push(container(form).padding([10, 12]).width(Length::Fill).style(dlg::estilo_bloco));
                 if let Some(e) = erro { corpo = corpo.push(e); }
-                self.dialogo("Gerenciador de nomes", corpo)
-                    .secundario("Cancelar", Some(Msg::NomesEvento(Evento::Voltar)))
-                    .primario(if novo { "Criar nome" } else { "Salvar" }, Some(Msg::NomeCriar))
+                self.dialogo(tr!("Gerenciador de nomes"), corpo)
+                    .secundario(tr!("Cancelar"), Some(Msg::NomesEvento(Evento::Voltar)))
+                    .primario(if novo { tr!("Criar nome") } else { tr!("Salvar") }, Some(Msg::NomeCriar))
             }
             Modo::Excluir(nome) => {
-                corpo = corpo.push(dlg::aviso("alert-triangle", format!(
+                corpo = corpo.push(dlg::aviso("alert-triangle", trf!(
                     "Excluir o nome \"{nome}\"? As fórmulas que o usam passam a mostrar #NOME?.")));
-                self.dialogo("Gerenciador de nomes", corpo)
-                    .secundario("Cancelar", Some(Msg::NomesEvento(Evento::Voltar)))
-                    .primario("Excluir nome", Some(Msg::NomesEvento(Evento::ExcluirConfirmar)))
+                self.dialogo(tr!("Gerenciador de nomes"), corpo)
+                    .secundario(tr!("Cancelar"), Some(Msg::NomesEvento(Evento::Voltar)))
+                    .primario(tr!("Excluir nome"), Some(Msg::NomesEvento(Evento::ExcluirConfirmar)))
             }
         };
         d.icone("tag")
-            .subtitulo("Use os nomes em fórmulas, como =SOMA(receitas). Valem para a pasta inteira.")
+            .subtitulo(tr!("Use os nomes em fórmulas, como =SOMA(receitas). Valem para a pasta inteira."))
             .largura(640.0)
             .ao_fechar(Msg::NomesFechar)
     }

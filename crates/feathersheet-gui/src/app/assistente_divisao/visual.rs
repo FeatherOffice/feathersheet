@@ -126,14 +126,14 @@ fn seletor(
 }
 fn label_tipo(t: &TipoColunaDivisao) -> &'static str {
     match t {
-        TipoColunaDivisao::Geral => "Geral",
-        TipoColunaDivisao::Texto => "Texto",
-        TipoColunaDivisao::Numero => "Número",
-        TipoColunaDivisao::Data(FormatoDeData::DiaMesAno) => "Data DMA",
-        TipoColunaDivisao::Data(FormatoDeData::MesDiaAno) => "Data MDA",
-        TipoColunaDivisao::Data(FormatoDeData::AnoMesDia) => "Data AMD",
-        TipoColunaDivisao::Porcentagem => "Porcentagem",
-        TipoColunaDivisao::Pular => "Ignorar",
+        TipoColunaDivisao::Geral => tr!("Geral"),
+        TipoColunaDivisao::Texto => tr!("Texto"),
+        TipoColunaDivisao::Numero => tr!("Número"),
+        TipoColunaDivisao::Data(FormatoDeData::DiaMesAno) => tr!("Data DMA"),
+        TipoColunaDivisao::Data(FormatoDeData::MesDiaAno) => tr!("Data MDA"),
+        TipoColunaDivisao::Data(FormatoDeData::AnoMesDia) => tr!("Data AMD"),
+        TipoColunaDivisao::Porcentagem => tr!("Porcentagem"),
+        TipoColunaDivisao::Pular => tr!("Ignorar"),
     }
 }
 /// O exemplo é usado somente quando a seleção não contém dado algum.
@@ -217,15 +217,15 @@ impl App {
         for c in 0..colunas {
             let nome=if dividido {
                 if com_cabecalho && !edicao {
-                    recortes[0].get(c).cloned().unwrap_or_else(||format!("Coluna {}",c+1))
-                }else{format!("Coluna {}",c+1)}
-            }else{"Dados originais".to_owned()};
+                    recortes[0].get(c).cloned().unwrap_or_else(||trf!("Coluna {}",c+1))
+                }else{trf!("Coluna {}",c+1)}
+            }else{tr!("Dados originais").to_owned()};
             let selecionada=dividido && e.selecionada==c;
             let conteudo:Element<'_,Msg>=if edicao {
                 iced::widget::column![
                     text(nome).size(12),
                     pick_list(
-                        TIPOS,Some(label_tipo(&e.tipo(c))),
+                        TIPOS.map(|t| tr!(t)),Some(label_tipo(&e.tipo(c))),
                         move |tipo|Msg::AssistenteDivisao(Evento::TipoNaColuna(c,tipo))
                     ).text_size(11).padding([5,7]).width(Length::Fill),
                 ].spacing(4).into()
@@ -267,15 +267,15 @@ impl App {
             }
             tabela=tabela.push(linha);
         }
-        let titulo_previa=if dividido {"Visualização dos dados"}else{"Visualização dos dados selecionados"};
+        let titulo_previa=if dividido {tr!("Visualização dos dados")}else{tr!("Visualização dos dados selecionados")};
         let note=if ilustrativo {
-            "Exemplo ilustrativo — selecione células preenchidas para visualizar seus dados."
-        }else{"A prévia usa somente a seleção; a conversão aplica-se à seleção inteira."};
+            tr!("Exemplo ilustrativo — selecione células preenchidas para visualizar seus dados.")
+        }else{tr!("A prévia usa somente a seleção; a conversão aplica-se à seleção inteira.")};
         iced::widget::column![
             iced::widget::row![
                 destaque(titulo_previa),
                 Space::with_width(Length::Fill),
-                legenda(&format!("{} linha(s) de amostra",
+                legenda(&trf!("{} linha(s) de amostra",
                     recortes.len().saturating_sub(primeira))),
             ].align_y(Alignment::Center),
             container(scrollable(tabela)
@@ -290,7 +290,7 @@ impl App {
             if ilustrativo {
                 legenda(note)
             }else if max_cols>colunas {
-                legenda(&format!("Exibindo {} de {} colunas · {}",colunas,max_cols,note))
+                legenda(&trf!("Exibindo {} de {} colunas · {}",colunas,max_cols,note))
             }else{
                 legenda(note)
             },
@@ -319,13 +319,13 @@ impl App {
                 .on_press(Msg::AssistenteDivisao(Evento::Modo(modo)))
         };
         iced::widget::column![
-            titulo("Escolha como seus dados estão delimitados"),
-            legenda("Selecione o método de separação. A pré-visualização será atualizada."),
+            titulo(tr!("Escolha como seus dados estão delimitados")),
+            legenda(tr!("Selecione o método de separação. A pré-visualização será atualizada.")),
             iced::widget::row![
-                cartao(Modo::Delimitado,"Delimitado",
-                    "Vírgulas e tabulações separam os campos.","columns"),
-                cartao(Modo::LarguraFixa,"Largura fixa",
-                    "Campos organizados em larguras definidas.","arrows-horizontal"),
+                cartao(Modo::Delimitado,tr!("Delimitado"),
+                    tr!("Vírgulas e tabulações separam os campos."),"columns"),
+                cartao(Modo::LarguraFixa,tr!("Largura fixa"),
+                    tr!("Campos organizados em larguras definidas."),"arrows-horizontal"),
             ].spacing(12),
             self.grade_previa(e,false),
         ].spacing(14).width(Length::Fill).into()
@@ -334,8 +334,8 @@ impl App {
     fn tela_separadores<'a>(&'a self,e:&'a Estado)->Element<'a,Msg> {
         let controles:Element<'a,Msg>=if e.modo==Modo::LarguraFixa {
             iced::widget::column![
-                legenda("Largura fixa de cada coluna"),
-                text_input("Quantidade de caracteres", &e.largura)
+                legenda(tr!("Largura fixa de cada coluna")),
+                text_input(tr!("Quantidade de caracteres"), &e.largura)
                     .on_input(|s|Msg::AssistenteDivisao(Evento::Largura(s)))
                     .width(Length::Fixed(250.)).padding([9,12]).size(12),
             ].spacing(8).into()
@@ -343,33 +343,36 @@ impl App {
             let atual=e.separador_atual();
             iced::widget::column![
                 iced::widget::row![
-                    seletor("Ponto e vírgula",";",";",atual),
-                    seletor("Vírgula",",",",",atual),
-                    seletor("Tabulação","\\t","Tab",atual),
-                    seletor("Espaço","( )","Espaço",atual),
-                    seletor("Outro","","Outro",atual),
-                    text_input("Caractere", &e.outro)
+                    seletor(tr!("Ponto e vírgula"),";",";",atual),
+                    seletor(tr!("Vírgula"),",",",",atual),
+                    seletor(tr!("Tabulação"),"\\t","Tab",atual),
+                    seletor(tr!("Espaço"),"( )","Espaço",atual),
+                    seletor(tr!("Outro"),"","Outro",atual),
+                    text_input(tr!("Caractere"), &e.outro)
                         .on_input(|s|Msg::AssistenteDivisao(Evento::Outro(s)))
                         .width(Length::Fixed(90.)).padding([6,8]).size(11),
                 ].spacing(6).align_y(Alignment::Center).wrap(),
                 iced::widget::row![
-                    checkbox("Considerar delimitadores consecutivos como um só",e.consecutivos)
+                    checkbox(tr!("Considerar delimitadores consecutivos como um só"),e.consecutivos)
                         .size(14).text_size(12)
                         .on_toggle(|s|Msg::AssistenteDivisao(Evento::Consecutivos(s))),
                     Space::with_width(Length::Fill),
-                    legenda("Qualificador de texto:"),
+                    legenda(tr!("Qualificador de texto:")),
                     pick_list(
-                        ["Aspas duplas","Aspas simples","Nenhum"],Some(e.qualificador),
-                        |v|Msg::AssistenteDivisao(Evento::Qualificador(v))
+                        // Mostra traduzido; o estado guarda sempre a chave em português.
+                        [tr!("Aspas duplas"),tr!("Aspas simples"),tr!("Nenhum")],Some(tr!(e.qualificador)),
+                        |v|Msg::AssistenteDivisao(Evento::Qualificador(
+                            [tr!("Aspas duplas"),tr!("Aspas simples"),tr!("Nenhum")].into_iter()
+                                .find(|pt| tr!(*pt)==v).unwrap_or(tr!("Aspas duplas"))))
                     ).width(Length::Fixed(147.)).text_size(11).padding([7,8]),
                 ].spacing(9).align_y(Alignment::Center),
             ].spacing(11).into()
         };
         iced::widget::column![
             titulo(if e.modo==Modo::Delimitado {
-                "Escolha os delimitadores"
-            }else{"Defina a largura fixa"}),
-            legenda(if e.modo==Modo::Delimitado {"Escolha o caractere que separa os campos."} else {"Informe quantos caracteres tem cada campo."}),
+                tr!("Escolha os delimitadores")
+            }else{tr!("Defina a largura fixa")}),
+            legenda(if e.modo==Modo::Delimitado {tr!("Escolha o caractere que separa os campos.")} else {tr!("Informe quantos caracteres tem cada campo.")}),
             controles,
             self.grade_previa(e,true),
         ].spacing(12).width(Length::Fill).into()
@@ -377,11 +380,11 @@ impl App {
 
     fn tela_formato(&self,e:&Estado)->Element<'_,Msg> {
         iced::widget::column![
-            titulo("Defina o formato de cada coluna"),
-            legenda("Cada coluna tem seu próprio formato. Selecione Ignorar para não importá-la."),
+            titulo(tr!("Defina o formato de cada coluna")),
+            legenda(tr!("Cada coluna tem seu próprio formato. Selecione Ignorar para não importá-la.")),
             self.grade_previa(e,true),
             iced::widget::row![
-                button(if e.avancado {"Ocultar opções avançadas"}else{"Avançado..."})
+                button(if e.avancado {tr!("Ocultar opções avançadas")}else{tr!("Avançado...")})
                     .padding([8,13]).style(estilo_botao_secundario)
                     .on_press(Msg::AssistenteDivisao(Evento::Avancado)),
                 Space::with_width(Length::Fill),
@@ -389,9 +392,9 @@ impl App {
                     feather_ui::icones::icone("info-circle",18.)
                         .style(|_,_| iced::widget::svg::Style{color:Some(COR_AZUL_ACENTO())}),
                     legenda(if e.avancado {
-                        "Datas: DMA (dia/mês/ano), MDA (mês/dia/ano) ou AMD (ano/mês/dia)."
+                        tr!("Datas: DMA (dia/mês/ano), MDA (mês/dia/ano) ou AMD (ano/mês/dia).")
                     } else {
-                        "Geral converte números e mantém os demais valores como texto."
+                        tr!("Geral converte números e mantém os demais valores como texto.")
                     }),
                 ].spacing(9).align_y(Alignment::Center))
                     .padding([9,11]).width(Length::Fixed(385.))
@@ -437,23 +440,23 @@ impl App {
             .max(e.tipos.len());
         let mantidas=(0..total).filter(|&i|e.tipo(i)!=TipoColunaDivisao::Pular).count();
         iced::widget::column![
-            titulo("Escolha o destino dos dados"),
-            legenda("Escolha onde as colunas convertidas serão colocadas."),
+            titulo(tr!("Escolha o destino dos dados")),
+            legenda(tr!("Escolha onde as colunas convertidas serão colocadas.")),
             iced::widget::column![
                 iced::widget::row![
                     radio_app(false,e.nova_aba,|v|Msg::AssistenteDivisao(Evento::NovaAba(v))),
-                    container(text("Planilha existente:").size(12)).width(Length::Fixed(150.)),
+                    container(text(tr!("Planilha existente:")).size(12)).width(Length::Fixed(150.)),
                     self.destino_input(e,false),
                 ].spacing(9).align_y(Alignment::Center),
                 iced::widget::row![
                     radio_app(true,e.nova_aba,|v|Msg::AssistenteDivisao(Evento::NovaAba(v))),
-                    container(text("Nova planilha").size(12)).width(Length::Fixed(150.)),
+                    container(text(tr!("Nova planilha")).size(12)).width(Length::Fixed(150.)),
                     self.destino_input(e,true),
                 ].spacing(9).align_y(Alignment::Center),
             ].spacing(8).width(Length::Fill),
             iced::widget::column![
-                destaque("Resumo"),
-                legenda(&format!("Os dados serão divididos em {total} colunas; {mantidas} serão importadas.")),
+                destaque(tr!("Resumo")),
+                legenda(&trf!("Os dados serão divididos em {total} colunas; {mantidas} serão importadas.")),
             ].spacing(4),
             self.grade_previa(e,true),
         ].spacing(12).width(Length::Fill).into()
@@ -479,29 +482,29 @@ impl App {
                 .on_press(Msg::AssistenteDivisao(Evento::IrPara(n))));
         }
         let mut acoes=iced::widget::row![
-            button("Cancelar").padding([8,17]).style(estilo_botao_secundario)
+            button(tr!("Cancelar")).padding([8,17]).style(estilo_botao_secundario)
                 .on_press(Msg::AssistenteDivisao(Evento::Cancelar)),
             Space::with_width(Length::Fill),
             etapas,
             Space::with_width(Length::Fill),
         ].spacing(10).align_y(Alignment::Center);
         if e.etapa==1 {
-            acoes=acoes.push(button("Pular").padding([8,17])
+            acoes=acoes.push(button(tr!("Pular")).padding([8,17])
                 .style(estilo_botao_secundario)
                 .on_press(Msg::AssistenteDivisao(Evento::Pular)));
         }else{
             acoes=acoes.push(button(iced::widget::row![
                 feather_ui::icones::icone("chevron-left",14.),
-                text("Voltar"),
+                text(tr!("Voltar")),
             ].spacing(6).align_y(Alignment::Center)).padding([8,15])
                 .style(estilo_botao_secundario)
                 .on_press(Msg::AssistenteDivisao(Evento::Voltar)));
         }
         let rotulo_avancar: Element<'static,Msg> = if e.etapa==4 {
-            text("Concluir").into()
+            text(tr!("Concluir")).into()
         }else{
             iced::widget::row![
-                text("Avançar"),
+                text(tr!("Avançar")),
                 feather_ui::icones::icone("chevron-right",14.)
                     .style(|_,_| iced::widget::svg::Style{
                         color:Some(feather_ui::acessibilidade::texto_sobre(COR_AZUL_ACENTO())),
@@ -517,7 +520,7 @@ impl App {
     }
     pub(in crate::app) fn view_assistente_divisao(&self) -> Element<'_,Msg> {
         let Some(e)=self.assistente_divisao.as_ref() else {
-            return text("Assistente fechado").into()
+            return text(tr!("Assistente fechado")).into()
         };
         if let Some(progresso)=e.progresso_conversao() {
             // Durante o milhão de linhas não reconstruímos a prévia nem
@@ -525,13 +528,13 @@ impl App {
             // O valor suavizado: a barra desliza em vez de pular por lote.
             let porcentagem=e.percentual_exibido();
             return container(iced::widget::column![
-                titulo("Convertendo texto em colunas"),
-                legenda("A planilha está sendo processada em lotes sem bloquear o aplicativo."),
+                titulo(tr!("Convertendo texto em colunas")),
+                legenda(tr!("A planilha está sendo processada em lotes sem bloquear o aplicativo.")),
                 iced::widget::progress_bar(0.0..=100.0, porcentagem)
                     .width(Length::Fill),
                 destaque(&progresso),
-                legenda("Cancelar reverte todos os lotes já gravados."),
-                button("Cancelar conversão")
+                legenda(tr!("Cancelar reverte todos os lotes já gravados.")),
+                button(tr!("Cancelar conversão"))
                     .padding([10, 16])
                     .style(estilo_botao_secundario)
                     .on_press(Msg::AssistenteDivisao(Evento::Cancelar)),
@@ -552,7 +555,7 @@ impl App {
                 text(e.erro.clone()).size(12).color(COR_TEXTO()).width(Length::Fill),
             ].spacing(10).align_y(Alignment::Center);
             if e.conflito.is_some() {
-                linha=linha.push(button("Substituir").padding([6,14])
+                linha=linha.push(button(tr!("Substituir")).padding([6,14])
                     .style(estilo_primario)
                     .on_press(Msg::AssistenteDivisao(Evento::Substituir)));
             }

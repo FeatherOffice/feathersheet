@@ -4,54 +4,54 @@ use super::*;
 pub(super) fn menu_itens(id: u8) -> Vec<(&'static str, Option<Msg>)> {
     match id {
         0 => vec![
-            ("Novo módulo JavaScript", Some(Msg::MacroNovoModulo)),
-            ("Abrir .js  Ctrl+O", Some(Msg::MacroAbrir)),
-            ("Guardar módulo  Ctrl+S", Some(Msg::MacroGuardarModulo)),
-            ("Salvar .js  Ctrl+Shift+S", Some(Msg::MacroSalvar)),
-            ("Importar catálogo", Some(Msg::MacroImportarCatalogo)),
-            ("Importar VBA do Excel (.xlsm)", Some(Msg::VbaImportar)),
-            ("Exportar catálogo", Some(Msg::MacroExportarCatalogo)),
-            ("Fechar editor  Alt+Q", Some(Msg::FecharAux(Auxiliar::Macros))),
+            (tr!("Novo módulo JavaScript"), Some(Msg::MacroNovoModulo)),
+            (tr!("Abrir .js  Ctrl+O"), Some(Msg::MacroAbrir)),
+            (tr!("Guardar módulo  Ctrl+S"), Some(Msg::MacroGuardarModulo)),
+            (tr!("Salvar .js  Ctrl+Shift+S"), Some(Msg::MacroSalvar)),
+            (tr!("Importar catálogo"), Some(Msg::MacroImportarCatalogo)),
+            (tr!("Importar VBA do Excel (.xlsm)"), Some(Msg::VbaImportar)),
+            (tr!("Exportar catálogo"), Some(Msg::MacroExportarCatalogo)),
+            (tr!("Fechar editor  Alt+Q"), Some(Msg::FecharAux(Auxiliar::Macros))),
         ],
         1 => vec![
-            ("Desfazer  Ctrl+Z", event(EventoVisual::Codigo(EventoCodigo::Desfazer))),
-            ("Refazer  Ctrl+Y", event(EventoVisual::Codigo(EventoCodigo::Refazer))),
-            ("Localizar  Ctrl+F", event(EventoVisual::Codigo(EventoCodigo::Abrir(false)))),
-            ("Substituir  Ctrl+H", event(EventoVisual::Codigo(EventoCodigo::Abrir(true)))),
-            ("Localizar próxima  F3", event(EventoVisual::Codigo(EventoCodigo::Proximo))),
-            ("Buscar macro pelo nome", event(EventoVisual::Codigo(EventoCodigo::FocarProjeto))),
+            (tr!("Desfazer  Ctrl+Z"), event(EventoVisual::Codigo(EventoCodigo::Desfazer))),
+            (tr!("Refazer  Ctrl+Y"), event(EventoVisual::Codigo(EventoCodigo::Refazer))),
+            (tr!("Localizar  Ctrl+F"), event(EventoVisual::Codigo(EventoCodigo::Abrir(false)))),
+            (tr!("Substituir  Ctrl+H"), event(EventoVisual::Codigo(EventoCodigo::Abrir(true)))),
+            (tr!("Localizar próxima  F3"), event(EventoVisual::Codigo(EventoCodigo::Proximo))),
+            (tr!("Buscar macro pelo nome"), event(EventoVisual::Codigo(EventoCodigo::FocarProjeto))),
         ],
         2 => vec![
-            ("Explorador de projeto", event(EventoVisual::Explorador)),
-            ("Propriedades", event(EventoVisual::Propriedades)),
-            ("Janela Imediata  Ctrl+G", event(EventoVisual::Painel(0))),
-            ("Locais", event(EventoVisual::Painel(1))),
-            ("Pilha de chamadas", event(EventoVisual::Painel(2))),
-            ("Janela de Inspeção", event(EventoVisual::Painel(3))),
-            ("Histórico de macros", event(EventoVisual::Painel(PAINEL_HISTORICO))),
-            ("Mostrar/ocultar saída", event(EventoVisual::Console)),
+            (tr!("Explorador de projeto"), event(EventoVisual::Explorador)),
+            (tr!("Propriedades"), event(EventoVisual::Propriedades)),
+            (tr!("Janela Imediata  Ctrl+G"), event(EventoVisual::Painel(0))),
+            (tr!("Locais"), event(EventoVisual::Painel(1))),
+            (tr!("Pilha de chamadas"), event(EventoVisual::Painel(2))),
+            (tr!("Janela de Inspeção"), event(EventoVisual::Painel(3))),
+            (tr!("Histórico de macros"), event(EventoVisual::Painel(PAINEL_HISTORICO))),
+            (tr!("Mostrar/ocultar saída"), event(EventoVisual::Console)),
         ],
         3 => vec![
-            ("Módulo", Some(Msg::MacroNovoModulo)), ("Componente HTML/CSS", event(EventoVisual::Documento("componente:previsao".into()))),
-            ("Procedimento", None), ("Evento da planilha", None),
+            (tr!("Módulo"), Some(Msg::MacroNovoModulo)), (tr!("Componente HTML/CSS"), event(EventoVisual::Documento("componente:previsao".into()))),
+            (tr!("Procedimento"), None), (tr!("Evento da planilha"), None),
         ],
         4 => vec![
-            ("Executar  F5 / Ctrl+Enter", Some(Msg::MacroExecutar)),
-            ("Limpar Janela Imediata", event(EventoVisual::LimparSaida)),
+            (tr!("Executar  F5 / Ctrl+Enter"), Some(Msg::MacroExecutar)),
+            (tr!("Limpar Janela Imediata"), event(EventoVisual::LimparSaida)),
         ],
         5 => vec![
-            ("Verificar sintaxe", None), ("Entrar  F8", None),
-            ("Passar  Shift+F8", None), ("Sair  Ctrl+Shift+F8", None),
-            ("Pausar", None), ("Parar  Shift+F5", None),
-            ("Ponto de interrupção  F9", None),
-            ("Próxima instrução  Ctrl+F9", None),
-            ("Adicionar inspeção", event(EventoVisual::Painel(3))),
+            (tr!("Verificar sintaxe"), None), (tr!("Entrar  F8"), None),
+            (tr!("Passar  Shift+F8"), None), (tr!("Sair  Ctrl+Shift+F8"), None),
+            (tr!("Pausar"), None), (tr!("Parar  Shift+F5"), None),
+            (tr!("Ponto de interrupção  F9"), None),
+            (tr!("Próxima instrução  Ctrl+F9"), None),
+            (tr!("Adicionar inspeção"), event(EventoVisual::Painel(3))),
         ],
         6 => vec![
-            ("Opções do editor", None), ("Fonte / Tabulação", None),
-            ("Sempre depurar", None),
+            (tr!("Opções do editor"), None), (tr!("Fonte / Tabulação"), None),
+            (tr!("Sempre depurar"), None),
         ],
-        _ => vec![("Guia de macros  F1", None), ("Atalhos", None)],
+        _ => vec![(tr!("Guia de macros  F1"), None), (tr!("Atalhos"), None)],
     }
 }
 /// Mapeamento centralizado: nenhum item dos menus TS deve depender de glifo Unicode.
@@ -101,6 +101,8 @@ pub(super) fn icone_do_menu(rotulo: &str) -> Option<&'static str> {
         ("Guia de macros", "help"),
         ("Atalhos", "keyboard"),
     ];
+    // O rótulo chega traduzido; os prefixos são em português.
+    let rotulo = crate::idioma::original(rotulo);
     pares.iter().find_map(|(prefixo, icone)| rotulo.starts_with(prefixo).then_some(*icone))
 }
 
@@ -129,7 +131,7 @@ pub(super) fn menus<'a>(app: &'a App) -> Element<'a, Msg> {
     for (i, rotulo) in MENUS.iter().enumerate() {
         let ativo = app.macro_visual.menu == Some(i as u8);
         let conteudo = row![
-            text((*rotulo).to_owned()).size(12),
+            text(tr!(*rotulo).to_owned()).size(12),
             feather_ui::icones::icone("chevron-down", 11.0),
         ].spacing(4).align_y(Alignment::Center);
         linha = linha.push(
@@ -141,7 +143,7 @@ pub(super) fn menus<'a>(app: &'a App) -> Element<'a, Msg> {
         );
     }
     linha = linha.push(Space::with_width(Length::Fill));
-    linha = linha.push(text("EDITOR DE MACROS").size(10).color(cor_secundaria(escuro)));
+    linha = linha.push(text(tr!("EDITOR DE MACROS")).size(10).color(cor_secundaria(escuro)));
     container(linha).padding([4, 8]).style(estilo_area(escuro))
         .width(Length::Fill).into()
 }
@@ -191,20 +193,20 @@ pub(super) fn ferramentas<'a>(app: &'a App) -> Element<'a, Msg> {
         botao_executar(if app.macro_visual.documento.starts_with("modulo:") {
             Some(Msg::MacroExecutar)
         } else { None }),
-        botao_icone("Pausar", "player-pause", None, false),
-        botao_icone("Parar", "player-stop", None, false),
+        botao_icone(tr!("Pausar"), "player-pause", None, false),
+        botao_icone(tr!("Parar"), "player-stop", None, false),
         container(Space::with_width(Length::Fixed(1.0)))
             .height(Length::Fixed(20.0)).style(estilo_divisor(escuro)),
-        botao_icone("Entrar  F8", "arrow-down", None, false),
-        botao_icone("Passar", "arrow-step", None, false),
-        botao_icone("Sair", "arrow-back-up", None, false),
-        botao_icone("Próxima instrução", "arrow-step", None, false),
+        botao_icone(tr!("Entrar  F8"), "arrow-down", None, false),
+        botao_icone(tr!("Passar"), "arrow-step", None, false),
+        botao_icone(tr!("Sair"), "arrow-back-up", None, false),
+        botao_icone(tr!("Próxima instrução"), "arrow-step", None, false),
         container(Space::with_width(Length::Fixed(1.0)))
             .height(Length::Fixed(20.0)).style(estilo_divisor(escuro)),
-        botao_icone("Módulo", "file-code", Some(Msg::MacroNovoModulo), false),
-        botao_icone("Componente", "forms", event(EventoVisual::Documento("componente:previsao".into())), false),
-        botao_icone("Salvar módulo", "device-floppy", Some(Msg::MacroGuardarModulo), false),
-        botao_icone("Guia", "help", None, false),
+        botao_icone(tr!("Módulo"), "file-code", Some(Msg::MacroNovoModulo), false),
+        botao_icone(tr!("Componente"), "forms", event(EventoVisual::Documento("componente:previsao".into())), false),
+        botao_icone(tr!("Salvar módulo"), "device-floppy", Some(Msg::MacroGuardarModulo), false),
+        botao_icone(tr!("Guia"), "help", None, false),
     ].spacing(7).align_y(Alignment::Center).width(Length::Shrink)
         .height(Length::Fixed(34.0));
     // Uma barra rolável no eixo horizontal não pode conter Fill.

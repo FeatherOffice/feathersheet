@@ -96,22 +96,22 @@ fn formatar_inteiro(v: u64) -> String {
 /// só quando há números. Na barra estreita, as estatísticas da frente somem
 /// primeiro (adaptação de largura própria do Rust, para não cortar a tela).
 fn texto_resumo(c: &ContagemSelecao, largura: f32) -> String {
-    let qtd = format!("Contagem: {}", formatar_inteiro(c.count));
+    let qtd = trf!("Contagem: {}", formatar_inteiro(c.count));
     if c.numbers == 0 {
         return qtd;
     }
-    let soma = format!("Soma: {}", formatar_numero(c.sum));
+    let soma = trf!("Soma: {}", formatar_numero(c.sum));
     if largura < 790. {
         return qtd;
     }
     if largura < 1080. {
         return format!("{soma}     {qtd}");
     }
-    let media = format!("Média: {}", formatar_numero(c.media().unwrap_or(0.)));
+    let media = trf!("Média: {}", formatar_numero(c.media().unwrap_or(0.)));
     if largura < 1450. {
         return format!("{soma}     {media}     {qtd}");
     }
-    format!(
+    trf!(
         "{soma}     {media}     Mín: {}     Máx: {}     {qtd}",
         formatar_numero(c.min),
         formatar_numero(c.max)
@@ -233,7 +233,7 @@ impl App {
         if self.assistente_divisao.as_ref()
             .is_some_and(|e| e.conversao_em_andamento())
         {
-            return container(text("Convertendo texto em colunas…").size(11)
+            return container(text(tr!("Convertendo texto em colunas…")).size(11)
                 .color(COR_TEXTO_MUTED()))
                 .padding([0, 8]).width(Length::Fill).into();
         }
@@ -244,7 +244,7 @@ impl App {
         let texto = if estado.fora_da_area {
             String::new()
         } else if estado.pendente {
-            format!("Somando {}%…   {}", estado.porcentagem(),
+            trf!("Somando {}%…   {}", estado.porcentagem(),
                 texto_resumo(&estado.conta, largura))
         } else {
             texto_resumo(&estado.conta, largura)

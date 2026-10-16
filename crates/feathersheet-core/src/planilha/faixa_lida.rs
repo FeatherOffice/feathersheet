@@ -29,6 +29,11 @@ pub struct FaixaLida {
     linhas: u32,
     colunas: u32,
     valores: Vec<Value>,
+    /// Posição do primeiro valor igual a cada chave, para a busca exata
+    /// (`PROCX` modo 0) não varrer a lista a cada uma do milhão de linhas
+    /// que a consultam. Montado na primeira busca; `None` quando a faixa não
+    /// é um vetor ou tem `NaN` (que casa com qualquer número).
+    indice_exato: std::sync::OnceLock<Option<HashMap<crate::planilha::agregado::ChaveCriterio, u32>>>,
 }
 
 static VAZIO: Value = Value::Empty;
@@ -36,7 +41,32 @@ static VAZIO: Value = Value::Empty;
 impl FaixaLida {
     pub(crate) fn nova(r0: u32, c0: u32, linhas: u32, colunas: u32, valores: Vec<Value>) -> Self {
         debug_assert_eq!(valores.len() as u64, linhas as u64 * colunas as u64);
-        FaixaLida { r0, c0, linhas, colunas, valores }
+        FaixaLida { r0, c0, linhas, colunas, valores, indice_exato: std::sync::OnceLock::new() }
+    }
+
+    /// A posição (no vetor: linha ou coluna, a partir de zero) do primeiro
+    /// valor igual a `procurado`, pela regra de
+    /// [`crate::funcoes::fn_helpers::valores_iguais`]. `None` de fora: a
+    /// busca não é indexável (procurado vazio, zero, lógico; faixa com
+    /// `NaN`), varrer como sempre. `Some(None)`: não há.
+    pub fn posicao_exata(&self, procurado: &Value) -> Option<Option<u32>> {
+        use crate::planilha::agregado::ChaveCriterio;
+        let chave = ChaveCriterio::exata(procurado)?;
+        let indice = self.indice_exato.get_or_init(|| {
+            if self.linhas != 1 && self.colunas != 1 {
+                return None;
+            }
+            let mut mapa = HashMap::new();
+            for (i, v) in self.valores.iter().enumerate() {
+                match ChaveCriterio::da_celula(v) {
+                    Ok(Some(c)) => { mapa.entry(c).or_insert(i as u32); }
+                    Ok(None) => {}
+                    Err(()) => return None,
+                }
+            }
+            Some(mapa)
+        }).as_ref()?;
+        Some(indice.get(&chave).copied())
     }
 
     /// Cada valor não vazio, com a linha e a coluna dele na aba.

@@ -59,6 +59,7 @@ pub fn da_workbook(workbook: &Workbook, ativa: u32) -> PastaBruta {
         names: Some(crate::para_workbook::nomes_para_json(workbook)),
         es: workbook.estilos_celula.as_deref().and_then(|t| serde_json::from_str(t).ok()),
         pr: crate::para_workbook::propriedades_para_json(&workbook.propriedades),
+        mc: workbook.macros.as_deref().and_then(|t| serde_json::from_str(t).ok()),
         sheets,
     }
 }
@@ -109,16 +110,20 @@ fn montar_aba_bruta(sheet: &Sheet) -> AbaBruta {
         }
     }
 
-    // 2) Estilos literais das células literais
-    let mut estilos_literais = Vec::new();
-    let mut style_keys: Vec<_> = sheet.styles.keys().cloned().collect();
-    style_keys.sort_unstable();
-
-    for k in style_keys {
-        if let Some(&idx) = sheet.styles.get(&k) {
-            if let Some(json) = estilo_da_entrada(sheet, idx) {
-                estilos_literais.push((k, json));
-            }
+    // 2) Estilo direto das células literais e das fórmulas empacotadas, por
+    //    faixa — como a aba guarda. O JSON de cada estilo é montado uma vez
+    //    por entrada da tabela, não uma vez por célula (eram 6 milhões de
+    //    clones na Planilha Pesada: 12 GB e 3,3 s a cada Ctrl+S).
+    let mut json_por_estilo: Vec<Option<Option<serde_json::Value>>> = vec![None; sheet.style_parts.len().max(sheet.style_table.len())];
+    let mut estilos_faixa = Vec::with_capacity(sheet.styles.faixas_len());
+    for (col, faixa) in sheet.styles.faixas() {
+        let idx = faixa.idx as usize;
+        if idx >= json_por_estilo.len() {
+            json_por_estilo.resize(idx + 1, None);
+        }
+        let json = json_por_estilo[idx].get_or_insert_with(|| estilo_da_entrada(sheet, idx));
+        if let Some(json) = json {
+            estilos_faixa.push((col, faixa.r0, faixa.r1, json.clone()));
         }
     }
 
@@ -190,7 +195,8 @@ fn montar_aba_bruta(sheet: &Sheet) -> AbaBruta {
         ob: parse_json_opt(&sheet.ob),
         ce: parse_json_opt(&sheet.ce),
         avulsas,
-        estilos_literais,
+        estilos_literais: Vec::new(),
+        estilos_faixa,
         estilos_coluna: sheet.col_styles.iter().map(|(k, v)| (*k, estilo_parcial_para_json(v))).collect(),
         estilos_linha: sheet.row_styles.iter().map(|(k, v)| (*k, estilo_parcial_para_json(v))).collect(),
         estilo_aba: sheet.sheet_style.as_ref().map(estilo_parcial_para_json),
@@ -302,6 +308,54 @@ mod testes {
     /// `=BUSCARTEXTO("…")`): até 26/09/2026 a aba contava como vazia (só
     /// `cells` e `data` eram olhados), gravava zero linhas, e a fórmula sumia
     /// do arquivo.
+    /// Estilo direto por faixa (Fase 2 do plano de 400 MB): uma coluna de
+    /// 300 células em moeda é UMA faixa no arquivo (`sf`), não 300 entradas,
+    /// e volta igual — inclusive onde a faixa tem buraco e estilo trocado.
+    #[test]
+    fn estilo_por_faixa_vai_e_volta_pelo_fshz() {
+        use feathersheet_core::celulas::estilo_parcial::{Campo, EstiloParcial};
+        let mut wb = Workbook::vazia();
+        let idx = wb.criar_aba("Vendas");
+        let mut moeda = EstiloParcial::new();
+        moeda.insert("format".into(), Campo::Texto("currency".into()));
+        let mut negrito = EstiloParcial::new();
+        negrito.insert("bold".into(), Campo::Logico(true));
+        {
+            let s = &mut wb.aba_mut(idx).unwrap().sheet;
+            let i_moeda = s.registrar_parcial(moeda.clone()).unwrap();
+            let i_negrito = s.registrar_parcial(negrito.clone()).unwrap();
+            for r in 0..300u32 {
+                s.set_cell_raw(r, 0, (r + 1).to_string(), Some(i_moeda));
+            }
+            s.set_cell_raw(150, 0, "151".to_string(), Some(i_negrito));
+            s.set_cell_raw(200, 0, String::new(), None);
+            // Célula só com estilo, sem valor.
+            s.set_style_idx(400, 2, i_negrito);
+            assert_eq!(s.styles.len(), 300);
+            assert_eq!(s.styles.faixas_len(), 5, "0..149 moeda · 150 negrito · 151..199 moeda · 201..299 moeda · 400 negrito");
+        }
+        let bruta = da_workbook(&wb, 0);
+        assert_eq!(bruta.sheets[0].estilos_faixa.len(), 5);
+        assert!(bruta.sheets[0].estilos_literais.is_empty());
+        let bytes = pasta_gravar_bytes(&wb, 0).expect("grava");
+        let lida = crate::fshz_read::ler_fshz(&bytes).expect("lê");
+        assert_eq!(lida.sheets[0].estilos_faixa.len(), 5);
+        assert!(lida.sheets[0].estilos_diretos.is_empty());
+        let volta = crate::para_workbook::para_workbook(&lida);
+        let s = &volta.aba(0).unwrap().sheet;
+        assert_eq!(s.styles.len(), 300);
+        assert_eq!(s.styles.faixas_len(), 5);
+        let parcial = |r: u32, c: u32| s.get_style_idx(r, c).and_then(|i| s.style_parts.get(i)).cloned();
+        assert_eq!(parcial(0, 0), Some(moeda.clone()));
+        assert_eq!(parcial(149, 0), Some(moeda.clone()));
+        assert_eq!(parcial(150, 0), Some(negrito.clone()));
+        assert_eq!(parcial(200, 0), None);
+        assert_eq!(parcial(299, 0), Some(moeda.clone()));
+        assert_eq!(parcial(300, 0), None);
+        assert_eq!(parcial(400, 2), Some(negrito));
+        assert_eq!(s.get_value(150, 0), feathersheet_core::celulas::values::Value::Number(151.0));
+    }
+
     #[test]
     fn formula_sozinha_na_primeira_linha_sobrevive() {
         let mut wb = Workbook::vazia();
@@ -503,6 +557,17 @@ mod testes {
         let xlsx = crate::xlsx_write::gerar_xlsx(&wb).unwrap();
         let (de_volta, _) = crate::xlsx_read::ler_xlsx_workbook(xlsx).unwrap();
         assert_eq!(de_volta.propriedades, wb.propriedades);
+    }
+
+    #[test]
+    fn macros_da_pasta_vao_e_voltam_no_fshz() {
+        let mut wb = Workbook::new();
+        let lida = crate::fshz_read::ler_fshz(&pasta_gravar_bytes(&wb, 0).unwrap()).unwrap();
+        assert!(lida.mc.is_none());
+        wb.macros = Some(r#"{"macros":[{"name":"Colorir","code":"sheet.set('A1',1)","auto":false}]}"#.into());
+        let lida = crate::fshz_read::ler_fshz(&pasta_gravar_bytes(&wb, 0).unwrap()).unwrap();
+        let v: serde_json::Value = serde_json::from_str(crate::para_workbook::para_workbook(&lida).macros.as_deref().unwrap()).unwrap();
+        assert_eq!(v["macros"][0]["name"], "Colorir");
     }
 
     /// Medida, não roda no `cargo test`: `cargo test --release -p sheet-io

@@ -63,37 +63,37 @@ fn resumo(grupo: &str, e: &EstiloParcial) -> String {
     match grupo {
         "numero" => {
             let nome = match s.format {
-                NumberFormat::Auto => "Geral", NumberFormat::Number => "Número", NumberFormat::Integer => "Inteiro",
-                NumberFormat::Currency => "Moeda", NumberFormat::Accounting => "Contábil", NumberFormat::Percent => "Porcentagem",
-                NumberFormat::Scientific => "Científico", NumberFormat::Date => "Data", NumberFormat::Datetime => "Data e hora",
-                NumberFormat::Time => "Hora", NumberFormat::Duration => "Duração", NumberFormat::Text => "Texto",
+                NumberFormat::Auto => tr!("Geral"), NumberFormat::Number => tr!("Número"), NumberFormat::Integer => tr!("Inteiro"),
+                NumberFormat::Currency => tr!("Moeda"), NumberFormat::Accounting => tr!("Contábil"), NumberFormat::Percent => tr!("Porcentagem"),
+                NumberFormat::Scientific => tr!("Científico"), NumberFormat::Date => tr!("Data"), NumberFormat::Datetime => tr!("Data e hora"),
+                NumberFormat::Time => tr!("Hora"), NumberFormat::Duration => tr!("Duração"), NumberFormat::Text => tr!("Texto"),
             };
-            match s.decimals { Some(d) => format!("{nome}, {d} casa(s)"), None => nome.into() }
+            match s.decimals { Some(d) => trf!("{nome}, {d} casa(s)"), None => nome.into() }
         }
         "alinhamento" => {
-            let h = match s.align { Align::Left => "Esquerda", Align::Center => "Centro", Align::Right => "Direita", Align::Auto => "Geral" };
+            let h = match s.align { Align::Left => tr!("Esquerda"), Align::Center => tr!("Centro"), Align::Right => tr!("Direita"), Align::Auto => tr!("Geral") };
             let v = match s.valign { VAlign::Top => "topo", VAlign::Bottom => "base", VAlign::Middle => "meio" };
-            format!("{h}, {v}{}", if s.wrap { ", quebra" } else { "" })
+            trf!("{h}, {v}{}", if s.wrap { tr!(", quebra") } else { "" })
         }
         "fonte" => {
-            let mut t = format!("{} {}", s.font_family.as_deref().and_then(|f| f.split(',').next()).map(|f| f.trim_matches(['\'', ' '])).unwrap_or("Padrão"),
+            let mut t = format!("{} {}", s.font_family.as_deref().and_then(|f| f.split(',').next()).map(|f| f.trim_matches(['\'', ' '])).unwrap_or(tr!("Padrão")),
                 s.font_size.map(|n| n.to_string()).unwrap_or_else(|| "13".into()));
-            for (sim, nome) in [(s.bold, "negrito"), (s.italic, "itálico"), (s.underline, "sublinhado"), (s.strike, "tachado")] {
+            for (sim, nome) in [(s.bold, "negrito"), (s.italic, tr!("itálico")), (s.underline, "sublinhado"), (s.strike, "tachado")] {
                 if sim { t.push_str(", "); t.push_str(nome); }
             }
-            if let Some(c) = &s.color { t.push_str(&format!(", {c}")); }
+            if let Some(c) = &s.color { t.push_str(&trf!(", {c}")); }
             t
         }
         "borda" => match &s.borders {
-            Some(b) if b.top && b.right && b.bottom && b.left => "Todas".into(),
+            Some(b) if b.top && b.right && b.bottom && b.left => tr!("Todas").into(),
             Some(b) => {
                 let lados: Vec<&str> = [(b.top, "superior"), (b.right, "direita"), (b.bottom, "inferior"), (b.left, "esquerda")]
                     .into_iter().filter(|x| x.0).map(|x| x.1).collect();
-                if lados.is_empty() { "Sem bordas".into() } else { lados.join(", ") }
+                if lados.is_empty() { tr!("Sem bordas").into() } else { lados.join(", ") }
             }
-            None => "Sem bordas".into(),
+            None => tr!("Sem bordas").into(),
         },
-        _ => s.bg.clone().unwrap_or_else(|| "Sem preenchimento".into()),
+        _ => s.bg.clone().unwrap_or_else(|| tr!("Sem preenchimento").into()),
     }
 }
 
@@ -103,7 +103,7 @@ impl App {
         let base = self.workbook.aba(self.folha)
             .and_then(|a| a.sheet.estilo_mesclado(self.linha, self.coluna)).unwrap_or_default();
         let existentes = da_pasta(&self.workbook);
-        let nome = (1..).map(|n| format!("Estilo {n}")).find(|n| !existentes.iter().any(|e| e.nome.eq_ignore_ascii_case(n)))
+        let nome = (1..).map(|n| trf!("Estilo {n}")).find(|n| !existentes.iter().any(|e| e.nome.eq_ignore_ascii_case(n)))
             .unwrap_or_default();
         self.estilos_menu_aberto = false;
         self.novo_estilo = Some(Estado { nome, grupos: [true; 5], base, erro: None });
@@ -113,11 +113,11 @@ impl App {
         let Some(s) = self.novo_estilo.clone() else { return };
         let nome = s.nome.trim().to_string();
         let erro = if nome.is_empty() {
-            Some("Dê um nome ao estilo.".to_string())
+            Some(tr!("Dê um nome ao estilo.").to_string())
         } else if !s.grupos.iter().any(|&g| g) {
-            Some("Marque ao menos uma parte do formato.".into())
+            Some(tr!("Marque ao menos uma parte do formato.").into())
         } else if da_pasta(&self.workbook).iter().any(|e| e.nome.eq_ignore_ascii_case(&nome)) {
-            Some(format!("Já existe um estilo chamado \"{nome}\"."))
+            Some(trf!("Já existe um estilo chamado \"{nome}\"."))
         } else { None };
         if let Some(erro) = erro {
             if let Some(m) = &mut self.novo_estilo { m.erro = Some(erro); }
@@ -137,7 +137,7 @@ impl App {
         gravar(&mut self.workbook, &lista);
         self.alterado = true;
         self.novo_estilo = None;
-        self.status = format!("Estilo \"{nome}\" criado: está em Estilos de célula → Personalizados.");
+        self.status = trf!("Estilo \"{nome}\" criado: está em Estilos de célula → Personalizados.");
     }
 
     /// Aplica o estilo `i` na seleção: só as partes que ele leva mudam (as
@@ -160,7 +160,7 @@ impl App {
         });
         self.alterado = true;
         self.estilos_menu_aberto = false;
-        self.status = format!("Estilo de célula \"{}\" aplicado.", e.nome);
+        self.status = trf!("Estilo de célula \"{}\" aplicado.", e.nome);
     }
 
     pub(super) fn evento_novo_estilo(&mut self, evento: Evento) -> Task<Msg> {
@@ -177,7 +177,7 @@ impl App {
                     let nome = lista.remove(i).nome;
                     gravar(&mut self.workbook, &lista);
                     self.alterado = true;
-                    self.status = format!("Estilo \"{nome}\" excluído (as células que o usavam mantêm o formato).");
+                    self.status = trf!("Estilo \"{nome}\" excluído (as células que o usavam mantêm o formato).");
                 }
             }
         }
@@ -186,21 +186,21 @@ impl App {
 
     fn view_novo_estilo(&self) -> super::dialogo_interno::Dialogo<'_, Msg> {
         let s = self.novo_estilo.as_ref().expect("janela Novo estilo aberta");
-        let campo = text_input("Nome do estilo", &s.nome)
+        let campo = text_input(tr!("Nome do estilo"), &s.nome)
             .on_input(|v| Msg::NovoEstilo(Evento::Nome(v)))
             .on_submit(Msg::NovoEstilo(Evento::Salvar))
             .padding(9).width(Length::Fill);
         let mut partes = iced::widget::column![].spacing(8);
         for (i, (id, rotulo, _)) in GRUPOS.iter().enumerate() {
             partes = partes.push(row![
-                iced::widget::checkbox(*rotulo, s.grupos[i]).on_toggle(move |v| Msg::NovoEstilo(Evento::Grupo(i, v)))
+                iced::widget::checkbox(tr!(*rotulo), s.grupos[i]).on_toggle(move |v| Msg::NovoEstilo(Evento::Grupo(i, v)))
                     .size(15).text_size(13).width(Length::Fixed(140.0)),
                 text(resumo(id, &s.base)).size(12).color(COR_TEXTO_MUTED()),
             ].align_y(Alignment::Center));
         }
-        let celula = format!("O estilo inclui (da célula {}):", feathersheet_core::celulas::refs::cell_name(self.linha, self.coluna));
+        let celula = trf!("O estilo inclui (da célula {}):", feathersheet_core::celulas::refs::cell_name(self.linha, self.coluna));
         let mut painel = iced::widget::column![
-            row![text("Nome do estilo").size(13), campo].spacing(12).align_y(Alignment::Center),
+            row![text(tr!("Nome do estilo")).size(13), campo].spacing(12).align_y(Alignment::Center),
             text(celula).size(12).color(COR_TEXTO_MUTED()),
             partes,
         ].spacing(12);
@@ -210,11 +210,11 @@ impl App {
                 text(erro.clone()).size(12).color(COR_ERRO()),
             ].spacing(6).align_y(Alignment::Center));
         }
-        self.dialogo("Novo estilo de célula", painel)
+        self.dialogo(tr!("Novo estilo de célula"), painel)
             .icone("palette")
             .largura(480.0)
             .ao_fechar(Msg::NovoEstilo(Evento::Fechar))
-            .secundario("Cancelar", Some(Msg::NovoEstilo(Evento::Fechar)))
+            .secundario(tr!("Cancelar"), Some(Msg::NovoEstilo(Evento::Fechar)))
             .primario("OK", Some(Msg::NovoEstilo(Evento::Salvar)))
     }
 

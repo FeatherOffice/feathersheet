@@ -119,7 +119,8 @@ fn parece_referencia(t: &str) -> bool {
 }
 
 /// As sugestões de função para o que está sendo digitado (`suggestAt`).
-pub fn suggest_at(texto: &str, cursor: usize, limite: usize) -> Vec<Sugestao> {
+/// `ingles`: o idioma da interface — só os nomes dele são sugeridos.
+pub fn suggest_at(texto: &str, cursor: usize, limite: usize, ingles: bool) -> Vec<Sugestao> {
     if !texto.starts_with('=') {
         return Vec::new();
     }
@@ -131,17 +132,32 @@ pub fn suggest_at(texto: &str, cursor: usize, limite: usize) -> Vec<Sugestao> {
     if letras(texto).get(token.end) == Some(&'(') {
         return Vec::new();
     }
-    suggest(&token.text, limite)
+    suggest(&token.text, limite, ingles)
 }
 
-pub fn suggest(prefixo: &str, limite: usize) -> Vec<Sugestao> {
+pub fn suggest(prefixo: &str, limite: usize, ingles: bool) -> Vec<Sugestao> {
     let maiusculo = prefixo.to_uppercase();
     if maiusculo.is_empty() {
         return Vec::new();
     }
-    let mut nomes: Vec<&str> = function_names().into_iter().filter(|n| n.starts_with(&maiusculo)).collect();
+    let mut nomes: Vec<&str> = function_names()
+        .into_iter()
+        .filter(|n| n.starts_with(&maiusculo) && do_idioma(n, ingles))
+        .collect();
     nomes.sort_by(|a, b| a.chars().count().cmp(&b.chars().count()).then_with(|| comparar_pt(a, b)));
     nomes.into_iter().take(limite).map(describe).collect()
+}
+
+/// O autocompletar mostra só os nomes do idioma escolhido: em inglês, os
+/// nomes canônicos; em português, os apelidos e as funções cujo nome é o
+/// mesmo nos dois (sem apelido, como `LET` ou `MAP`).
+fn do_idioma(nome: &str, ingles: bool) -> bool {
+    let apelido = canonical(nome).is_some();
+    if ingles {
+        !apelido
+    } else {
+        apelido || !aliases().iter().any(|(_, real)| *real == nome)
+    }
 }
 
 pub fn describe(nome: &str) -> Sugestao {
@@ -526,6 +542,15 @@ mod testes {
     use super::*;
 
     #[test]
+    fn autocompletar_so_no_idioma_escolhido() {
+        assert!(do_idioma("SOMA", false) && !do_idioma("SOMA", true));
+        assert!(do_idioma("SUM", true) && !do_idioma("SUM", false));
+        assert!(do_idioma("DEIXAR", false) && do_idioma("LET", true) && !do_idioma("LET", false));
+        // Sem apelido em português: o mesmo nome serve aos dois.
+        assert!(do_idioma("PI", true) && do_idioma("PI", false));
+    }
+
+    #[test]
     fn referencias_coloridas_e_descartes() {
         let r: Vec<_> = color_references("=SOMA(A1:B2;$C$3)+A1+LOG10(2)+\"D4\"+ABCD1")
             .into_iter()
@@ -547,11 +572,11 @@ mod testes {
 
     #[test]
     fn sugere_funcoes_pelo_prefixo_digitado() {
-        let nomes = |t: &str| suggest_at(t, t.chars().count(), 8).into_iter().map(|s| s.name).collect::<Vec<_>>();
+        let nomes = |t: &str| suggest_at(t, t.chars().count(), 8, false).into_iter().map(|s| s.name).collect::<Vec<_>>();
         assert!(nomes("=PROC").contains(&"PROCV".to_string()));
         assert!(nomes("=PROC").contains(&"PROCX".to_string()));
         assert!(nomes("=SOM").contains(&"SOMA".to_string()));
-        assert!(nomes("=VLOO").contains(&"VLOOKUP".to_string()));
+        assert!(nomes("=VLOO").is_empty(), "em português não sugere o nome em inglês");
         assert!(nomes("123").is_empty(), "não é fórmula");
         assert!(nomes("=A1").is_empty(), "parece referência");
         assert!(nomes("=SOMA(").is_empty(), "já está dentro dos parênteses");
@@ -559,7 +584,7 @@ mod testes {
 
     #[test]
     fn a_sugestao_traz_assinatura_e_descricao() {
-        let primeira = suggest_at("=PROCX", 6, 8).into_iter().next().unwrap();
+        let primeira = suggest_at("=PROCX", 6, 8, false).into_iter().next().unwrap();
         assert_eq!(primeira.name, "PROCX");
         assert!(primeira.signature.starts_with("PROCX(procurado; onde_procurar"), "{}", primeira.signature);
         assert!(primeira.help.unwrap().doc.contains("Busca moderna"));
@@ -610,7 +635,7 @@ mod testes {
         assert_eq!(token_before("=SOMA(", 10), Some(Token { text: String::new(), start: 6, end: 10 }));
         assert_eq!(token_before("", 3), Some(Token { text: String::new(), start: 0, end: 3 }));
         // Para a sugestão não muda nada: o prefixo é o mesmo.
-        let nomes: Vec<_> = suggest_at("=SOM", 9, 8).into_iter().map(|s| s.name).collect();
+        let nomes: Vec<_> = suggest_at("=SOM", 9, 8, false).into_iter().map(|s| s.name).collect();
         // Não é igualdade: cada função nova com prefixo "SOM" entraria aqui.
         assert_eq!(nomes[..3], ["SOMA", "SOMASE", "SOMASES"]);
         assert!(nomes.iter().any(|n| n == "SOMARPRODUTO"));

@@ -39,9 +39,9 @@ pub(super) const CORES: &[(&str, Option<&str>)] = &[
 
 pub(super) fn nome_modo(modo: ModoBorda) -> &'static str {
     match modo {
-        ModoBorda::Contorno => "Desenhar borda",
-        ModoBorda::Grade => "Desenhar grade de borda",
-        ModoBorda::Apagar => "Apagar borda",
+        ModoBorda::Contorno => tr!("Desenhar borda"),
+        ModoBorda::Grade => tr!("Desenhar grade de borda"),
+        ModoBorda::Apagar => tr!("Apagar borda"),
     }
 }
 
@@ -51,7 +51,7 @@ impl App {
         let modo = match evento {
             Evento::Sair => {
                 self.borda_desenho.modo = None;
-                self.status = "Desenho de bordas encerrado".into();
+                self.status = tr!("Desenho de bordas encerrado").into();
                 return Task::none();
             }
             Evento::Modo(m) if self.borda_desenho.modo == Some(m) => {
@@ -71,7 +71,7 @@ impl App {
         // A caneta de borda e o pincel usam o mesmo arraste: um de cada vez.
         self.pincel_formatacao = None;
         self.borda_desenho.modo = Some(modo);
-        self.status = format!("{}: arraste sobre as células. Esc sai.", nome_modo(modo));
+        self.status = trf!("{}: arraste sobre as células. Esc sai.", nome_modo(modo));
         Task::none()
     }
 
@@ -88,9 +88,9 @@ impl App {
         match resultado {
             Ok(true) => {
                 self.alterado = true;
-                self.status = format!("{}: traço aplicado (Ctrl+Z desfaz). Esc sai.", nome_modo(modo));
+                self.status = trf!("{}: traço aplicado (Ctrl+Z desfaz). Esc sai.", nome_modo(modo));
             }
-            Ok(false) => self.status = format!("{}: nada mudou. Esc sai.", nome_modo(modo)),
+            Ok(false) => self.status = trf!("{}: nada mudou. Esc sai.", nome_modo(modo)),
             Err(erro) => self.status = erro,
         }
         true

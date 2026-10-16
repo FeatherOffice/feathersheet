@@ -1383,7 +1383,7 @@ fn clique_divisoria(state: &mut EstadoMouse, coluna: bool, indice: u32, inicio: 
 /// A linha-guia do arrasto e a medida ao lado, como a dica do Excel.
 fn desenhar_guia_dimensao(f: &mut Frame, bounds: Rectangle, a: ArrastoDimensao, cor: Color, zoom: f32) {
     let e = 1.5 / zoom.max(0.25);
-    let rotulo = format!("{}: {} px", if a.coluna { "Largura" } else { "Altura" }, a.tamanho());
+    let rotulo = trf!("{}: {} px", if a.coluna { tr!("Largura") } else { tr!("Altura") }, a.tamanho());
     let (caixa, guia) = if a.coluna {
         (Point::new(a.atual + 6.0, 2.0), (Point::new(a.atual - e / 2.0, 0.0), Size::new(e, bounds.height)))
     } else {

@@ -47,7 +47,7 @@ impl App {
         let area = self.area_selecionada();
         let (a, b) = if coluna { (area.c0, area.c1) } else { (area.r0, area.r1) };
         if b - a + 1 > TETO_EIXOS {
-            self.status = format!(
+            self.status = trf!(
                 "Selecione até {} {} para definir o tamanho",
                 TETO_EIXOS, if coluna { "colunas" } else { "linhas" });
             return;
@@ -80,7 +80,7 @@ impl App {
         let Some(estado) = self.dimensao_modal.clone() else { return };
         let Some(px) = ler_valor(&estado.valor) else {
             if let Some(modal) = &mut self.dimensao_modal {
-                modal.erro = Some(format!("Digite um número inteiro de {MINIMO} a {MAXIMO} pixels."));
+                modal.erro = Some(trf!("Digite um número inteiro de {MINIMO} a {MAXIMO} pixels."));
             }
             return;
         };
@@ -88,7 +88,7 @@ impl App {
             let mut mudou = false;
             self.workbook.editar(self.folha, |sheet| { mudou = sheet.definir_largura_padrao(Some(px)); });
             self.alterado |= mudou;
-            self.status = format!("Largura padrão das colunas: {px} px");
+            self.status = trf!("Largura padrão das colunas: {px} px");
             self.dimensao_modal = None;
             return;
         }
@@ -103,10 +103,10 @@ impl App {
         self.alterado |= mudou;
         let quantos = estado.b - estado.a + 1;
         self.status = match (estado.coluna, quantos) {
-            (true, 1) => format!("Largura da coluna {}: {px} px", nome_eixo(true, estado.a)),
-            (true, n) => format!("{n} colunas com largura de {px} px"),
-            (false, 1) => format!("Altura da linha {}: {px} px", nome_eixo(false, estado.a)),
-            (false, n) => format!("{n} linhas com altura de {px} px"),
+            (true, 1) => trf!("Largura da coluna {}: {px} px", nome_eixo(true, estado.a)),
+            (true, n) => trf!("{n} colunas com largura de {px} px"),
+            (false, 1) => trf!("Altura da linha {}: {px} px", nome_eixo(false, estado.a)),
+            (false, n) => trf!("{n} linhas com altura de {px} px"),
         };
         self.dimensao_modal = None;
     }
@@ -143,18 +143,18 @@ impl App {
     fn view_dimensao(&self) -> super::dialogo_interno::Dialogo<'_, Msg> {
         let s = self.dimensao_modal.as_ref().expect("diálogo de dimensão aberto");
         let (titulo, rotulo, plural) = if s.padrao {
-            ("Largura padrão", "Largura (px)", "Colunas")
+            (tr!("Largura padrão"), tr!("Largura (px)"), tr!("Colunas"))
         } else if s.coluna {
-            ("Largura da coluna", "Largura (px)", "Colunas")
-        } else { ("Altura da linha", "Altura (px)", "Linhas") };
+            (tr!("Largura da coluna"), tr!("Largura (px)"), tr!("Colunas"))
+        } else { (tr!("Altura da linha"), tr!("Altura (px)"), tr!("Linhas")) };
         let alvo = if s.padrao {
-            "Vale para as colunas desta aba que não têm largura própria".to_string()
+            tr!("Vale para as colunas desta aba que não têm largura própria").to_string()
         } else if s.a == s.b {
             format!("{} {}", &plural[..plural.len() - 1], nome_eixo(s.coluna, s.a))
         } else {
-            format!("{plural} {} a {}", nome_eixo(s.coluna, s.a), nome_eixo(s.coluna, s.b))
+            trf!("{plural} {} a {}", nome_eixo(s.coluna, s.a), nome_eixo(s.coluna, s.b))
         };
-        let campo = text_input(if s.a == s.b { "" } else { "Tamanhos diferentes" }, &s.valor)
+        let campo = text_input(if s.a == s.b { "" } else { tr!("Tamanhos diferentes") }, &s.valor)
             .id(text_input::Id::new(ID_CAMPO))
             .on_input(|v| Msg::Dimensao(Evento::Valor(v)))
             .on_submit(Msg::Dimensao(Evento::Aplicar))
@@ -173,7 +173,7 @@ impl App {
             .subtitulo(alvo)
             .largura(420.0)
             .ao_fechar(Msg::Dimensao(Evento::Fechar))
-            .secundario("Cancelar", Some(Msg::Dimensao(Evento::Fechar)))
+            .secundario(tr!("Cancelar"), Some(Msg::Dimensao(Evento::Fechar)))
             .primario("OK", Some(Msg::Dimensao(Evento::Aplicar)))
     }
 

@@ -10,14 +10,14 @@ impl App {
         let selecao = self.area_selecionada();
         let Some(aba) = self.workbook.aba(self.folha) else { return; };
         if aba.sheet.is_empty() {
-            self.status = "Não há dados para selecionar nesta aba.".into();
+            self.status = tr!("Não há dados para selecionar nesta aba.").into();
             return;
         }
         let usada = aba.sheet.used_rect();
         // Sem essa guarda, o motor trunca a posição de uma célula vazia
         // abaixo/à direita da região usada e salta para outro endereço.
         if selecao.r0 > usada.r1 || selecao.c0 > usada.c1 {
-            self.status = "Não há região de dados na seleção atual.".into();
+            self.status = tr!("Não há região de dados na seleção atual.").into();
             return;
         }
         let regiao = ops::regiao_atual(&aba.sheet, selecao);
@@ -32,7 +32,7 @@ impl App {
         self.trocar_selecao(regiao.r0, regiao.c0);
         self.fim_selecao = (regiao.r1, regiao.c1);
         self.endereco = endereco.clone();
-        self.status = format!("Região atual selecionada: {endereco}");
+        self.status = trf!("Região atual selecionada: {endereco}");
     }
 }
 

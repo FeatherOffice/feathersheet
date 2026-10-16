@@ -56,7 +56,7 @@ impl Estado {
             .map(String::as_str).unwrap_or("");
         if self.cabecalho && !titulo.is_empty() {
             format!("{letra}   {titulo}")
-        }else{format!("Coluna {letra}")}
+        }else{trf!("Coluna {letra}")}
     }
 }
 
@@ -65,7 +65,7 @@ impl App {
         self.confirmar();
         if self.janelas.aberta(Auxiliar::RemoverDuplicados) {return Task::none();}
         let Some(estado)=Estado::novo(self) else {
-            self.status="Não há dados para remover duplicados na aba atual".into();
+            self.status=tr!("Não há dados para remover duplicados na aba atual").into();
             return Task::none();
         };
         self.duplicados=Some(estado);
@@ -81,7 +81,7 @@ impl App {
             let Some(estado)=self.duplicados.as_ref() else {return Task::none()};
             if estado.marcadas.is_empty(){
                 if let Some(e)=self.duplicados.as_mut(){
-                    e.erro="Selecione ao menos uma coluna para comparar.".into();
+                    e.erro=tr!("Selecione ao menos uma coluna para comparar.").into();
                 }
                 return Task::none();
             }
@@ -104,8 +104,8 @@ impl App {
                 total
             }else{0};
             self.status=if removidas>0 {
-                format!("{removidas} linha(s) duplicada(s) removida(s)")
-            }else{"Nenhum registro duplicado encontrado".into()};
+                trf!("{removidas} linha(s) duplicada(s) removida(s)")
+            }else{tr!("Nenhum registro duplicado encontrado").into()};
             if self.folha==folha {
                 self.edicao=self.workbook.aba(folha)
                     .map(|a|a.sheet.get_raw(self.linha,self.coluna))
@@ -132,7 +132,7 @@ impl App {
 
     pub(super) fn view_duplicados(&self)->Element<'_,Msg> {
         let Some(e)=self.duplicados.as_ref() else{
-            return container(text("Janela fechada")).into();
+            return container(text(tr!("Janela fechada"))).into();
         };
         let intervalo=format!("{}:{}",cell_name(e.regiao.r0,e.regiao.c0),
             cell_name(e.regiao.r1,e.regiao.c1));
@@ -150,32 +150,32 @@ impl App {
             Space::with_height(Length::Fixed(0.)).into()
         }else{text(e.erro.clone()).size(12).color(COR_AZUL_ACENTO()).into()};
         let botoes=iced::widget::row![
-            button("Cancelar").style(estilo_botao_secundario).padding([9,18])
+            button(tr!("Cancelar")).style(estilo_botao_secundario).padding([9,18])
                 .on_press(Msg::Duplicados(Evento::Cancelar)),
             Space::with_width(Length::Fill),
-            button("Remover duplicados").style(estilo_botao_primario)
+            button(tr!("Remover duplicados")).style(estilo_botao_primario)
                 .padding([9,17])
                 .on_press_maybe((!e.marcadas.is_empty())
                     .then_some(Msg::Duplicados(Evento::Confirmar))),
         ].align_y(Alignment::Center).spacing(10);
         let corpo=iced::widget::column![
-            text(format!("Região: {intervalo}")).size(14).color(COR_TEXTO()),
-            text("Escolha quais colunas determinam se uma linha é repetida. A linha inteira será movida para manter os dados alinhados.")
+            text(trf!("Região: {intervalo}")).size(14).color(COR_TEXTO()),
+            text(tr!("Escolha quais colunas determinam se uma linha é repetida. A linha inteira será movida para manter os dados alinhados."))
                 .size(12).color(COR_TEXTO_MUTED()),
             iced::widget::row![
-                button("Marcar todas").style(estilo_botao_pequeno(false))
+                button(tr!("Marcar todas")).style(estilo_botao_pequeno(false))
                     .padding([6,9]).on_press(Msg::Duplicados(Evento::Todas)),
-                button("Desmarcar todas").style(estilo_botao_pequeno(false))
+                button(tr!("Desmarcar todas")).style(estilo_botao_pequeno(false))
                     .padding([6,9]).on_press(Msg::Duplicados(Evento::Nenhuma)),
                 Space::with_width(Length::Fill),
-                text(format!("{} de {} colunas",e.marcadas.len(),
+                text(trf!("{} de {} colunas",e.marcadas.len(),
                     e.regiao.c1-e.regiao.c0+1)).size(11).color(COR_TEXTO_MUTED()),
             ].spacing(10).align_y(Alignment::Center),
             container(
                 scrollable(opcoes).height(Length::Fill)
             ).height(Length::Fill).width(Length::Fill).padding(6)
                 .style(estilo_painel_faixa),
-            checkbox("Meus dados têm cabeçalho",e.cabecalho)
+            checkbox(tr!("Meus dados têm cabeçalho"),e.cabecalho)
                 .on_toggle(|b|Msg::Duplicados(Evento::Cabecalho(b)))
                 .size(15).text_size(13),
             erro,

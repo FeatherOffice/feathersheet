@@ -586,7 +586,7 @@ fn px_para_largura(px: u32) -> f64 {
 fn chaves_ocupadas(sheet: &Sheet) -> Vec<CellKey> {
     let mut chaves: Vec<CellKey> = Vec::with_capacity(sheet.cells.len() + sheet.styles.len());
     chaves.extend(sheet.cells.keys().copied());
-    chaves.extend(sheet.styles.keys().copied());
+    chaves.extend(sheet.styles.keys());
     sheet.data.for_each(&sheet.pool, &mut |row, col, _| chaves.push(key(row, col)));
     sheet.formulas.for_each_in_range(0, u32::MAX, 0, u32::MAX, |row, col| chaves.push(key(row, col)));
     chaves.sort_unstable();

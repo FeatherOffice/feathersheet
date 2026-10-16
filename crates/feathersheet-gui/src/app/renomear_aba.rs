@@ -39,14 +39,14 @@ impl App {
                 .is_some_and(|a| Some(a.id) == self.aba_em_renomeacao)
         });
         let Some(alvo) = alvo else {
-            self.erro_nome_aba = Some("A aba não está mais disponível.".into());
+            self.erro_nome_aba = Some(tr!("A aba não está mais disponível.").into());
             return Task::none();
         };
         let nome = self.nome_aba.trim().to_owned();
         let erro = if nome.is_empty() {
-            Some("O nome não pode ficar vazio.")
+            Some(tr!("O nome não pode ficar vazio."))
         } else if nome.contains('!') {
-            Some("O nome não pode conter \"!\".")
+            Some(tr!("O nome não pode conter \"!\"."))
         } else if self
             .workbook
             .nomes()
@@ -54,7 +54,7 @@ impl App {
             .enumerate()
             .any(|(i, n)| i != alvo && n.to_lowercase() == nome.to_lowercase())
         {
-            Some("Já existe uma aba com esse nome.")
+            Some(tr!("Já existe uma aba com esse nome."))
         } else {
             None
         };
@@ -69,11 +69,11 @@ impl App {
             self.cancelar_renomeacao();
             if antigo != nome {
                 self.alterado = true;
-                self.status = "Aba renomeada".into();
+                self.status = tr!("Aba renomeada").into();
             }
         } else {
-            self.erro_nome_aba = Some("Não foi possível renomear a aba.".into());
-            self.status = "Não foi possível renomear a aba.".into();
+            self.erro_nome_aba = Some(tr!("Não foi possível renomear a aba.").into());
+            self.status = tr!("Não foi possível renomear a aba.").into();
         }
         Task::none()
     }

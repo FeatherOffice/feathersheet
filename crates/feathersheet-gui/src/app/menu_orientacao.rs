@@ -36,22 +36,22 @@ impl App {
         patch.insert("textVertical".into(), Campo::Logico(vertical));
         self.workbook.editar(self.folha, |sheet| sheet.set_style(&area, &patch));
         self.alterado = true;
-        self.status = format!("Orientação aplicada: {opcao}");
+        self.status = trf!("Orientação aplicada: {opcao}");
         Task::none()
     }
 
     fn menu_orientacao(&self) -> Element<'_, Msg> {
-        let mut items = iced::widget::column![text("Orientação do texto")
+        let mut items = iced::widget::column![text(tr!("Orientação do texto"))
             .size(12).color(COR_TEXTO_MUTED())].spacing(2).padding(6);
         for &(acao, rotulo) in OPCOES {
-            let simbolo = match acao {
-                "Horário" => "↘", "Anti-horário" => "↗",
-                "Vertical" => "↕", "Para cima" => "↑",
-                "Para baixo" => "↓", _ => "→",
+            let icone = match acao {
+                "Horário" => "arrow-down-right", "Anti-horário" => "arrow-up-right",
+                "Vertical" => "arrows-vertical", "Para cima" => "arrow-up",
+                "Para baixo" => "arrow-down", _ => "arrow-right",
             };
             items = items.push(button(iced::widget::row![
-                text(simbolo).size(16).width(Length::Fixed(24.0)),
-                text(rotulo).size(12),
+                container(feather_ui::icones::icone(icone, 17.0)).width(Length::Fixed(24.0)),
+                text(tr!(rotulo)).size(12),
             ].align_y(Alignment::Center).spacing(7))
                 .width(Length::Fill).padding([7, 9])
                 .style(estilo_item_menu(false, true))
@@ -60,7 +60,7 @@ impl App {
         items = items.push(
             button(iced::widget::row![
                 feather_ui::icones::icone("settings", 17.0),
-                text("Formatar células…").size(12),
+                text(tr!("Formatar células…")).size(12),
             ].spacing(10).align_y(Alignment::Center))
                 .width(Length::Fill).padding([9, 10])
                 .style(estilo_item_menu(false, true))
@@ -102,5 +102,12 @@ mod testes {
         assert_eq!(app.workbook.aba(0).unwrap().sheet
             .estilo_mesclado(0,0).unwrap().get("textVertical"),
             Some(&Campo::Logico(true)));
+    }
+
+    #[test]
+    fn icones_do_menu_existem_no_catalogo() {
+        for i in ["arrow-down-right", "arrow-up-right", "arrows-vertical", "arrow-up", "arrow-down", "arrow-right", "settings"] {
+            assert!(feather_ui::icones::existe(i), "{i}");
+        }
     }
 }

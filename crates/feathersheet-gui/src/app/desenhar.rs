@@ -130,15 +130,15 @@ impl CacheContorno {
 fn resumo_pressao(traco: &Traco, real: bool) -> String {
     let valores: Vec<f32> = traco.pontos.iter().filter_map(|p| p.pressao).collect();
     if valores.is_empty() {
-        return "sem pressão".into();
+        return tr!("sem pressão").into();
     }
     let min = valores.iter().copied().fold(f32::INFINITY, f32::min);
     let max = valores.iter().copied().fold(0.0f32, f32::max);
     let med = valores.iter().sum::<f32>() / valores.len() as f32;
     let br = |v: f32| format!("{v:.2}").replace('.', ",");
-    format!(
+    trf!(
         "{} {}–{} (média {})",
-        if real { "pressão da mesa" } else { "pressão pela velocidade (sem mesa)" },
+        if real { tr!("pressão da mesa") } else { tr!("pressão pela velocidade (sem mesa)") },
         br(min),
         br(max),
         br(med)
@@ -340,12 +340,12 @@ impl App {
         if parar {
             self.tinta.selecao = None;
             self.tinta.rascunho = None;
-            self.status = "Modo de seleção: clique nas células normalmente.".into();
+            self.status = tr!("Modo de seleção: clique nas células normalmente.").into();
         } else if self.tinta.ui.ativo && self.tinta.ui.menu.is_none() {
             self.status = match self.tinta.ui.ferramenta {
-                f if f.desenha() => format!("{}: desenhe sobre a planilha (Esc para parar).", f.rotulo()),
-                Ferramenta::Laco => "Laço: circule os traços para selecionar (Delete apaga).".into(),
-                f => format!("{}: passe sobre os traços (Esc para parar).", f.rotulo()),
+                f if f.desenha() => trf!("{}: desenhe sobre a planilha (Esc para parar).", f.rotulo()),
+                Ferramenta::Laco => tr!("Laço: circule os traços para selecionar (Delete apaga).").into(),
+                f => trf!("{}: passe sobre os traços (Esc para parar).", f.rotulo()),
             };
         }
         Task::none()
@@ -386,26 +386,26 @@ impl App {
                 }
                 traco.preparar(TOLERANCIA_TELA / vista.zoom);
                 let resumo = resumo_pressao(&traco, real);
-                let origem = self.tinta.fonte_pressao.as_ref().map(FontePressao::descricao).unwrap_or_else(|| "leitura da mesa desligada".into());
+                let origem = self.tinta.fonte_pressao.as_ref().map(FontePressao::descricao).unwrap_or_else(|| tr!("leitura da mesa desligada").into());
                 self.monitor.registrar(
                     feather_ui::monitor::Nivel::Info,
-                    "Caneta",
+                    tr!("Caneta"),
                     &format!("[caneta] {} com {} pontos: {resumo}; {origem}", ferramenta.rotulo(), traco.pontos.len()),
                 );
                 let mut status = if usa_pressao && traco.tem_pressao() {
-                    format!("Traço de {} desenhado, {resumo} (Ctrl+Z desfaz).", ferramenta.rotulo().to_lowercase())
+                    trf!("Traço de {} desenhado, {resumo} (Ctrl+Z desfaz).", ferramenta.rotulo().to_lowercase())
                 } else {
-                    format!("Traço de {} desenhado (Ctrl+Z desfaz).", ferramenta.rotulo().to_lowercase())
+                    trf!("Traço de {} desenhado (Ctrl+Z desfaz).", ferramenta.rotulo().to_lowercase())
                 };
                 if self.tinta.ui.tinta_para_forma {
                     if let Some(forma) = traco.reconhecer_forma() {
                         traco = traco.com_forma(&forma);
-                        status = format!("Tinta convertida em {} (Ctrl+Z desfaz).", forma.nome());
+                        status = trf!("Tinta convertida em {} (Ctrl+Z desfaz).", forma.nome());
                     }
                 }
                 let Some((_, mut tinta)) = self.tinta_atual() else { return Task::none() };
                 if tinta.len() >= MAX_TRACOS {
-                    self.status = format!("Limite de {MAX_TRACOS} traços por aba.");
+                    self.status = trf!("Limite de {MAX_TRACOS} traços por aba.");
                     return Task::none();
                 }
                 if tinta.adicionar(traco).is_some() {
@@ -432,7 +432,7 @@ impl App {
                 if let Some((aba_id, tinta, true, _)) = self.tinta.rascunho.take() {
                     if self.workbook.aba(self.folha).is_some_and(|a| a.id == aba_id) {
                         self.tinta.selecao = None;
-                        self.gravar_tinta(tinta, "Tinta apagada (Ctrl+Z desfaz).".into());
+                        self.gravar_tinta(tinta, tr!("Tinta apagada (Ctrl+Z desfaz).").into());
                     }
                 }
             }
@@ -441,9 +441,9 @@ impl App {
                 let Some((aba_id, tinta)) = self.tinta_atual() else { return Task::none() };
                 let ids = tinta.selecionar_laco(&laco);
                 self.status = match ids.len() {
-                    0 => "Nenhum traço dentro do laço.".into(),
-                    1 => "1 traço selecionado (Delete apaga).".into(),
-                    n => format!("{n} traços selecionados (Delete apaga)."),
+                    0 => tr!("Nenhum traço dentro do laço.").into(),
+                    1 => tr!("1 traço selecionado (Delete apaga).").into(),
+                    n => trf!("{n} traços selecionados (Delete apaga)."),
                 };
                 self.tinta.selecao = (!ids.is_empty()).then_some((aba_id, ids));
             }
@@ -530,7 +530,7 @@ impl App {
         }
         ui_caneta::anotar(|| "[caneta] mouse de volta: sai do modo desenhar".into());
         let tarefa = self.evento_desenhar(ui_tinta::Evento::Parar);
-        self.status = "Mouse: de volta à seleção de células.".into();
+        self.status = tr!("Mouse: de volta à seleção de células.").into();
         tarefa
     }
 
@@ -568,7 +568,7 @@ impl App {
                     let pena = self.tinta.ultima_pena.unwrap_or(Ferramenta::Caneta(0));
                     let _ = self.evento_desenhar(ui_tinta::Evento::Escolher(pena));
                     self.tinta.auto_caneta = true;
-                    self.status = format!("Caneta: {} (o mouse ou Esc voltam à seleção).", pena.rotulo());
+                    self.status = trf!("Caneta: {} (o mouse ou Esc voltam à seleção).", pena.rotulo());
                     ui_caneta::anotar(|| format!("[caneta] modo desenhar ligado pela caneta ({})", pena.rotulo()));
                 }
                 // A ponta de borracha apaga traços inteiros, seja qual for a ferramenta.
@@ -622,20 +622,20 @@ impl App {
             return;
         }
         let mesas = crate::MESAS_NA_ABERTURA.get().cloned().unwrap_or_default();
-        let quais = if mesas.is_empty() { "nenhuma mesa detectada".to_string() } else { format!("mesa: {}", mesas.join(", ")) };
+        let quais = if mesas.is_empty() { tr!("nenhuma mesa detectada").to_string() } else { trf!("mesa: {}", mesas.join(", ")) };
         let forcado = crate::CANETA_X11_FORCADO.load(std::sync::atomic::Ordering::Relaxed);
         let wayland = std::env::var("WAYLAND_DISPLAY").is_ok_and(|v| !v.is_empty());
         let preferencia = crate::preferencia_janela(&self.config).texto();
         let (nivel, linha) = if forcado {
-            (Nivel::Info, format!("Janela pelo XWayland (preferência {preferencia}); {quais}."))
+            (Nivel::Info, trf!("Janela pelo XWayland (preferência {preferencia}); {quais}."))
         } else if wayland && !mesas.is_empty() {
-            (Nivel::Aviso, format!("Janela Wayland nativa com {quais}: a ponta da caneta não clica aqui (o winit 0.30 não recebe a mesa no Wayland). Configurações > Planilha > Janela: Automático ou X11."))
+            (Nivel::Aviso, trf!("Janela Wayland nativa com {quais}: a ponta da caneta não clica aqui (o winit 0.30 não recebe a mesa no Wayland). Configurações > Planilha > Janela: Automático ou X11."))
         } else if wayland {
-            (Nivel::Info, format!("Janela Wayland nativa (preferência {preferencia}); {quais}."))
+            (Nivel::Info, trf!("Janela Wayland nativa (preferência {preferencia}); {quais}."))
         } else {
-            (Nivel::Info, format!("Janela X11; {quais}."))
+            (Nivel::Info, trf!("Janela X11; {quais}."))
         };
-        self.monitor.registrar(nivel, "Caneta", &linha);
+        self.monitor.registrar(nivel, tr!("Caneta"), &linha);
         ui_caneta::anotar(|| format!("[janela] {linha}"));
     }
 
@@ -646,15 +646,15 @@ impl App {
         let wayland = std::env::var("WAYLAND_DISPLAY").ok().filter(|v| !v.is_empty());
         if wayland.is_some() {
             // Janela nativa do Wayland: o XWayland não recebe a mesa.
-            self.monitor.registrar(Nivel::Aviso, "Caneta",
-                "Pressão pedida, mas a janela abriu no Wayland (sem DISPLAY/XWayland): sem pressão.");
+            self.monitor.registrar(Nivel::Aviso, tr!("Caneta"),
+                tr!("Pressão pedida, mas a janela abriu no Wayland (sem DISPLAY/XWayland): sem pressão."));
             return Task::none();
         }
         let forcado = crate::CANETA_X11_FORCADO.load(std::sync::atomic::Ordering::Relaxed);
         match ui_caneta::x11::iniciar(fonte.clone()) {
             Ok(descricao) => {
-                let modo = if forcado { "janela pelo XWayland" } else { "sessão X11" };
-                self.monitor.registrar(Nivel::Info, "Caneta", &format!("Pressão ligada ({modo}). {descricao}"));
+                let modo = if forcado { tr!("janela pelo XWayland") } else { tr!("sessão X11") };
+                self.monitor.registrar(Nivel::Info, tr!("Caneta"), &trf!("Pressão ligada ({modo}). {descricao}"));
                 self.tinta.fonte_pressao = Some(fonte.clone());
                 // A leitura precisa da janela X do winit para saber onde a
                 // ponta encostou (traço na tinta ou clique na faixa/células).
@@ -680,7 +680,7 @@ impl App {
                 .map(|erro| Msg::Caneta(AjusteCaneta::Falha(erro)))
             }
             Err(e) => {
-                self.monitor.registrar(Nivel::Aviso, "Caneta", &format!("Pressão indisponível: {e}"));
+                self.monitor.registrar(Nivel::Aviso, tr!("Caneta"), &trf!("Pressão indisponível: {e}"));
                 Task::none()
             }
         }
@@ -704,21 +704,21 @@ impl App {
             AjusteCaneta::Pressao(v) => {
                 self.config.caneta_pressao = v;
                 self.status = if v {
-                    "Pressão da caneta ligada: vale na próxima vez que o FeatherSheet abrir.".into()
+                    tr!("Pressão da caneta ligada: vale na próxima vez que o FeatherSheet abrir.").into()
                 } else {
-                    "Pressão da caneta desligada (vale na próxima abertura).".into()
+                    tr!("Pressão da caneta desligada (vale na próxima abertura).").into()
                 };
             }
             AjusteCaneta::Janela(valor) => {
                 if let Some(&(rotulo, v)) = crate::configuracao::JANELAS_LINUX.iter().find(|&&(_, v)| v == valor) {
                     self.config.janela_linux = v.into();
-                    self.status = format!("Janela: {rotulo} — vale na próxima vez que o FeatherSheet abrir.");
+                    self.status = trf!("Janela: {rotulo} — vale na próxima vez que o FeatherSheet abrir.");
                 }
             }
             AjusteCaneta::Curva(g) => {
                 if let Some(&(nome, gama)) = crate::configuracao::CURVAS_CANETA.iter().find(|&&(_, x)| x == g) {
                     self.config.caneta_gama = gama;
-                    self.status = format!("Curva da pressão: {nome}.");
+                    self.status = trf!("Curva da pressão: {nome}.");
                 }
             }
             AjusteCaneta::Velocidade(v) => self.config.caneta_velocidade = v,
@@ -728,15 +728,15 @@ impl App {
             AjusteCaneta::AutoDesenhar(v) => {
                 self.config.caneta_auto_desenhar = v;
                 self.status = if v {
-                    "A caneta liga o modo desenhar ao tocar na planilha.".into()
+                    tr!("A caneta liga o modo desenhar ao tocar na planilha.").into()
                 } else {
-                    "A caneta só desenha com Desenhar ligado (sem modo automático).".into()
+                    tr!("A caneta só desenha com Desenhar ligado (sem modo automático).").into()
                 };
             }
             AjusteCaneta::Falha(erro) => {
                 if !erro.is_empty() {
                     self.tinta.fonte_pressao = None;
-                    self.monitor.registrar(feather_ui::monitor::Nivel::Aviso, "Caneta", &format!("Pressão indisponível: {erro}"));
+                    self.monitor.registrar(feather_ui::monitor::Nivel::Aviso, tr!("Caneta"), &trf!("Pressão indisponível: {erro}"));
                 }
                 return Task::none();
             }
@@ -756,7 +756,7 @@ impl App {
         for id in &ids {
             tinta.remover(*id);
         }
-        self.gravar_tinta(tinta, format!("{} traço(s) apagado(s) (Ctrl+Z desfaz).", ids.len()));
+        self.gravar_tinta(tinta, trf!("{} traço(s) apagado(s) (Ctrl+Z desfaz).", ids.len()));
         true
     }
 

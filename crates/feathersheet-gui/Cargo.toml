@@ -1,6 +1,6 @@
 [package]
 name = "feathersheet-gui"
-version = "0.0.4"
+version = "0.0.5"
 edition = "2021"
 description = "Interface nativa FeatherSheet em Rust/Iced usando o template FeatherOffice"
 
@@ -9,8 +9,8 @@ name = "feathersheet"
 path = "src/main.rs"
 
 [dependencies]
-feather-charts = { path = "../../../feather-charts" }
-feather-ui = { git = "https://github.com/FeatherOffice/feather-ui", tag = "v0.2.6" }
+feather-charts = { git = "https://github.com/FeatherOffice/feather-charts", tag = "v0.3.0" }
+feather-ui = { git = "https://github.com/FeatherOffice/feather-ui", tag = "v0.2.7" }
 feather-draw = { git = "https://github.com/FeatherOffice/feather-draw", tag = "v0.1.1" }
 # Formas, ícones e SmartArt comuns da suíte (camada de objetos soltos, app/objetos).
 feather-shapes = { git = "https://github.com/FeatherOffice/feather-shapes", tag = "v0.1.1" }
@@ -65,3 +65,4 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
+

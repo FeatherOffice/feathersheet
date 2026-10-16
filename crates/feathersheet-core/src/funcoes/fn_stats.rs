@@ -134,6 +134,9 @@ pub fn fn_countif(args: &[Node], ev: &Evaluator<'_>) -> Computed {
         None => return err_value(),
     };
     let crit_val = ev.eval(&args[1]);
+    if let Some(grupo) = crate::funcoes::fn_helpers::grupo_agregado(ev, None, std::slice::from_ref(&range_rect), std::slice::from_ref(&crit_val)) {
+        return Computed::Scalar(Value::Number(grupo.linhas as f64));
+    }
     let pred = make_predicate(&crit_val);
 
     let criterio = LeitorFaixa::novo(ev, &range_rect);
@@ -331,6 +334,14 @@ pub fn fn_averageif(args: &[Node], ev: &Evaluator<'_>) -> Computed {
         test_rect.clone()
     };
 
+    if let Some(grupo) = crate::funcoes::fn_helpers::grupo_agregado(ev, Some(&avg_rect), std::slice::from_ref(&test_rect), std::slice::from_ref(&crit_val)) {
+        return if grupo.numeros == 0 {
+            Computed::Scalar(Value::erro(ErrorCode::Div0))
+        } else {
+            Computed::Scalar(Value::Number(grupo.soma / grupo.numeros as f64))
+        };
+    }
+
     let mut sum = 0.0;
     let mut count = 0;
     for r in test_rect.r0..=test_rect.r1 {
@@ -373,19 +384,16 @@ pub fn fn_averageifs(args: &[Node], ev: &Evaluator<'_>) -> Computed {
         None => return err_value(),
     };
 
-    let mut pairs = Vec::with_capacity((args.len() - 1) / 2);
-    for i in (1..args.len()).step_by(2) {
-        let rect = match node_rect(&args[i]) {
-            Some(r) => r,
-            None => return err_value(),
-        };
-        let crit_val = ev.eval(&args[i + 1]);
-        if let Value::Error(e) = crit_val {
-            return Computed::Scalar(Value::Error(e));
-        }
-        let pred = make_predicate(&crit_val);
-        pairs.push(CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred });
+    let (rects, crits) = match crate::funcoes::fn_helpers::faixas_e_criterios(args, 1, ev) {
+        Ok(x) => x,
+        Err(e) => return Computed::Scalar(Value::Error(e)),
+    };
+    if let Some(grupo) = crate::funcoes::fn_helpers::grupo_agregado(ev, Some(&avg_rect), &rects, &crits) {
+        return if grupo.numeros == 0 { Computed::Scalar(Value::erro(ErrorCode::Div0)) } else { Computed::Scalar(Value::Number(grupo.soma / grupo.numeros as f64)) };
     }
+    let pairs: Vec<CriteriaPair> = rects.into_iter().zip(crits.iter())
+        .map(|(rect, crit)| CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred: make_predicate(crit) })
+        .collect();
 
     let mut sum = 0.0;
     let mut count = 0;
@@ -433,19 +441,16 @@ pub fn fn_countifs(args: &[Node], ev: &Evaluator<'_>) -> Computed {
         None => return err_value(),
     };
 
-    let mut pairs = Vec::with_capacity(args.len() / 2);
-    for i in (0..args.len()).step_by(2) {
-        let rect = match node_rect(&args[i]) {
-            Some(r) => r,
-            None => return err_value(),
-        };
-        let crit_val = ev.eval(&args[i + 1]);
-        if let Value::Error(e) = crit_val {
-            return Computed::Scalar(Value::Error(e));
-        }
-        let pred = make_predicate(&crit_val);
-        pairs.push(CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred });
+    let (rects, crits) = match crate::funcoes::fn_helpers::faixas_e_criterios(args, 0, ev) {
+        Ok(x) => x,
+        Err(e) => return Computed::Scalar(Value::Error(e)),
+    };
+    if let Some(grupo) = crate::funcoes::fn_helpers::grupo_agregado(ev, None, &rects, &crits) {
+        return Computed::Scalar(Value::Number(grupo.linhas as f64));
     }
+    let pairs: Vec<CriteriaPair> = rects.into_iter().zip(crits.iter())
+        .map(|(rect, crit)| CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred: make_predicate(crit) })
+        .collect();
 
     let mut count = 0;
     for r in base_rect.r0..=base_rect.r1 {
@@ -482,19 +487,16 @@ pub fn fn_maxifs(args: &[Node], ev: &Evaluator<'_>) -> Computed {
         None => return err_value(),
     };
 
-    let mut pairs = Vec::with_capacity((args.len() - 1) / 2);
-    for i in (1..args.len()).step_by(2) {
-        let rect = match node_rect(&args[i]) {
-            Some(r) => r,
-            None => return err_value(),
-        };
-        let crit_val = ev.eval(&args[i + 1]);
-        if let Value::Error(e) = crit_val {
-            return Computed::Scalar(Value::Error(e));
-        }
-        let pred = make_predicate(&crit_val);
-        pairs.push(CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred });
+    let (rects, crits) = match crate::funcoes::fn_helpers::faixas_e_criterios(args, 1, ev) {
+        Ok(x) => x,
+        Err(e) => return Computed::Scalar(Value::Error(e)),
+    };
+    if let Some(grupo) = crate::funcoes::fn_helpers::grupo_agregado(ev, Some(&max_rect), &rects, &crits) {
+        return Computed::Scalar(Value::Number(if grupo.numeros == 0 { 0.0 } else { grupo.maximo }));
     }
+    let pairs: Vec<CriteriaPair> = rects.into_iter().zip(crits.iter())
+        .map(|(rect, crit)| CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred: make_predicate(crit) })
+        .collect();
 
     let mut max_val = f64::NEG_INFINITY;
     let mut count = 0;
@@ -544,19 +546,16 @@ pub fn fn_minifs(args: &[Node], ev: &Evaluator<'_>) -> Computed {
         None => return err_value(),
     };
 
-    let mut pairs = Vec::with_capacity((args.len() - 1) / 2);
-    for i in (1..args.len()).step_by(2) {
-        let rect = match node_rect(&args[i]) {
-            Some(r) => r,
-            None => return err_value(),
-        };
-        let crit_val = ev.eval(&args[i + 1]);
-        if let Value::Error(e) = crit_val {
-            return Computed::Scalar(Value::Error(e));
-        }
-        let pred = make_predicate(&crit_val);
-        pairs.push(CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred });
+    let (rects, crits) = match crate::funcoes::fn_helpers::faixas_e_criterios(args, 1, ev) {
+        Ok(x) => x,
+        Err(e) => return Computed::Scalar(Value::Error(e)),
+    };
+    if let Some(grupo) = crate::funcoes::fn_helpers::grupo_agregado(ev, Some(&min_rect), &rects, &crits) {
+        return Computed::Scalar(Value::Number(if grupo.numeros == 0 { 0.0 } else { grupo.minimo }));
     }
+    let pairs: Vec<CriteriaPair> = rects.into_iter().zip(crits.iter())
+        .map(|(rect, crit)| CriteriaPair { leitor: LeitorFaixa::novo(ev, &rect), rect, pred: make_predicate(crit) })
+        .collect();
 
     let mut min_val = f64::INFINITY;
     let mut count = 0;

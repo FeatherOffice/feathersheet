@@ -4,8 +4,9 @@ pub mod fn_complexo;
 /// Funções do FeatherSheet que o Excel não tem (nome internacional). Ao
 /// exportar .xlsx, a interface avisa: no Excel essas células mostram #NOME?.
 /// Função nova sem equivalente no Excel entra aqui.
-pub const FORA_DO_EXCEL: &[&str] = &["COUNTUNIQUE", "IMAGE.BASE64", "IMPORTDATA", "IMPORTJSON", "FETCHTEXT"];
+pub const FORA_DO_EXCEL: &[&str] = &["COUNTUNIQUE", "SUMBYCOLOR", "COUNTBYCOLOR", "IMAGE.BASE64", "IMPORTDATA", "IMPORTJSON", "FETCHTEXT"];
 pub mod fn_conversao;
+pub mod fn_cor;
 pub mod fn_date;
 pub mod fn_db;
 pub mod fn_dist;

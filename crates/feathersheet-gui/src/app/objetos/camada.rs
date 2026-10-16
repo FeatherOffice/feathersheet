@@ -28,7 +28,7 @@ const BARRA: f32 = 13.0;
 /// Lado da alça, em px de tela.
 const ALCA: f32 = 8.0;
 /// Distância da alça de giro acima da moldura, em px de tela.
-const DIST_GIRO: f32 = 22.0;
+pub(super) const DIST_GIRO: f32 = 22.0;
 /// Folga do clique, em px de tela (linha fina também pega).
 const FOLGA: f32 = 4.0;
 /// Tamanho da forma criada por clique simples, em px lógicos.
@@ -641,7 +641,7 @@ impl Camada {
         let c = r.center();
         if let Some(wa) = &it.wordart {
             // O texto é o próprio desenho (não sai centrado por cima, como o da forma).
-            let texto = it.texto.as_deref().unwrap_or(super::wordart::TEXTO_PADRAO);
+            let texto = it.texto.as_deref().unwrap_or(tr!(super::wordart::TEXTO_PADRAO));
             frame.with_save(|f| {
                 f.translate(Vector::new(c.x, c.y));
                 f.rotate(giro.to_radians());

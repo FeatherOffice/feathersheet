@@ -28,6 +28,11 @@ const VOLATILE_KEYWORDS: &[&str] = &[
     "ALEATORIOENTRE",
     "AGORA",
     "HOJE",
+    // A cor não é dependência: recalculam com as voláteis.
+    "SUMBYCOLOR",
+    "COUNTBYCOLOR",
+    "SOMAR.POR.COR",
+    "CONT.SE.COR",
 ];
 
 fn is_ascii_word_char(c: char) -> bool {

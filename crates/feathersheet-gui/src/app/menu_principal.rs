@@ -65,7 +65,7 @@ impl Historico {
     }
     pub(super) fn registrar(&mut self, path: &Path, abas: usize) {
         let nome = path.file_name().and_then(|v| v.to_str())
-            .unwrap_or("Planilha").to_owned();
+            .unwrap_or(tr!("Planilha")).to_owned();
         self.arquivos = recents::registrar(&self.arquivos, Recente {
             caminho: path.to_string_lossy().into_owned(),
             nome, aberto: agora(), abas: Some(abas),
@@ -130,39 +130,39 @@ impl App {
 
     fn menu_lateral(&self) -> Element<'_, Msg> {
         let lista = iced::widget::column![
-            self.menu_item("Início", "layout-sidebar",
+            self.menu_item(tr!("Início"), "layout-sidebar",
                 Some(Msg::MenuPagina(Pagina::Inicio)),
                 self.menu_pagina == Pagina::Inicio),
-            self.menu_item("Novo", "file-plus", Some(Msg::Novo), false),
-            self.menu_item("Abrir", "folder-open", Some(Msg::Abrir), false),
-            self.menu_item("Recentes", "clock",
+            self.menu_item(tr!("Novo"), "file-plus", Some(Msg::Novo), false),
+            self.menu_item(tr!("Abrir"), "folder-open", Some(Msg::Abrir), false),
+            self.menu_item(tr!("Recentes"), "clock",
                 Some(Msg::MenuPagina(Pagina::Recentes)),
                 self.menu_pagina == Pagina::Recentes),
-            self.menu_item("Recuperar temporário", "clock",
+            self.menu_item(tr!("Recuperar temporário"), "clock",
                 Some(Msg::RecuperarTemporario), false),
             self.menu_divisor(),
-            self.menu_item("Salvar", "device-floppy", Some(Msg::Salvar), false),
-            self.menu_item("Salvar como...", "device-floppy", Some(Msg::SalvarComo), false),
-            self.menu_item("Fazer uma cópia", "copy", Some(Msg::MenuSalvarCopia), false),
-            self.menu_item("Renomear arquivo", "edit", Some(Msg::RenomearArquivo), false),
+            self.menu_item(tr!("Salvar"), "device-floppy", Some(Msg::Salvar), false),
+            self.menu_item(tr!("Salvar como..."), "device-floppy", Some(Msg::SalvarComo), false),
+            self.menu_item(tr!("Fazer uma cópia"), "copy", Some(Msg::MenuSalvarCopia), false),
+            self.menu_item(tr!("Renomear arquivo"), "edit", Some(Msg::RenomearArquivo), false),
             self.menu_divisor(),
-            self.menu_item("Importar", "folder-open", Some(Msg::Abrir), false),
+            self.menu_item(tr!("Importar"), "folder-open", Some(Msg::Abrir), false),
             // Um item só: a página Exportar oferece Excel, CSV, TSV e JSON.
-            self.menu_item("Exportar", "file-export",
+            self.menu_item(tr!("Exportar"), "file-export",
                 Some(Msg::MenuPagina(Pagina::Exportar)),
                 self.menu_pagina == Pagina::Exportar),
-            self.menu_item("Imprimir", "printer", Some(Msg::Impressao(EventoImpressao::Abrir)), false),
+            self.menu_item(tr!("Imprimir"), "printer", Some(Msg::Impressao(EventoImpressao::Abrir)), false),
             self.menu_divisor(),
-            self.menu_item("Compartilhar", "list-details", None, false),
-            self.menu_item("Informações", "info-circle",
+            self.menu_item(tr!("Compartilhar"), "list-details", None, false),
+            self.menu_item(tr!("Informações"), "info-circle",
                 Some(Msg::MenuPagina(Pagina::Informacoes)),
                 self.menu_pagina == Pagina::Informacoes),
-            self.menu_item("Opções", "settings", Some(Msg::Configuracoes), false),
+            self.menu_item(tr!("Opções"), "settings", Some(Msg::Configuracoes), false),
             self.menu_divisor(),
-            self.menu_item("Comandos", "list-details",
+            self.menu_item(tr!("Comandos"), "list-details",
                 Some(Msg::MenuPagina(Pagina::Comandos)),
                 self.menu_pagina == Pagina::Comandos),
-            self.menu_item("Fechar", "x", Some(Msg::FecharAplicativo), false),
+            self.menu_item(tr!("Fechar"), "x", Some(Msg::FecharAplicativo), false),
         ].spacing(3).padding(11);
         container(scrollable(lista).height(Length::Fill))
             .width(Length::Fixed(217.0)).height(Length::Fill)
@@ -177,10 +177,10 @@ impl App {
         let existe = Path::new(&item.caminho).is_file();
         let nome = if item.nome.trim().is_empty() {
             Path::new(&item.caminho).file_name()
-                .and_then(|v| v.to_str()).unwrap_or("Planilha").to_owned()
+                .and_then(|v| v.to_str()).unwrap_or(tr!("Planilha")).to_owned()
         } else { item.nome.clone() };
         let detalhe = if existe { item.caminho.clone() }
-            else { format!("Arquivo não encontrado: {}", item.caminho) };
+            else { trf!("Arquivo não encontrado: {}", item.caminho) };
         let linha = button(iced::widget::row![
             feather_ui::icones::icone("file-plus", 21.0),
             iced::widget::column![
@@ -209,10 +209,10 @@ impl App {
     fn menu_lista_recentes(&self, limite: usize) -> Element<'_, Msg> {
         if self.recentes.arquivos.is_empty() {
             return container(iced::widget::column![
-                text("Ainda não há planilhas recentes.").size(13),
-                text("As planilhas abertas ou salvas aparecerão aqui.")
+                text(tr!("Ainda não há planilhas recentes.")).size(13),
+                text(tr!("As planilhas abertas ou salvas aparecerão aqui."))
                     .size(11).color(COR_TEXTO_MUTED()),
-                button("Abrir planilha").on_press(Msg::Abrir)
+                button(tr!("Abrir planilha")).on_press(Msg::Abrir)
                     .style(estilo_botao_primario),
             ].spacing(11)).padding(16).style(estilo_painel_faixa).into();
         }
@@ -227,31 +227,31 @@ impl App {
         match self.menu_pagina {
             Pagina::Inicio => self.inicio_conteudo(false),
             Pagina::Recentes => iced::widget::column![
-                text("Recentes").size(24),
-                text("Abra, fixe ou remova arquivos do histórico local.")
+                text(tr!("Recentes")).size(24),
+                text(tr!("Abra, fixe ou remova arquivos do histórico local."))
                     .size(12).color(COR_TEXTO_MUTED()),
                 self.menu_lista_recentes(recents::MAX_RECENTES),
             ].spacing(12).into(),
             Pagina::Exportar => self.menu_exportar(),
             Pagina::Comandos => iced::widget::column![
-                text("Comandos").size(24),
-                text("Ferramentas e submenus do TypeScript preservados.")
+                text(tr!("Comandos")).size(24),
+                text(tr!("Ferramentas e submenus do TypeScript preservados."))
                     .size(12).color(COR_TEXTO_MUTED()),
                 self.view_menu_typescript(),
             ].spacing(12).into(),
             Pagina::Informacoes => iced::widget::column![
-                text("Informações").size(24),
+                text(tr!("Informações")).size(24),
                 text(self.nome_documento()).size(17),
                 text(self.caminho.as_ref().map(|p| p.display().to_string())
-                    .unwrap_or_else(|| "Documento não salvo em .fshz".into()))
+                    .unwrap_or_else(|| tr!("Documento não salvo em .fshz").into()))
                     .size(12).color(COR_TEXTO_MUTED()),
                 self.menu_divisor(),
-                text(format!("Abas: {}", self.workbook.len())).size(13),
-                text(if self.alterado { "Há alterações não salvas" }
-                    else { "Sem alterações pendentes" }).size(13),
+                text(trf!("Abas: {}", self.workbook.len())).size(13),
+                text(if self.alterado { tr!("Há alterações não salvas") }
+                    else { tr!("Sem alterações pendentes") }).size(13),
                 iced::widget::row![
-                    button("Salvar").on_press(Msg::Salvar).style(estilo_botao_primario),
-                    button("Salvar como...").on_press(Msg::SalvarComo)
+                    button(tr!("Salvar")).on_press(Msg::Salvar).style(estilo_botao_primario),
+                    button(tr!("Salvar como...")).on_press(Msg::SalvarComo)
                         .style(estilo_botao_secundario),
                 ].spacing(8),
             ].spacing(13).into(),
@@ -297,17 +297,17 @@ impl App {
                 .on_press(evento).into()
         };
         iced::widget::column![
-            text("Exportar").size(24).font(negrito),
-            text("Salva uma cópia em outro formato. O arquivo .fshz em que você trabalha não muda.")
+            text(tr!("Exportar")).size(24).font(negrito),
+            text(tr!("Salva uma cópia em outro formato. O arquivo .fshz em que você trabalha não muda."))
                 .size(12).color(COR_TEXTO_MUTED()),
-            cartao("file-export", "Excel", ".xlsx",
-                "Todas as abas, para abrir no Excel ou em outro programa de planilhas.", Msg::ExportarXlsx),
+            cartao("file-export", tr!("Excel"), ".xlsx",
+                tr!("Todas as abas, para abrir no Excel ou em outro programa de planilhas."), Msg::ExportarXlsx),
             cartao("file-export", "CSV", ".csv",
-                "Só a aba atual, valores separados por vírgula.", Msg::ExportarDelimitado(false)),
+                tr!("Só a aba atual, valores separados por vírgula."), Msg::ExportarDelimitado(false)),
             cartao("file-code", "TSV", ".tsv",
-                "Só a aba atual, valores separados por tabulação.", Msg::ExportarDelimitado(true)),
+                tr!("Só a aba atual, valores separados por tabulação."), Msg::ExportarDelimitado(true)),
             cartao("file-code", "JSON", ".json",
-                "Todas as abas, para integrar com outros programas.", Msg::ExportarJson),
+                tr!("Todas as abas, para integrar com outros programas."), Msg::ExportarJson),
         ].spacing(12).into()
     }
 
@@ -536,7 +536,7 @@ impl App {
         let modelos_lista = modelos::lista();
         let total = modelos_lista.len();
         if total == 0 {
-            return text("Nenhum modelo disponível neste build.").size(12).color(COR_TEXTO_MUTED()).into();
+            return text(tr!("Nenhum modelo disponível neste build.")).size(12).color(COR_TEXTO_MUTED()).into();
         }
         let cartoes: Vec<Element<'_, Msg>> = modelos_lista.iter().map(|m|
             self.inicio_cartao(m.id, m.nome, m.descricao, Msg::NovoDeModelo(m.id))
@@ -550,16 +550,16 @@ impl App {
         let inicio = self.carrossel_modelos.min(total - visiveis);
         let rodando = !self.ver_todos_modelos && visiveis < total;
         let mut cabecalho = iced::widget::row![
-            text("Novo").size(16).font(negrito()),
+            text(tr!("Novo")).size(16).font(negrito()),
             Space::with_width(Length::Fill),
         ].spacing(10).align_y(Alignment::Center);
         if rodando {
-            cabecalho = cabecalho.push(text(format!("{}–{} de {}", inicio + 1, inicio + visiveis, total))
+            cabecalho = cabecalho.push(text(trf!("{}–{} de {}", inicio + 1, inicio + visiveis, total))
                 .size(11.5).color(COR_TEXTO_MUTED()));
         }
         if visiveis < total || self.ver_todos_modelos {
             cabecalho = cabecalho.push(Self::botao_link(
-                if self.ver_todos_modelos { "Mostrar menos".into() } else { "Ver todos os modelos".into() },
+                if self.ver_todos_modelos { tr!("Mostrar menos").into() } else { tr!("Ver todos os modelos").into() },
                 if self.ver_todos_modelos { "chevron-up" } else { "chevron-right" },
                 Msg::VerTodosModelos));
         }
@@ -593,7 +593,7 @@ impl App {
         let existe = Path::new(&item.caminho).is_file();
         let nome = if item.nome.trim().is_empty() {
             Path::new(&item.caminho).file_name()
-                .and_then(|v| v.to_str()).unwrap_or("Planilha").to_owned()
+                .and_then(|v| v.to_str()).unwrap_or(tr!("Planilha")).to_owned()
         } else { item.nome.clone() };
         // As colunas Nome e Pasta dividem o que sobra em 5:4; ~7 px por caractere.
         let livre = (largura - COL_TIPO - COL_QUANDO - COL_ACOES - 40.0).max(120.0);
@@ -611,7 +611,7 @@ impl App {
         let mut nome_txt = text(cortar_fim(&nome, max_nome)).size(13);
         if !existe { nome_txt = nome_txt.color(COR_TEXTO_MUTED()); }
         let pasta = if existe { cortar_inicio(&pasta_legivel(&item.caminho), max_pasta) }
-            else { "Arquivo não encontrado".to_owned() };
+            else { tr!("Arquivo não encontrado").to_owned() };
         let linha = button(iced::widget::row![
             container(selo).width(Length::Fixed(COL_TIPO)),
             container(nome_txt).width(Length::FillPortion(5)),
@@ -647,10 +647,10 @@ impl App {
             linha,
             iced::widget::row![
                 tooltip(pequeno(if fixado { "circle-check" } else { "plus" }, fixado, Msg::MenuFixarRecente(i)),
-                    text(if fixado { "Desafixar" } else { "Fixar no topo" }).size(11),
+                    text(if fixado { tr!("Desafixar") } else { tr!("Fixar no topo") }).size(11),
                     tooltip::Position::Top).style(estilo_dica),
                 tooltip(pequeno("x", false, Msg::MenuEsquecerRecente(i)),
-                    text("Tirar da lista").size(11), tooltip::Position::Top).style(estilo_dica),
+                    text(tr!("Tirar da lista")).size(11), tooltip::Position::Top).style(estilo_dica),
             ].spacing(4).width(Length::Fixed(COL_ACOES)),
         ].spacing(4).align_y(Alignment::Center).into()
     }
@@ -659,14 +659,14 @@ impl App {
     fn inicio_recentes(&self, largura: f32, tela_cheia: bool) -> Element<'_, Msg> {
         let busca = self.busca_recentes.trim().to_lowercase();
         let mut titulo = iced::widget::row![
-            text("Recentes").size(16).font(negrito()),
+            text(tr!("Recentes")).size(16).font(negrito()),
             Space::with_width(Length::Fill),
         ].spacing(10).align_y(Alignment::Center);
         if !self.recentes.arquivos.is_empty() {
             // Busca no padrão da Ajuda (F1): ícone `search` do catálogo + campo sem borda própria.
             titulo = titulo.push(container(row![
                 feather_ui::icones::icone("search", 15.0),
-                text_input("Buscar nos recentes", &self.busca_recentes)
+                text_input(tr!("Buscar nos recentes"), &self.busca_recentes)
                     .on_input(Msg::BuscarRecentes)
                     .size(13).padding([5, 4])
                     .style(|tema, estado| {
@@ -685,15 +685,15 @@ impl App {
                 }));
         }
         if !tela_cheia && self.recentes.arquivos.len() > 6 {
-            titulo = titulo.push(Self::botao_link("Ver todos".into(), "chevron-right", Msg::MenuPagina(Pagina::Recentes)));
+            titulo = titulo.push(Self::botao_link(tr!("Ver todos").into(), "chevron-right", Msg::MenuPagina(Pagina::Recentes)));
         }
         if self.recentes.arquivos.is_empty() {
             return iced::widget::column![
                 titulo,
                 container(iced::widget::column![
                     feather_ui::icones::icone("folder-open", 30.0),
-                    text("Nenhuma planilha aberta ainda").size(13),
-                    text("As planilhas que você abrir ou salvar aparecem aqui.")
+                    text(tr!("Nenhuma planilha aberta ainda")).size(13),
+                    text(tr!("As planilhas que você abrir ou salvar aparecem aqui."))
                         .size(11.5).color(COR_TEXTO_MUTED()),
                 ].spacing(6).align_x(Alignment::Center))
                     .center_x(Length::Fill).padding(28),
@@ -709,14 +709,14 @@ impl App {
         let rotulo_coluna = |s: &'static str| text(s).size(11).color(COR_TEXTO_MUTED());
         let colunas = container(iced::widget::row![
             Space::with_width(Length::Fixed(COL_TIPO)),
-            container(rotulo_coluna("Nome")).width(Length::FillPortion(5)),
-            container(rotulo_coluna("Pasta")).width(Length::FillPortion(4)),
-            container(rotulo_coluna("Aberto")).width(Length::Fixed(COL_QUANDO)),
+            container(rotulo_coluna(tr!("Nome"))).width(Length::FillPortion(5)),
+            container(rotulo_coluna(tr!("Pasta"))).width(Length::FillPortion(4)),
+            container(rotulo_coluna(tr!("Aberto"))).width(Length::Fixed(COL_QUANDO)),
             Space::with_width(Length::Fixed(COL_ACOES + 4.0)),
         ].spacing(10)).padding([0, 10]);
         let mut lista = iced::widget::column![colunas, self.menu_divisor()].spacing(4);
         if indices.is_empty() {
-            lista = lista.push(container(text(format!("Nenhum recente com “{}”.", self.busca_recentes.trim()))
+            lista = lista.push(container(text(trf!("Nenhum recente com “{}”.", self.busca_recentes.trim()))
                 .size(12).color(COR_TEXTO_MUTED())).padding([14, 10]));
         }
         for i in indices {
@@ -734,12 +734,12 @@ impl App {
             feather_ui::marca::icone_atual(if tela_cheia { 44.0 } else { 36.0 }),
             iced::widget::column![
                 text("FeatherSheet").size(if tela_cheia { 24 } else { 20 }).font(negrito()),
-                text("Planilhas que ficam na sua máquina.").size(12.5).color(COR_TEXTO_MUTED()),
+                text(tr!("Planilhas que ficam na sua máquina.")).size(12.5).color(COR_TEXTO_MUTED()),
             ].spacing(1),
             Space::with_width(Length::Fill),
             button(iced::widget::row![
                 feather_ui::icones::icone("folder-open", 16.0),
-                text("Abrir…").size(13),
+                text(tr!("Abrir…")).size(13),
             ].spacing(7).align_y(Alignment::Center))
                 .padding([8, 16]).style(estilo_botao_secundario).on_press(Msg::Abrir),
         ].spacing(12).align_y(Alignment::Center);

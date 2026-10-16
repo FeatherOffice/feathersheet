@@ -122,9 +122,9 @@ impl TrabalhoDivisao {
         if self.fase==FaseDivisao::Validando {parcial} else {50+parcial}
     }
     fn progresso(&self) -> String {
-        let fase = if self.fase==FaseDivisao::Validando {"Validando destinos"}
-            else {"Convertendo linhas"};
-        format!("{fase} · {}% · {} de {} linhas · RSS +{:.0} MiB (pico {:.0} MiB)",
+        let fase = if self.fase==FaseDivisao::Validando {tr!("Validando destinos")}
+            else {tr!("Convertendo linhas")};
+        trf!("{fase} · {}% · {} de {} linhas · RSS +{:.0} MiB (pico {:.0} MiB)",
             self.percentual(),self.cursor.saturating_sub(self.area.r0),
             self.fim-self.area.r0+1,
             self.rss_pico_kb.saturating_sub(self.rss_inicio_kb) as f64 / 1024.0,
@@ -146,7 +146,7 @@ impl Estado {
             etapa:1, origem:app.folha, area,
             modo:Modo::Delimitado, ponto_virgula:true,virgula:false,
             tab:false,espaco:false,outro_ativo:false,outro:String::new(),
-            consecutivos:true, qualificador:"Aspas duplas",
+            consecutivos:true, qualificador:tr!("Aspas duplas"),
             largura:"10".into(), selecionada:0, tipos:Vec::new(), avancado:false,
             nova_aba:false, destino,
             nome_aba:"Dados_Separados".into(), erro:String::new(),
@@ -204,15 +204,15 @@ impl Estado {
         self.tipos.get(i).cloned().unwrap_or(TipoColunaDivisao::Geral)
     }
     fn validacao(&self)->Result<(),String> {
-        if self.area.c0!=self.area.c1 {return Err("Selecione apenas uma coluna na planilha.".into());}
+        if self.area.c0!=self.area.c1 {return Err(tr!("Selecione apenas uma coluna na planilha.").into());}
         if self.modo==Modo::LarguraFixa && self.largura.parse::<usize>().ok().filter(|n| (1..=16384).contains(n)).is_none() {
-            return Err("A largura fixa deve ter entre 1 e 16.384 caracteres.".into());
+            return Err(tr!("A largura fixa deve ter entre 1 e 16.384 caracteres.").into());
         }
         if self.modo==Modo::Delimitado && self.opcoes().delimitadores.is_empty() {
-            return Err("Selecione pelo menos um separador.".into());
+            return Err(tr!("Selecione pelo menos um separador.").into());
         }
-        if self.nova_aba&&self.nome_aba.trim().is_empty() {return Err("Informe o nome da nova planilha.".into());}
-        if !self.nova_aba&&endereco(&self.destino).is_none() {return Err("Informe um destino válido, como A1.".into());}
+        if self.nova_aba&&self.nome_aba.trim().is_empty() {return Err(tr!("Informe o nome da nova planilha.").into());}
+        if !self.nova_aba&&endereco(&self.destino).is_none() {return Err(tr!("Informe um destino válido, como A1.").into());}
         Ok(())
     }
 }
@@ -264,6 +264,9 @@ fn partes_preparadas(
 
 /// Compartilhado pelas ações do campo de formato e por coluna.
 fn tipo_de_rotulo(tipo:&str)->TipoColunaDivisao {
+    // A lista mostra o rótulo traduzido; a decisão usa a chave em português.
+    let tipo=crate::idioma::chave_de(&[tr!("Número"),tr!("Texto"),tr!("Porcentagem"),tr!("Data DMA"),tr!("Data MDA"),tr!("Data AMD"),tr!("Ignorar")],tipo)
+        .unwrap_or(tipo);
     match tipo {
         "Número"=>TipoColunaDivisao::Numero,
         "Texto"=>TipoColunaDivisao::Texto,
@@ -376,24 +379,24 @@ impl App {
     }
     /// Começa sem percorrer nenhuma linha: a validação roda em ticks de UI.
     fn iniciar_trabalho_divisao(&mut self)->Result<(),String> {
-        let e=self.assistente_divisao.as_ref().ok_or("Assistente fechado")?;
+        let e=self.assistente_divisao.as_ref().ok_or(tr!("Assistente fechado"))?;
         if e.trabalho.is_some() { return Ok(()); }
         e.validacao()?;
-        let aba=self.workbook.aba(e.origem).ok_or("Aba de origem não encontrada")?;
+        let aba=self.workbook.aba(e.origem).ok_or(tr!("Aba de origem não encontrada"))?;
         let fim=e.area.r1.min(aba.sheet.used_rect().r1);
-        if e.area.r0>fim {return Err("Nenhuma linha preenchida na seleção".into());}
+        if e.area.r0>fim {return Err(tr!("Nenhuma linha preenchida na seleção").into());}
         let (dst_row,dst_col)=if e.nova_aba {(0,0)}else{endereco(&e.destino).unwrap()};
         // Verificar os limites de destino para o ÚLTIMO registro antes
         // de começar a escrita. Mesmo com o milhão de linhas isso é O(1).
         let ultima=dst_row as u64+fim as u64-e.area.r0 as u64;
         if ultima>=MAX_ROWS as u64 {
-            return Err("A divisão ultrapassa a última linha da planilha".into());
+            return Err(tr!("A divisão ultrapassa a última linha da planilha").into());
         }
-        let destino_txt=if e.nova_aba {format!("nova aba '{}'",e.nome_aba.trim())}
-            else {format!("{} (própria aba)",e.destino)};
-        let linha=format!("início · área {}:{} · destino {} · modo {:?}",
+        let destino_txt=if e.nova_aba {trf!("nova aba '{}'",e.nome_aba.trim())}
+            else {trf!("{} (própria aba)",e.destino)};
+        let linha=trf!("início · área {}:{} · destino {} · modo {:?}",
             cell_name(e.area.r0,e.area.c0),cell_name(fim,e.area.c1),destino_txt,e.modo);
-        self.monitor.registrar(feather_ui::monitor::Nivel::Info,"Divisão",&linha);
+        self.monitor.registrar(feather_ui::monitor::Nivel::Info,tr!("Divisão"),&linha);
         let rss_inicio=Self::rss_atual_kb().unwrap_or(0);
         let trabalho=TrabalhoDivisao {
             fase:FaseDivisao::Validando,
@@ -415,7 +418,7 @@ impl App {
             estado.erro.clear();
             estado.conflito=None;
         }
-        self.status="Conversão de texto em colunas iniciada".into();
+        self.status=tr!("Conversão de texto em colunas iniciada").into();
         Ok(())
     }
 
@@ -434,7 +437,7 @@ impl App {
                 }
             }
         }
-        self.status="Conversão cancelada; dados originais preservados".into();
+        self.status=tr!("Conversão cancelada; dados originais preservados").into();
     }
 
     /// Um tique da gravação em lote: manda linhas para as threads, recolhe as
@@ -465,7 +468,7 @@ impl App {
                 Ok(prontas)=>{lote.prontas.extend(prontas);lote.em_voo.pop_front();}
                 Err(std::sync::mpsc::TryRecvError::Empty)=>break,
                 Err(std::sync::mpsc::TryRecvError::Disconnected)=>
-                    return Err("Uma thread da conversão falhou; nada foi alterado.".into()),
+                    return Err(tr!("Uma thread da conversão falhou; nada foi alterado.").into()),
             }
         }
         let inicio=std::time::Instant::now();
@@ -498,7 +501,7 @@ impl App {
             if trabalho.fase==FaseDivisao::Validando {
                 if !trabalho.com_divisao {
                     if let Some(e)=self.assistente_divisao.as_mut() {
-                        e.erro="Nenhum dado produziu mais de uma coluna. Confira os separadores.".into();
+                        e.erro=tr!("Nenhum dado produziu mais de uma coluna. Confira os separadores.").into();
                     }
                     return Task::none();
                 }
@@ -512,10 +515,10 @@ impl App {
                     }
                     self.workbook.criar_aba(nome)
                 } else {trabalho.origem};
-                let linha=format!("validação concluída · {} linhas · até {} coluna(s) · {:.1} ms desde o início · lote validar {}",
+                let linha=trf!("validação concluída · {} linhas · até {} coluna(s) · {:.1} ms desde o início · lote validar {}",
                     trabalho.total,trabalho.cols,trabalho.iniciado_em.elapsed().as_secs_f64()*1000.0,
                     trabalho.lote_validar);
-                self.monitor.registrar(feather_ui::monitor::Nivel::Info,"Divisão",&linha);
+                self.monitor.registrar(feather_ui::monitor::Nivel::Info,tr!("Divisão"),&linha);
                 trabalho.destino=Some(destino);
                 trabalho.fase=FaseDivisao::Gravando;
                 trabalho.cursor=trabalho.area.r0;
@@ -534,14 +537,14 @@ impl App {
                     let mut gravador=None;
                     self.workbook.editar_lote_sem_notificar(destino,|sheet|
                         gravador=Some(ops::iniciar_divisao(sheet,std::sync::Arc::clone(&plano))));
-                    let linha=format!("foto do desfazer · {:.2} s",t.elapsed().as_secs_f64());
-                    self.monitor.registrar(feather_ui::monitor::Nivel::Info,"Divisão",&linha);
+                    let linha=trf!("foto do desfazer · {:.2} s",t.elapsed().as_secs_f64());
+                    self.monitor.registrar(feather_ui::monitor::Nivel::Info,tr!("Divisão"),&linha);
                     trabalho.lote=gravador.map(|gravador| LoteParalelo {
                         leitura:plano.r0, plano, gravador,
                         em_voo:Default::default(), prontas:Default::default(),
                     });
                 }
-                self.status="Destinos validados; convertendo texto em colunas".into();
+                self.status=tr!("Destinos validados; convertendo texto em colunas").into();
             } else {
                 let mut fechar_ms=0.0;
                 if let Some(destino)=trabalho.destino {
@@ -550,18 +553,18 @@ impl App {
                     fechar_ms=t.elapsed().as_secs_f64()*1000.0;
                     if trabalho.nova {self.folha=destino;}
                 }
-                let linha=format!("fim · {} linhas · até {} coluna(s) · fechar_transacao {:.1} ms · total {:.1} ms · pico RSS {:.0} MiB",
+                let linha=trf!("fim · {} linhas · até {} coluna(s) · fechar_transacao {:.1} ms · total {:.1} ms · pico RSS {:.0} MiB",
                     trabalho.total,trabalho.cols,fechar_ms,
                     trabalho.iniciado_em.elapsed().as_secs_f64()*1000.0,
                     trabalho.rss_pico_kb as f64 / 1024.0);
-                self.monitor.registrar(feather_ui::monitor::Nivel::Info,"Divisão",&linha);
+                self.monitor.registrar(feather_ui::monitor::Nivel::Info,tr!("Divisão"),&linha);
                 self.alterado=true;
-                self.status=format!("{} linha(s) convertida(s) em até {} coluna(s) · {:.1}s · RSS início {:.0} MiB · pico {:.0} MiB",
+                self.status=trf!("{} linha(s) convertida(s) em até {} coluna(s) · {:.1}s · RSS início {:.0} MiB · pico {:.0} MiB",
                     trabalho.total,trabalho.cols,trabalho.iniciado_em.elapsed().as_secs_f32(),
                     trabalho.rss_inicio_kb as f64 / 1024.0,
                     trabalho.rss_pico_kb as f64 / 1024.0);
                 self.assistente_divisao=None;
-                App::devolver_memoria("texto para colunas");
+                App::devolver_memoria(tr!("texto para colunas"));
                 return self.janelas.fechar_tipo(Auxiliar::DividirTexto);
             }
         } else {
@@ -610,7 +613,7 @@ impl App {
                     let linha=trabalho.dst_row+(r-trabalho.area.r0);
                     if linha>=MAX_ROWS {
                         if let Some(e)=self.assistente_divisao.as_mut() {
-                            e.erro="A divisão ultrapassa a última linha da planilha".into();
+                            e.erro=tr!("A divisão ultrapassa a última linha da planilha").into();
                         }
                         return Task::none();
                     }
@@ -621,7 +624,7 @@ impl App {
                         let col=trabalho.dst_col as usize+i;
                         if col>=MAX_COLS as usize {
                             if let Some(e)=self.assistente_divisao.as_mut() {
-                                e.erro="A divisão ultrapassa XFD".into();
+                                e.erro=tr!("A divisão ultrapassa XFD").into();
                             }
                             return Task::none();
                         }
@@ -630,7 +633,7 @@ impl App {
                             && celula_com_conteudo(&aba.sheet,linha,col as u32) {
                             if let Some(e)=self.assistente_divisao.as_mut() {
                                 let celula=cell_name(linha,col as u32);
-                                e.erro=format!("{celula} já contém dados. Substituir os dados existentes no destino?");
+                                e.erro=trf!("{celula} já contém dados. Substituir os dados existentes no destino?");
                                 e.conflito=Some(celula);
                             }
                             return Task::none();

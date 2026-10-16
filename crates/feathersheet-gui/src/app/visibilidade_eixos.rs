@@ -23,14 +23,14 @@ impl App {
         if self.workbook.editar(self.folha, |sheet| {
             resultado = sheet.alterar_visibilidade_dimensoes(coluna, ocultar, a, b);
         }).is_none() {
-            self.status = "A planilha não está disponível.".into();
+            self.status = tr!("A planilha não está disponível.").into();
             return;
         }
         match resultado {
             Ok(0) => self.status = if ocultar {
-                "As dimensões selecionadas já estão ocultas.".into()
+                tr!("As dimensões selecionadas já estão ocultas.").into()
             } else {
-                "Não há linhas ou colunas ocultas nessa região.".into()
+                tr!("Não há linhas ou colunas ocultas nessa região.").into()
             },
             Ok(quantidade) => {
                 self.alterado = true;

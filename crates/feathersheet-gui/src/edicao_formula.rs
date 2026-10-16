@@ -70,9 +70,9 @@ impl EditorFormula {
         self.cursor=None;
         self.selecao_texto=None;
     }
-    pub fn sugestoes(&self, texto:&str)->Vec<Sugestao> {
+    pub fn sugestoes(&self, texto:&str, ingles:bool)->Vec<Sugestao> {
         if !self.ativo || self.ocultar_sugestoes { return Vec::new(); }
-        suggest_at(texto,self.posicao(texto),6)
+        suggest_at(texto,self.posicao(texto),6,ingles)
     }
     pub fn pode_apontar(&self, texto:&str)->bool {
         self.ativo && texto.starts_with('=') &&
@@ -126,8 +126,8 @@ impl EditorFormula {
         self.ocultar_sugestoes=true;
         true
     }
-    pub fn aceitar_sugestao(&mut self,texto:&mut String,indice:usize)->bool {
-        let sugestoes=self.sugestoes(texto);
+    pub fn aceitar_sugestao(&mut self,texto:&mut String,indice:usize,ingles:bool)->bool {
+        let sugestoes=self.sugestoes(texto,ingles);
         let Some(s)=sugestoes.get(indice) else {return false;};
         let nome=s.name.clone();
         let pos=self.posicao(texto);
@@ -167,13 +167,15 @@ mod testes {
     #[test]
     fn autocomplete_portugues() {
         let mut e=EditorFormula::default();e.ativo=true;
-        assert!(e.sugestoes("=SOM").iter().any(|s|s.name=="SOMA"));
-        assert!(e.sugestoes("SOM").is_empty());
-        assert!(e.sugestoes("=A1").is_empty());
-        assert!(e.sugestoes("=SOMA(").is_empty());
+        assert!(e.sugestoes("=SOM",false).iter().any(|s|s.name=="SOMA"));
+        assert!(e.sugestoes("SOM",false).is_empty());
+        assert!(e.sugestoes("=A1",false).is_empty());
+        assert!(e.sugestoes("=SOMA(",false).is_empty());
+        assert!(e.sugestoes("=SOM",true).iter().all(|s|s.name!="SOMA"), "em inglês, só nomes em inglês");
+        assert!(e.sugestoes("=SU",true).iter().any(|s|s.name=="SUM"));
         let mut t="=SO".to_owned();
-        let i=e.sugestoes(&t).iter().position(|s|s.name=="SOMA").unwrap();
-        assert!(e.aceitar_sugestao(&mut t,i));
+        let i=e.sugestoes(&t,false).iter().position(|s|s.name=="SOMA").unwrap();
+        assert!(e.aceitar_sugestao(&mut t,i,false));
         assert_eq!(t,"=SOMA(");
     }
     #[test]

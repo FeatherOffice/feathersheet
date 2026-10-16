@@ -141,7 +141,7 @@ pub enum Auxiliar { Configuracoes, Ajuda, Monitor, Macros, FormatarCelulas, Divi
 pub enum DirecaoPreenchimento { Baixo, Direita, Cima, Esquerda, AteOFim }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AbaFaixa { Inicio, Inserir, Desenhar, Formulas, Dados, Revisao, Exibir, Macros, Ferramentas, Tabela, EditarForma }
+pub enum AbaFaixa { Inicio, Inserir, Desenhar, Layout, Formulas, Dados, Revisao, Exibir, Macros, Ferramentas, Tabela, EditarForma }
 
 impl AbaFaixa {
     /// Chaves fixas da antiga Ribbon TypeScript (ribbon.ts, ABA_KEY),
@@ -151,6 +151,7 @@ impl AbaFaixa {
             Self::Inicio => Some("inicio"),
             Self::Inserir => Some("inserir"),
             Self::Desenhar => Some("desenhar"),
+            Self::Layout => Some("layout"),
             Self::Formulas => Some("formulas"),
             Self::Dados => Some("dados"),
             Self::Revisao => Some("revisao"),
@@ -166,6 +167,7 @@ impl AbaFaixa {
         match chave {
             "inserir" => Self::Inserir,
             "desenhar" => Self::Desenhar,
+            "layout" => Self::Layout,
             "formulas" => Self::Formulas,
             "dados" => Self::Dados,
             "revisao" => Self::Revisao,
@@ -224,19 +226,19 @@ impl TipoCondicional {
 
     fn titulo(self) -> &'static str {
         match self {
-            Self::Maior=>"Maior que",Self::MaiorIgual=>"Maior ou igual",
-            Self::Menor=>"Menor que",Self::MenorIgual=>"Menor ou igual",
-            Self::Igual=>"Igual",Self::Diferente=>"Diferente",
-            Self::Entre=>"Entre",Self::Fora=>"Fora do intervalo",
-            Self::Vazia=>"Célula vazia",Self::NaoVazia=>"Célula não vazia",
-            Self::Contem=>"Texto contém",Self::NaoContem=>"Texto não contém",
-            Self::Comeca=>"Texto começa",Self::Termina=>"Texto termina",
-            Self::DataAntes=>"Data anterior",Self::DataDepois=>"Data posterior",
-            Self::DataIgual=>"Data é",
-            Self::Duplicado=>"Duplicados",Self::Unico=>"Únicos",
-            Self::AcimaMedia=>"Acima da média",Self::AbaixoMedia=>"Abaixo da média",
-            Self::Formula=>"Fórmula personalizada",Self::Escala=>"Escala de cores",
-            Self::Barra=>"Barra de dados",
+            Self::Maior=>tr!("Maior que"),Self::MaiorIgual=>tr!("Maior ou igual"),
+            Self::Menor=>tr!("Menor que"),Self::MenorIgual=>tr!("Menor ou igual"),
+            Self::Igual=>tr!("Igual"),Self::Diferente=>tr!("Diferente"),
+            Self::Entre=>tr!("Entre"),Self::Fora=>tr!("Fora do intervalo"),
+            Self::Vazia=>tr!("Célula vazia"),Self::NaoVazia=>tr!("Célula não vazia"),
+            Self::Contem=>tr!("Texto contém"),Self::NaoContem=>tr!("Texto não contém"),
+            Self::Comeca=>tr!("Texto começa"),Self::Termina=>tr!("Texto termina"),
+            Self::DataAntes=>tr!("Data anterior"),Self::DataDepois=>tr!("Data posterior"),
+            Self::DataIgual=>tr!("Data é"),
+            Self::Duplicado=>tr!("Duplicados"),Self::Unico=>tr!("Únicos"),
+            Self::AcimaMedia=>tr!("Acima da média"),Self::AbaixoMedia=>tr!("Abaixo da média"),
+            Self::Formula=>tr!("Fórmula personalizada"),Self::Escala=>tr!("Escala de cores"),
+            Self::Barra=>tr!("Barra de dados"),
         }
     }
     fn operador(self) -> Option<&'static str> {
@@ -555,7 +557,7 @@ struct PlanoColagem {
 impl PlanoColagem {
     fn calcular(area: &Rect, origem_altura: usize, origem_largura: usize) -> Result<Self, &'static str> {
         if origem_altura == 0 || origem_largura == 0 {
-            return Err("Não há células para colar");
+            return Err(tr!("Não há células para colar"));
         }
         let area = area.normalized();
         let selecao_altura = (area.r1 - area.r0) as usize + 1;
@@ -565,12 +567,12 @@ impl PlanoColagem {
         } else if selecao_altura % origem_altura == 0 && selecao_largura % origem_largura == 0 {
             (selecao_altura, selecao_largura)
         } else {
-            return Err("A área de destino deve ter dimensões múltiplas do bloco copiado (ou selecionar uma única célula)");
+            return Err(tr!("A área de destino deve ter dimensões múltiplas do bloco copiado (ou selecionar uma única célula)"));
         };
         if area.r0 as usize + altura > MAX_ROWS as usize
             || area.c0 as usize + largura > MAX_COLS as usize
         {
-            return Err("A colagem ultrapassa o limite de linhas ou colunas da planilha");
+            return Err(tr!("A colagem ultrapassa o limite de linhas ou colunas da planilha"));
         }
         Ok(Self { r0: area.r0, c0: area.c0, altura, largura })
     }
@@ -1015,7 +1017,7 @@ impl Default for App {
             edicao: String::new(), edicao_inline: None, multilinha: None, editor_formula:EditorFormula::default(), endereco: "A1".into(), endereco_digitado: false,
             aba_em_renomeacao:None, erro_nome_aba:None, ultimo_clique_aba:None,
             editando_nome_aba:false, nome_aba: "Planilha1".into(), linhas_grade: true,
-            status: "Pronto — FeatherSheet nativo Rust/Iced".into(),
+            status: tr!("Pronto — FeatherSheet nativo Rust/Iced").into(),
             carregando: false, calculo_pendente: false,
             aviso_abas: None,
             menu_aberto: false, menu_pagina: menu_principal::Pagina::Inicio,
@@ -1045,7 +1047,8 @@ impl Default for App {
             divisao_menu_aberto: false,
             macro_codigo: iced::widget::text_editor::Content::with_text("// Execute apenas quando desejar alterar a planilha.\nlog(sheet.range(\"A1\").value);"),
             macro_nome: "Macro1".into(),
-            macro_catalogo: feather_macros::carregar_padrao().unwrap_or_default(),
+            // As macros são de cada pasta (vêm do arquivo aberto); nada global.
+            macro_catalogo: feather_macros::Catalogo::default(),
             macro_visual: macros::EstadoVisual::default(),
             macro_saida: String::new(),
             botao_macro_modal: None,
@@ -1110,8 +1113,8 @@ impl App {
         // Um XLSX/CSV grande não deve travar a criação da janela.
         if inicial.is_some() {
             app.carregando = true;
-            app.status = "Carregando planilha em segundo plano…".into();
-            app.monitor.registrar(Nivel::Info, "Arquivo", &app.status);
+            app.status = tr!("Carregando planilha em segundo plano…").into();
+            app.monitor.registrar(Nivel::Info, tr!("Arquivo"), &app.status);
         }
         // Ícone e app_id de todas as janelas: sem o app_id o Linux não liga a janela ao
         // feathersheet.desktop instalado (sem nome nem ícone, em "Processos do Sistema").
@@ -1163,25 +1166,25 @@ impl App {
                 })
             }).await {
                 Ok(resultado) => resultado.map(Some),
-                Err(e) => Err(format!("Falha ao carregar arquivo: {e}")),
+                Err(e) => Err(trf!("Falha ao carregar arquivo: {e}")),
             }
         }, Msg::Aberto)
     }
 
     pub fn titulo(&self, id: window::Id) -> String {
         match self.janelas.tipo(id) {
-            Some(Auxiliar::Configuracoes) => "Configurações do FeatherSheet".into(),
-            Some(Auxiliar::Ajuda) => "Ajuda do FeatherSheet".into(),
-            Some(Auxiliar::Monitor) => "Monitor do FeatherSheet".into(),
-            Some(Auxiliar::Macros) => "Macros do FeatherSheet — Editor de macros · FeatherOffice".into(),
-            Some(Auxiliar::FormatarCelulas) => "Formatar Células — FeatherSheet".into(),
-            Some(Auxiliar::DividirTexto) => "Converter texto em colunas — FeatherSheet".into(),
-            Some(Auxiliar::RemoverDuplicados) => "Remover duplicados — FeatherSheet".into(),
-            Some(Auxiliar::Imprimir) => "Imprimir — FeatherSheet".into(),
-            Some(Auxiliar::OpenQuery) => "OpenQuery — Editor de consultas · FeatherOffice".into(),
-            Some(Auxiliar::Inspecao) => "Janela de inspeção — FeatherSheet".into(),
-            Some(Auxiliar::PrimeirosPassos) => "Primeiros passos — FeatherSheet".into(),
-            Some(Auxiliar::Novidades) => "O que há de novo — FeatherSheet".into(),
+            Some(Auxiliar::Configuracoes) => tr!("Configurações do FeatherSheet").into(),
+            Some(Auxiliar::Ajuda) => tr!("Ajuda do FeatherSheet").into(),
+            Some(Auxiliar::Monitor) => tr!("Monitor do FeatherSheet").into(),
+            Some(Auxiliar::Macros) => tr!("Macros do FeatherSheet — Editor de macros · FeatherOffice").into(),
+            Some(Auxiliar::FormatarCelulas) => tr!("Formatar Células — FeatherSheet").into(),
+            Some(Auxiliar::DividirTexto) => tr!("Converter texto em colunas — FeatherSheet").into(),
+            Some(Auxiliar::RemoverDuplicados) => tr!("Remover duplicados — FeatherSheet").into(),
+            Some(Auxiliar::Imprimir) => tr!("Imprimir — FeatherSheet").into(),
+            Some(Auxiliar::OpenQuery) => tr!("OpenQuery — Editor de consultas · FeatherOffice").into(),
+            Some(Auxiliar::Inspecao) => tr!("Janela de inspeção — FeatherSheet").into(),
+            Some(Auxiliar::PrimeirosPassos) => tr!("Primeiros passos — FeatherSheet").into(),
+            Some(Auxiliar::Novidades) => tr!("O que há de novo — FeatherSheet").into(),
             None => format!("{}{} — FeatherSheet",
                 if self.alterado { "* " } else { "" }, self.nome_documento()),
         }
@@ -1189,12 +1192,12 @@ impl App {
     pub fn tema(&self, _id: window::Id) -> iced::Theme { tema_iced() }
     fn nome_documento(&self) -> String {
         self.caminho.as_ref().or(self.origem.as_ref()).and_then(|p| p.file_name()).map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|| "Sem título.fshz".into())
+            .unwrap_or_else(|| tr!("Sem título.fshz").into())
     }
     /// O nome sem extensão que os diálogos de salvar/exportar sugerem.
     pub(super) fn nome_base_documento(&self) -> String {
         self.caminho.as_ref().or(self.origem.as_ref()).and_then(|p| p.file_stem())
-            .map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "Sem título".into())
+            .map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| tr!("Sem título").into())
     }
     fn acoes(id: window::Id) -> cromo::AcoesJanela<Msg> {
         cromo::AcoesJanela {
@@ -1219,7 +1222,7 @@ impl App {
             Auxiliar::Ajuda => Size::new(1190., 760.),
             Auxiliar::Monitor => Size::new(980., 620.),
             Auxiliar::Macros => Size::new(1180., 760.),
-            Auxiliar::FormatarCelulas => Size::new(820., 690.),
+            Auxiliar::FormatarCelulas => Size::new(780., 580.),
             Auxiliar::DividirTexto => Size::new(800., 610.),
             Auxiliar::RemoverDuplicados => Size::new(640., 560.),
             Auxiliar::Imprimir => Size::new(1000., 680.),
@@ -1229,6 +1232,15 @@ impl App {
         };
         self.janelas.alternar(tipo, tam, self.config.barra_propria).map(|_| Msg::AuxAberta)
     }
+    /// O objeto selecionado sobre a grade (forma ou ícone, gráfico, imagem
+    /// ou botão de macro), para saber quando a seleção mudou.
+    fn objeto_na_mao(&self) -> Option<String> {
+        if let Some((aba, id)) = self.objetos.selecionado { return Some(format!("forma {aba} {id}")); }
+        if let Some(id) = self.grafico_selecionado_id() { return Some(format!("grafico {id}")); }
+        if let Some((aba, id)) = &self.imagem_selecionada { return Some(format!("imagem {aba} {id}")); }
+        self.botao_macro_selecionado.as_ref().map(|b| format!("botao {b:?}"))
+    }
+
     pub fn update(&mut self, msg: Msg) -> Task<Msg> {
         // Toda mensagem pode mudar o que a grade mostra, menos as desta lista: o pulso
         // da soma do rodapé roda centenas de vezes numa seleção grande e só mexe no
@@ -1238,9 +1250,18 @@ impl App {
         }
         // Só a chamada de fora compara o antes e o depois para os eventos do VBA.
         let antes = if self.profundidade_update == 0 { self.antes_dos_eventos() } else { None };
+        let na_mao = if self.profundidade_update == 0 { Some(self.objeto_na_mao()) } else { None };
         self.profundidade_update += 1;
-        let tarefa = self.update_sem_eventos(msg);
+        let mut tarefa = self.update_sem_eventos(msg);
         self.profundidade_update -= 1;
+        // Forma, ícone, gráfico ou imagem recém-selecionados: o campo fx
+        // solta o foco, senão ele engole o Delete (e as setas) que são do objeto.
+        if let Some(antes) = na_mao {
+            let agora = self.objeto_na_mao();
+            if agora.is_some() && agora != antes {
+                tarefa = Task::batch([tarefa, crate::campo_fx::desfocar()]);
+            }
+        }
         if let Some(antes) = antes { self.disparar_eventos(antes); }
         // O rodapé decide aqui se vai somar em lotes: decidido só no desenho,
         // o pulso de 16 ms só nascia no tique seguinte do monitor (até 1 s).
@@ -1250,7 +1271,7 @@ impl App {
         if self.profundidade_update == 0 {
             let linhas = self.historico_macros.tirar_console();
             if !linhas.is_empty() {
-                for (nivel, linha) in linhas { self.monitor.registrar(nivel, "Macros", &linha); }
+                for (nivel, linha) in linhas { self.monitor.registrar(nivel, tr!("Macros"), &linha); }
                 return Task::batch([tarefa, self.monitor.acompanhar()]);
             }
         }
@@ -1302,12 +1323,12 @@ impl App {
             if self.monitor.console.revisao() == revisao {
                 let nivel = if arquivo_erro { Nivel::Erro }
                     else { Nivel::da_mensagem(&self.status) };
-                self.monitor.registrar(nivel, if arquivo_fim { "Arquivo" } else { "Aplicativo" }, &self.status);
+                self.monitor.registrar(nivel, if arquivo_fim { tr!("Arquivo") } else { tr!("Aplicativo") }, &self.status);
             }
         }
         if let Some(anterior) = saida_anterior {
             if (anterior != self.macro_saida || repetir_macro) && !registrado_internamente {
-                self.monitor.console.registrar_saida("Macros", &self.macro_saida);
+                self.monitor.console.registrar_saida(tr!("Macros"), &self.macro_saida);
             }
         }
         if self.monitor.console.revisao() != revisao {

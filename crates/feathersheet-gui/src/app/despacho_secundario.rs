@@ -167,7 +167,7 @@ impl App {
                 let area = self.area_selecionada();
                 match condicional::limpar_selecao(&mut self.workbook,
                     self.folha,area) {
-                    Ok(_) => {self.alterado=true;self.status="Regras da seleção removidas".into();}
+                    Ok(_) => {self.alterado=true;self.status=tr!("Regras da seleção removidas").into();}
                     Err(e) => self.status=e,
                 }
                 Task::none()
@@ -232,9 +232,9 @@ impl App {
                     self.alterado = true;
                     let nivel = self.workbook.aba(self.folha).map_or(0, |a|
                         feathersheet_core::operacoes::recuo::recuo_de(&a.sheet, self.linha, self.coluna));
-                    self.status = format!("Recuo: nível {nivel}");
+                    self.status = trf!("Recuo: nível {nivel}");
                 } else {
-                    self.status = if delta > 0 { "Recuo já está no máximo (15)" } else { "Recuo já está em 0" }.into();
+                    self.status = if delta > 0 { tr!("Recuo já está no máximo (15)") } else { tr!("Recuo já está em 0") }.into();
                 }
                 Task::none()
             }
@@ -253,7 +253,7 @@ impl App {
                 });
                 self.alterado = true;
                 self.edicao.clear();
-                self.status = "Conteúdo, formatos e comentários da seleção removidos".into();
+                self.status = tr!("Conteúdo, formatos e comentários da seleção removidos").into();
                 Task::none()
             }
             Msg::LimparFormato => {
@@ -276,7 +276,7 @@ impl App {
                     sheet.fechar_transacao();
                 });
                 self.alterado = true;
-                self.status = "Formatação da seleção removida".into();
+                self.status = tr!("Formatação da seleção removida").into();
                 Task::none()
             }
             Msg::AjustarLargura => {
@@ -303,11 +303,11 @@ impl App {
                 {
                     match resultado {
                         Ok(visao) => {
-                            self.status = format!("Estatísticas: {} valores preenchidos", visao.dados.count);
+                            self.status = trf!("Estatísticas: {} valores preenchidos", visao.dados.count);
                             self.estatisticas = Some(estatisticas_ui::Estado::Prontas(visao));
                         }
                         Err(erro) => {
-                            self.status = format!("Erro ao calcular estatísticas: {erro}");
+                            self.status = trf!("Erro ao calcular estatísticas: {erro}");
                             self.estatisticas = None;
                         }
                     }
@@ -319,10 +319,10 @@ impl App {
                 if geracao == self.perfil_geracao {
                     match resultado {
                         Ok(visao) => {
-                            self.status = format!("Perfil: {} linhas analisadas", visao.dados.linhas);
+                            self.status = trf!("Perfil: {} linhas analisadas", visao.dados.linhas);
                             self.perfil_coluna = Some(visao);
                         }
-                        Err(e) => self.status = format!("Erro no perfil: {e}"),
+                        Err(e) => self.status = trf!("Erro no perfil: {e}"),
                     }
                 }
                 Task::none()
@@ -346,15 +346,15 @@ impl App {
                 self.config.mostrar_formulas = self.mostrar_formulas;
                 self.config.gravar();
                 self.status = if self.mostrar_formulas {
-                    "Exibição de fórmulas ativada (Ctrl+`)"
+                    tr!("Exibição de fórmulas ativada (Ctrl+`)")
                 } else {
-                    "Exibição de resultados ativada (Ctrl+`)"
+                    tr!("Exibição de resultados ativada (Ctrl+`)")
                 }.into();
                 Task::none()
             }
             Msg::AlternarBarraFx => {
                 if self.editor_formula.ativo {
-                    self.status = "Conclua a edição antes de ocultar a barra de fórmulas".into();
+                    self.status = tr!("Conclua a edição antes de ocultar a barra de fórmulas").into();
                 } else {
                     self.mostrar_fx = !self.mostrar_fx;
                     self.config.barra_formulas = self.mostrar_fx;
@@ -527,21 +527,21 @@ impl App {
                 self.coluna_inicio=fixas_colunas;
                 self.trocar_selecao(0,0);
                 self.alterado = true;
-                self.status = format!("Aba duplicada: {}", self.nome_aba);
+                self.status = trf!("Aba duplicada: {}", self.nome_aba);
                 Task::none()
             }
             Msg::OcultarAba(i) => {
                 if !self.confirmar() { return Task::none(); }
                 self.contexto = None;
                 let nome = self.workbook.aba(i).map(|a| a.sheet.name.clone())
-                    .unwrap_or_else(|| "Aba".into());
+                    .unwrap_or_else(|| tr!("Aba").into());
                 match self.workbook.ocultar_aba(i) {
                     Ok(primeira_visivel) => {
                         let tarefa = if self.folha == i {
                             self.update(Msg::Aba(primeira_visivel))
                         } else { Task::none() };
                         self.alterado = true;
-                        self.status = format!("Aba \"{nome}\" ocultada. Reexiba pelo menu de abas.");
+                        self.status = trf!("Aba \"{nome}\" ocultada. Reexiba pelo menu de abas.");
                         tarefa
                     }
                     Err(erro) => {
@@ -552,7 +552,7 @@ impl App {
             }
             Msg::MostrarAbasOcultas => {
                 if self.workbook.abas_ocultas().is_empty() {
-                    self.status = "Não existem abas ocultas.".into();
+                    self.status = tr!("Não existem abas ocultas.").into();
                 } else {
                     self.reexibir_abas_aberto = true;
                     self.contexto = None;
@@ -565,15 +565,15 @@ impl App {
             }
             Msg::ReexibirAba(i) => {
                 let nome = self.workbook.aba(i).map(|a| a.sheet.name.clone())
-                    .unwrap_or_else(|| "Aba".into());
+                    .unwrap_or_else(|| tr!("Aba").into());
                 if self.workbook.reexibir_aba(i) {
                     self.reexibir_abas_aberto = false;
                     self.alterado = true;
                     let tarefa = self.update(Msg::Aba(i));
-                    self.status = format!("Aba \"{nome}\" reexibida.");
+                    self.status = trf!("Aba \"{nome}\" reexibida.");
                     tarefa
                 } else {
-                    self.status = "A aba não está oculta ou não existe.".into();
+                    self.status = tr!("A aba não está oculta ou não existe.").into();
                     Task::none()
                 }
             }
@@ -593,8 +593,8 @@ impl App {
                     self.linha_inicio=fixas_linhas;
                     self.coluna_inicio=fixas_colunas;
                     self.nome_aba = self.workbook.nomes().get(self.folha).cloned().unwrap_or_default();
-                    self.trocar_selecao(0,0); self.alterado=true; self.status="Aba excluída".into();
-                } else { self.status="A última aba visível não pode ser excluída".into(); }
+                    self.trocar_selecao(0,0); self.alterado=true; self.status=tr!("Aba excluída").into();
+                } else { self.status=tr!("A última aba visível não pode ser excluída").into(); }
                 Task::none()
             }
             Msg::AlterarEndereco(t) => {
@@ -639,9 +639,9 @@ impl App {
                     self.workbook.definir_nome(entrada, area);
                     self.alterado = true;
                     self.endereco = entrada.to_owned();
-                    self.status = format!("Intervalo \"{entrada}\" nomeado");
+                    self.status = trf!("Intervalo \"{entrada}\" nomeado");
                 } else {
-                    self.status = "Endereço ou nome inválido. Use A1:C10 ou um nome sem espaços.".into();
+                    self.status = tr!("Endereço ou nome inválido. Use A1:C10 ou um nome sem espaços.").into();
                 }
                 Task::none()
             }
@@ -678,7 +678,7 @@ impl App {
             }
             Msg::MenuAbrirRecente(i) => {
                 let Some(arquivo) = self.recentes.arquivos.get(i) else {
-                    self.status = "Esse arquivo não está mais no histórico.".into();
+                    self.status = tr!("Esse arquivo não está mais no histórico.").into();
                     return Task::none();
                 };
                 self.recente_destino = Some(PathBuf::from(&arquivo.caminho));
@@ -829,8 +829,8 @@ impl App {
                 }).is_some() {
                     self.alterado = true;
                     self.status = if cor.is_some() {
-                        "Cor da aba atualizada".into()
-                    } else { "Cor da aba removida".into() };
+                        tr!("Cor da aba atualizada").into()
+                    } else { tr!("Cor da aba removida").into() };
                 }
                 self.contexto = None;
                 self.paleta_aba_aberta = false;
@@ -997,7 +997,7 @@ impl App {
                         }
                         // FEATHERSHEET_CAPTURAR_MACRO="confirm('Gerar?')": roda a macro (pergunta, mensagens).
                         if let Ok(codigo) = std::env::var("FEATHERSHEET_CAPTURAR_MACRO") {
-                            let _ = self.rodar_macro(historico_macros::GatilhoMacro::manual("modo de captura"), "Macro de teste", &codigo, Vec::new());
+                            let _ = self.rodar_macro(historico_macros::GatilhoMacro::manual(tr!("modo de captura")), tr!("Macro de teste"), &codigo, Vec::new());
                         }
                         // FEATHERSHEET_CAPTURAR_CAIXAS=1: caixas de seleção na seleção da
                         // FEATHERSHEET_CAPTURAR_CELULA, uma sim, uma não marcada.
@@ -1131,7 +1131,8 @@ impl App {
                         if std::env::var("FEATHERSHEET_CAPTURAR_JANELA").as_deref() == Ok("busca_macros") {
                             return self.preparar_captura_busca_macros();
                         }
-                        // FEATHERSHEET_CAPTURAR_JANELA=primeiros:<passo 1–5> ou novidades[:<versão 1–3>].
+                        // FEATHERSHEET_CAPTURAR_JANELA=primeiros:<passo 1–5>, novidades[:<versão 1–3>],
+                        // monitor (F12) ou formatar:<aba 1–6> (Formatar células).
                         if let Ok(janela) = std::env::var("FEATHERSHEET_CAPTURAR_JANELA") {
                             let (nome, numero) = janela.split_once(':').map_or((janela.as_str(), 1), |(n, i)| (n, i.parse().unwrap_or(1)));
                             match nome {
@@ -1140,9 +1141,9 @@ impl App {
                                     self.origem = Some(PathBuf::from("dados.parquet"));
                                     self.aviso_salvamento_de = Some(self.nome_documento());
                                     self.faixa_salvamento = Some(if numero == 2 {
-                                        ("Esta pasta tem 633 milhões de células: grande demais para cópia automática. Nem a recuperação nem o salvamento automático a gravam; salve com Ctrl+S.".into(), true)
+                                        (tr!("Esta pasta tem 633 milhões de células: grande demais para cópia automática. Nem a recuperação nem o salvamento automático a gravam; salve com Ctrl+S.").into(), true)
                                     } else {
-                                        ("O salvamento automático não vale para arquivos .parquet. Até salvar como .fshz, só a recuperação automática protege esta planilha.".into(), false)
+                                        (tr!("O salvamento automático não vale para arquivos .parquet. Até salvar como .fshz, só a recuperação automática protege esta planilha.").into(), false)
                                     });
                                     return Task::none();
                                 }
@@ -1153,6 +1154,13 @@ impl App {
                                 "novidades" => {
                                     self.novidades_versao = numero.max(1) - 1;
                                     return self.alternar(Auxiliar::Novidades);
+                                }
+                                "monitor" => return self.alternar(Auxiliar::Monitor),
+                                "formatar" => {
+                                    use super::formatar_celulas::Aba;
+                                    let aba = [Aba::Numero, Aba::Alinhamento, Aba::Fonte, Aba::Borda,
+                                        Aba::Preenchimento, Aba::Protecao][numero.clamp(1, 6) - 1];
+                                    return self.abrir_formatar_celulas(aba);
                                 }
                                 _ => {}
                             }
@@ -1180,7 +1188,7 @@ impl App {
                                     let _ = self.update(Msg::Mover(1, 0));
                                     let _ = self.update(Msg::Mover(0, 1));
                                 }
-                                self.status = format!("Captura: zoom {}%, célula {}, origem {}",
+                                self.status = trf!("Captura: zoom {}%, célula {}, origem {}",
                                     self.config.zoom, cell_name(self.linha, self.coluna),
                                     cell_name(self.linha_inicio, self.coluna_inicio));
                             }
@@ -1196,6 +1204,8 @@ impl App {
                                 Ok("historico_macros" | "busca_macros") => self.janelas.id(Auxiliar::Macros),
                                 Ok(j) if j.starts_with("primeiros") => self.janelas.id(Auxiliar::PrimeirosPassos),
                                 Ok(j) if j.starts_with("novidades") => self.janelas.id(Auxiliar::Novidades),
+                                Ok("monitor") => self.janelas.id(Auxiliar::Monitor),
+                                Ok(j) if j.starts_with("formatar") => self.janelas.id(Auxiliar::FormatarCelulas),
                                 _ => None,
                             }
                         };
@@ -1221,7 +1231,7 @@ impl App {
                     self.workbook.soltar_faixas();
                     let movidos = self.workbook.consolidar_calculos(500_000);
                     if movidos > 0 {
-                        self.monitor.registrar(feather_ui::monitor::Nivel::Info, "Motor",
+                        self.monitor.registrar(feather_ui::monitor::Nivel::Info, tr!("Motor"),
                             &format!("[motor] {movidos} resultados de fórmula guardados nas colunas"));
                     }
                 }
@@ -1416,7 +1426,7 @@ impl App {
                     ajuda::definir_idioma(codigo);
                     self.config.gravar();
                     self.trocar_selecao(self.linha, self.coluna);
-                    self.status = format!("Regionalização: {codigo}; separador de fórmulas e texto: {}", self.regionalizacao().formula_arg_separator);
+                    self.status = trf!("Regionalização: {codigo}; separador de fórmulas e texto: {}", self.regionalizacao().formula_arg_separator);
                 }
                 Task::none()
             }
@@ -1429,7 +1439,7 @@ impl App {
                 let usado = feathersheet_core::paralelismo::nucleos();
                 self.config.nucleos = if usado == feathersheet_core::paralelismo::padrao() { 0 } else { usado as u16 };
                 self.config.gravar();
-                self.status = format!("Abrir e calcular: {usado} núcleos");
+                self.status = trf!("Abrir e calcular: {usado} núcleos");
                 Task::none()
             }
             Msg::LimiteMemoriaGb(gb) => {
@@ -1480,7 +1490,7 @@ impl App {
                 }
                 if self.pendente.take().is_some() {
                     self.recente_destino = None;
-                    self.status = "Operação cancelada; alterações preservadas.".into();
+                    self.status = tr!("Operação cancelada; alterações preservadas.").into();
                     return Task::none();
                 }
                 if self.edicao_menu.take().is_some() { return Task::none(); }
@@ -1505,21 +1515,21 @@ impl App {
                 if self.tabela_area.take().is_some() { return Task::none(); }
                 if self.botao_macro_modal.take().is_some() { return Task::none(); }
                 if self.arraste_botao_macro.take().is_some() {
-                    self.status = "Movimento do botão cancelado".into();
+                    self.status = tr!("Movimento do botão cancelado").into();
                     return Task::none();
                 }
                 if self.botao_macro_selecionado.take().is_some() {
                     return Task::none();
                 }
                 if self.arraste_imagem.take().is_some() {
-                    self.status = "Movimento da imagem cancelado".into();
+                    self.status = tr!("Movimento da imagem cancelado").into();
                     return Task::none();
                 }
                 if self.imagem_selecionada.take().is_some() {
                     return Task::none();
                 }
                 if self.pincel_formatacao.take().is_some() {
-                    self.status = "Pincel de formatação cancelado".into();
+                    self.status = tr!("Pincel de formatação cancelado").into();
                     return Task::none();
                 }
                 if self.editor_formula.ativo {

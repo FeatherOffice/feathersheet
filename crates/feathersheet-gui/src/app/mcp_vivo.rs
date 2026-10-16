@@ -379,7 +379,9 @@ impl Hospede for HospedeApp<'_> {
     }
 
     fn macros_mudaram(&mut self) {
-        self.app.macro_catalogo = feather_macros::carregar_padrao().unwrap_or_default();
+        // O MCP grava as macros na própria pasta (`Workbook::macros`).
+        self.app.recarregar_macros();
+        self.app.alterado = true;
     }
 }
 

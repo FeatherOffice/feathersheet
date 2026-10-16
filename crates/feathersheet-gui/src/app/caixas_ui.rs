@@ -52,7 +52,7 @@ impl App {
             s.fechar_transacao();
         });
         self.alterado = true;
-        self.status = "Caixas de seleção removidas. Ctrl+Z desfaz.".into();
+        self.status = tr!("Caixas de seleção removidas. Ctrl+Z desfaz.").into();
     }
 
     /// Caixas nas células selecionadas: a regra cobre a seleção e as vazias
@@ -82,9 +82,9 @@ impl App {
         });
         self.alterado = true;
         self.status = if com_conteudo > 0 {
-            format!("Caixas de seleção inseridas; {com_conteudo} célula(s) com outro conteúdo ficaram como estão. Ctrl+Z desfaz.")
+            trf!("Caixas de seleção inseridas; {com_conteudo} célula(s) com outro conteúdo ficaram como estão. Ctrl+Z desfaz.")
         } else {
-            "Caixas de seleção inseridas: clique ou barra de espaço marca. Ctrl+Z desfaz.".into()
+            tr!("Caixas de seleção inseridas: clique ou barra de espaço marca. Ctrl+Z desfaz.").into()
         };
     }
 
@@ -99,7 +99,7 @@ impl App {
         let regras = Regras::da(&aba.sheet);
         let Some((m, d)) = regras.caixa_em(r, c) else { return };
         if aba.sheet.get_raw(r, c).starts_with('=') {
-            self.status = "A caixa mostra o resultado de uma fórmula: edite a fórmula para mudar.".into();
+            self.status = tr!("A caixa mostra o resultado de uma fórmula: edite a fórmula para mudar.").into();
             return;
         }
         let Some(marcada) = caixas::estado(&aba.sheet, r, c, m, d) else { return };
@@ -141,7 +141,7 @@ impl App {
             s.fechar_transacao();
         });
         self.alterado = true;
-        self.status = format!("{} caixa(s) {}", alvos.len(), if marcar { "marcada(s)" } else { "desmarcada(s)" });
+        self.status = trf!("{} caixa(s) {}", alvos.len(), if marcar { "marcada(s)" } else { "desmarcada(s)" });
         true
     }
 }

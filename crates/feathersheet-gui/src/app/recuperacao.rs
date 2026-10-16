@@ -86,7 +86,7 @@ pub(super) fn procurar_orfas() -> Vec<Orfa> {
         let fshz = json.with_extension("fshz");
         let dados = std::fs::metadata(&fshz).ok()?;
         Some(Orfa {
-            nome: meta["nome"].as_str().unwrap_or("Sem título").to_owned(),
+            nome: meta["nome"].as_str().unwrap_or(tr!("Sem título")).to_owned(),
             origem: meta["origem"].as_str().map(PathBuf::from),
             quando: dados.modified().unwrap_or(SystemTime::UNIX_EPOCH),
             tamanho: dados.len(),
@@ -199,7 +199,7 @@ impl App {
                     }
                     Err(e) => {
                         self.recuperacao.versoes = None;
-                        self.monitor.registrar(Nivel::Aviso, "Recuperação", &format!("Cópia de recuperação falhou: {e}"));
+                        self.monitor.registrar(Nivel::Aviso, tr!("Recuperação"), &trf!("Cópia de recuperação falhou: {e}"));
                     }
                 }
                 Task::none()
@@ -212,7 +212,7 @@ impl App {
                 // A cópia passa a esta sessão (que grava a própria logo depois).
                 let destino = pasta().join(format!("recuperada-{}.fshz", std::process::id()));
                 if std::fs::rename(&o.fshz, &destino).is_err() {
-                    self.status = "Não foi possível abrir a cópia recuperada.".into();
+                    self.status = tr!("Não foi possível abrir a cópia recuperada.").into();
                     return Task::none();
                 }
                 let _ = std::fs::remove_file(&o.json);
@@ -237,9 +237,9 @@ impl App {
         let mut lista = iced::widget::column![
             row![
                 feather_ui::icones::icone("refresh", 18.0),
-                text("Planilhas para recuperar").size(15).font(iced::Font { weight: iced::font::Weight::Bold, ..Default::default() }),
+                text(tr!("Planilhas para recuperar")).size(15).font(iced::Font { weight: iced::font::Weight::Bold, ..Default::default() }),
             ].spacing(8).align_y(Alignment::Center),
-            text("O FeatherSheet fechou sem salvar estas planilhas. Recupere para continuar de onde parou.")
+            text(tr!("O FeatherSheet fechou sem salvar estas planilhas. Recupere para continuar de onde parou."))
                 .size(12).color(COR_TEXTO_MUTED()),
         ].spacing(8);
         for (i, o) in self.recuperacao.orfas.iter().enumerate() {
@@ -248,12 +248,12 @@ impl App {
                 feather_ui::icones::icone("table", 18.0),
                 iced::widget::column![
                     text(o.nome.clone()).size(13),
-                    text(format!("Cópia de {} · {:.1} MB", feathersheet_io::recents::quando(quando * 1000, agora_s() * 1000), o.tamanho as f64 / 1_048_576.0))
+                    text(trf!("Cópia de {} · {:.1} MB", feathersheet_io::recents::quando(quando * 1000, agora_s() * 1000), o.tamanho as f64 / 1_048_576.0))
                         .size(11).color(COR_TEXTO_MUTED()),
                 ].spacing(2).width(Length::Fill),
-                button(text("Descartar").size(12)).padding([6, 12]).style(estilo_botao_secundario)
+                button(text(tr!("Descartar")).size(12)).padding([6, 12]).style(estilo_botao_secundario)
                     .on_press(Msg::Recuperacao(Evento::Descartar(i))),
-                button(text("Recuperar").size(12)).padding([6, 14]).style(estilo_botao_primario)
+                button(text(tr!("Recuperar")).size(12)).padding([6, 14]).style(estilo_botao_primario)
                     .on_press(Msg::Recuperacao(Evento::Recuperar(i))),
             ].spacing(10).align_y(Alignment::Center));
         }

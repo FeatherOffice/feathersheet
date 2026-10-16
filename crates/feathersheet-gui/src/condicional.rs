@@ -83,12 +83,12 @@ pub fn regras(pasta: &Workbook, aba: usize) -> Vec<ConditionalRule> {
 }
 
 pub fn gravar(pasta: &mut Workbook, aba: usize, regras: Vec<ConditionalRule>) -> Result<(), String> {
-    if pasta.aba(aba).is_none() { return Err("Aba não encontrada".into()); }
+    if pasta.aba(aba).is_none() { return Err(tr!("Aba não encontrada").into()); }
     if regras.len() > 256 || regras.iter().any(|r| r.ranges.is_empty() || r.ranges.len() > 1024
         || r.ranges.iter().any(|f| f.r0 > f.r1 || f.c0 > f.c1 ||
             f.r1 >= MAX_ROWS || f.c1 >= MAX_COLS))
     {
-        return Err("Regras condicionais inválidas ou acima do limite".into());
+        return Err(tr!("Regras condicionais inválidas ou acima do limite").into());
     }
     let texto = serde_json::to_string(&regras).map_err(|e| e.to_string())?;
     pasta.editar(aba, |sheet| sheet.r = Some(texto));

@@ -53,7 +53,7 @@ impl Grade<'_> {
                 tracejado(f, Point::new(x0, y0), Point::new(x0, y1), VERDE, l, tr);
                 tracejado(f, Point::new(x1, y0), Point::new(x1, y1), VERDE, l, tr);
                 // Etiqueta no canto superior direito, acima da moldura.
-                let texto = "Área de Impressão";
+                let texto = tr!("Área de Impressão");
                 let larg = texto.chars().count() as f32 * 6.0 + 12.0;
                 let ex = (x1 - larg).max(esquerda);
                 let ey = (y0 - 18.0).max(topo);
