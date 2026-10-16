@@ -1,6 +1,6 @@
 [package]
 name = "feathersheet-ponte"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 description = "A camada de comandos: o TypeScript pede, a pasta viva no Rust responde."
 

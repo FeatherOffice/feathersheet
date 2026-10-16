@@ -30,6 +30,17 @@ impl App {
                 self.alterar_visibilidade_eixos(coluna, false);
                 Task::none()
             }
+            // Movimento do mouse nas janelas auxiliares (Configurações, Ajuda, Macros…) não
+            // mexe na planilha: antes virava posição da grade e refazia a tela principal a
+            // cada movimento, deixando tudo lento com outra janela aberta.
+            Msg::Atualizacao(e) => self.evento_atualizacao(e),
+            Msg::CursorJanela(id, pos) => {
+                if self.janelas.principal == Some(id) {
+                    self.update(Msg::Grafico(graficos::Evento::Cursor(pos)))
+                } else {
+                    Task::none()
+                }
+            }
             Msg::Grafico(e) => {
                 if let graficos::Evento::Cursor(pos) = &e {
                     self.ponteiro_x = pos.x;

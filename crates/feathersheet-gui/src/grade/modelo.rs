@@ -35,8 +35,17 @@ pub(super) fn ajustes_texto(sheet: &Sheet, r: u32, c: u32) -> AjustesTexto {
     }
 }
 
+/// Cache do desenho das células da grade (ver `Grade::draw`).
+#[derive(Default)]
+pub struct CacheGrade {
+    pub desenho: iced::widget::canvas::Cache,
+    /// Arrastes internos do Canvas no último desenho (referência, alça, divisória).
+    pub mouse: RefCell<String>,
+}
+
 pub struct Grade<'a> {
     pub workbook: &'a Workbook,
+    pub cache: &'a CacheGrade,
     /// Índices esparsos de dimensão, partilhados por desenho e hit-test.
     pub(crate) eixos: &'a RefCell<super::EstadoEixos>,
     pub condicional: &'a RefCell<EstadoCondicional>,

@@ -247,6 +247,7 @@ impl App {
     pub(super) fn grade(&self) -> Grade<'_> {
         Grade {
             workbook: &self.workbook,
+            cache: &self.cache_grade,
             eixos: &self.eixos_grade,
             condicional: &self.condicional,
             aba: self.folha,

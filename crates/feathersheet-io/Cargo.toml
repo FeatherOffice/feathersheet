@@ -1,6 +1,6 @@
 [package]
 name = "feathersheet-io"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 
 # Onde o Arrow entra do lado Rust — ver docs/ARQUITETURA.md, "O que muda no

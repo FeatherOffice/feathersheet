@@ -1,6 +1,6 @@
 [package]
 name = "feathersheet-mcp"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 description = "Servidor MCP do FeatherSheet: deixa uma IA ler, escrever e conferir planilhas, tudo local (stdio)."
 

@@ -299,7 +299,8 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
             col.into()
         }
         _ => iced::widget::column![
-            text("FeatherSheet — Rust + Iced").size(17),
+            text(format!("FeatherSheet {}", super::atualizacao::versao_atual())).size(17),
+            secao_atualizacao(app),
             text("Aplicativo desktop nativo. As células, fórmulas e arquivos são processados localmente.")
                 .size(12),
             text("As preferências são guardadas no diretório de configuração do usuário, fora do arquivo da planilha.")
@@ -312,6 +313,49 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
     };
     // Fecha pelo X da barra de título, como Docs e Slide: sem segundo "x" no corpo.
     feather_ui::configuracoes::tela(menu, secoes[app.config_secao], corpo, None)
+}
+
+/// "Procurar atualizações": só consulta o GitHub quando a pessoa clica, e instalar
+/// abre o terminal do sistema com cada passo à vista (ver `atualizacao.rs`).
+fn secao_atualizacao(app: &App) -> Element<'_, Msg> {
+    use super::atualizacao::{instalacao_atual, Estado, Evento};
+    let ev = Msg::Atualizacao;
+    let inst = instalacao_atual();
+    let procurar = opcao("Procurar atualizações", "refresh", false, ev(Evento::Procurar));
+    let estado: Element<'_, Msg> = match &app.atualizacao {
+        Estado::Parado => text("Consulta só github.com/FeatherOffice/feathersheet quando você clicar. Nada sobre você ou suas planilhas é enviado.")
+            .size(11.5).color(COR_TEXTO_MUTED()).into(),
+        Estado::Procurando => text("Procurando no GitHub…").size(12).color(COR_TEXTO_MUTED()).into(),
+        Estado::EmDia => row![feather_ui::icones::icone("check", 14.0),
+            text("Você já está na versão mais nova.").size(12)].spacing(6).align_y(Alignment::Center).into(),
+        Estado::Disponivel(l) => {
+            let notas: String = l.notas.lines().filter(|x| !x.trim().is_empty()).take(6).collect::<Vec<_>>().join("\n");
+            let mut acoes = row![opcao("Ver no GitHub", "info-circle", false, ev(Evento::AbrirPagina))].spacing(8);
+            if inst.arquivo().is_some() {
+                acoes = acoes.push(opcao(&format!("Atualizar para a {}", l.versao), "terminal", true, ev(Evento::Instalar)));
+            }
+            iced::widget::column![
+                text(format!("Versão {} disponível.", l.versao)).size(13),
+                text(notas).size(11.5).color(COR_TEXTO_MUTED()),
+                acoes,
+                text(if inst.pede_senha() {
+                    "Atualizar abre o terminal com os passos à vista: baixa do GitHub, confere o arquivo e instala por cima (pede sua senha lá)."
+                } else if inst.arquivo().is_some() {
+                    "Atualizar abre o terminal com os passos à vista: baixa do GitHub, confere o arquivo e instala por cima."
+                } else {
+                    "Esta cópia não veio de um instalador: baixe a versão nova pela página do GitHub."
+                }).size(11).color(COR_TEXTO_MUTED()),
+            ].spacing(8).into()
+        }
+        Estado::Instalando(msg) => row![feather_ui::icones::icone("terminal", 14.0), text(msg.clone()).size(12)]
+            .spacing(6).align_y(Alignment::Center).into(),
+        Estado::Erro(msg) => row![feather_ui::icones::icone("alert-triangle", 14.0), text(msg.clone()).size(12)]
+            .spacing(6).align_y(Alignment::Center).into(),
+    };
+    iced::widget::column![
+        linha("Atualizações", inst.descricao(), procurar),
+        estado,
+    ].spacing(8).into()
 }
 
 /// Apenas comandos com implementação nativa real são editáveis.

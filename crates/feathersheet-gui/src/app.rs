@@ -84,6 +84,7 @@ mod faixa_nativa;
 mod faixa_nativa_grupos;
 mod faixa_responsiva;
 mod status_selecao;
+mod atualizacao;
 mod menu_colagem;
 mod assistente_divisao;
 mod progresso_abertura;
@@ -370,6 +371,10 @@ pub enum Msg {
     /// Duplo clique: célula e retângulo em pixels relativos ao Canvas.
     EditarNaCelula(u32, u32, f32, f32, f32, f32),
     EnviarEditor, AceitarSugestao(usize), NavegarSugestao(i32), PosicionarCursorFx(usize), SelecionarTextoFx(usize,usize),
+    /// Movimento do mouse em alguma janela (id da janela, posição nela).
+    CursorJanela(window::Id, iced::Point),
+    /// Procurar e instalar atualização (Configurações → Sobre).
+    Atualizacao(atualizacao::Evento),
     Rolar(i32,i32), RolarNaGrade(u32,u32,i32,bool), Roda(i32), ControleZoom(bool),
     TeclaLiberada(keyboard::Key), Copiar, Recortar, ColarSolicitar, ColarTextoLido(String), ColarImagemLida(Option<Vec<u8>>), Colar(String),
     ColarValoresSolicitar, ColarValores(String), ColarFormatoSolicitar, ColarFormato(String),
@@ -715,6 +720,10 @@ pub struct App {
     /// Área de impressão, quebras e diálogo: só em memória, por id de aba.
     impressao: impressao_ui::Dados,
     resumo_selecao: RefCell<status_selecao::Estado>,
+    /// Desenho das células em cache (ver `Grade::draw` e `update`).
+    cache_grade: crate::grade::CacheGrade,
+    /// Procurar atualizações (Configurações → Sobre), só a pedido.
+    atualizacao: atualizacao::Estado,
     config: Configuracao,
     janelas: Janelas<Auxiliar>,
     ultimo_clique_barra: Option<Instant>,
@@ -965,7 +974,7 @@ impl Default for App {
             condicional_italico: false,
             condicional_sublinhado: false,
             condicional_riscado: false,
-            workbook: Workbook::new(), eixos_grade: RefCell::new(Default::default()), duplicados:None, impressao: Default::default(), resumo_selecao: RefCell::new(status_selecao::Estado::default()),
+            workbook: Workbook::new(), eixos_grade: RefCell::new(Default::default()), duplicados:None, impressao: Default::default(), resumo_selecao: RefCell::new(status_selecao::Estado::default()), atualizacao: Default::default(), cache_grade: Default::default(),
             config: Configuracao::default(),
             janelas: Janelas::default(), ultimo_clique_barra: None,
             caminho: None, alterado: false, tela_inteira: false, folha: 0,
@@ -1080,6 +1089,7 @@ impl App {
             ..Default::default()
         }));
         app.janelas.principal = Some(id);
+        definir_janela_principal(id);
         if let Some(aviso) = mcp_vivo::iniciar() {
             app.monitor.registrar(Nivel::Info, "MCP", &aviso);
         }
@@ -1165,6 +1175,12 @@ impl App {
         self.janelas.alternar(tipo, tam, self.config.barra_propria).map(|_| Msg::AuxAberta)
     }
     pub fn update(&mut self, msg: Msg) -> Task<Msg> {
+        // Toda mensagem pode mudar o que a grade mostra, menos as desta lista: o pulso
+        // da soma do rodapé roda centenas de vezes numa seleção grande e só mexe no
+        // rodapé. Na dúvida, fica fora da lista (redesenha como antes).
+        if !matches!(msg, Msg::ResumoPulso) {
+            self.cache_grade.desenho.clear();
+        }
         // Só a chamada de fora compara o antes e o depois para os eventos do VBA.
         let antes = if self.profundidade_update == 0 { self.antes_dos_eventos() } else { None };
         self.profundidade_update += 1;
@@ -1319,8 +1335,11 @@ impl App {
                 iced::Event::Keyboard(keyboard::Event::ModifiersChanged(m))
                     => Some(Msg::MacroVisual(macros::EventoVisual::Codigo(macros::EventoCodigo::Modificadores(m)))),
                 // Durante um gesto de forma só o Canvas redesenha (objetos/camada.rs).
-                iced::Event::Mouse(mouse::Event::CursorMoved { position }) if !objetos::arrastando() =>
-                    Some(Msg::Grafico(graficos::Evento::Cursor(position))),
+                // Só o cursor da janela principal interessa à grade e aos objetos (ver
+                // `Msg::CursorJanela`): o de Configurações, Ajuda… não vira posição na planilha.
+                iced::Event::Mouse(mouse::Event::CursorMoved { position })
+                    if !objetos::arrastando() && eh_janela_principal(id) =>
+                    Some(Msg::CursorJanela(id, position)),
                 iced::Event::Window(window::Event::Resized(size)) => Some(Msg::JanelaRedimensionada(id, size)),
                 iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => Some(Msg::Grafico(graficos::Evento::Soltar)),
                 iced::Event::Mouse(mouse::Event::WheelScrolled { delta }) if status==iced::event::Status::Ignored => {
@@ -1401,6 +1420,22 @@ impl App {
         self.view_editor(id)
     }
 
+}
+
+/// Janela principal, lida pela assinatura de eventos (função sem captura): o
+/// movimento do mouse nas janelas auxiliares é descartado antes de virar mensagem,
+/// porque cada mensagem faz o Iced reconstruir a tela de todas as janelas.
+static JANELA_PRINCIPAL: std::sync::Mutex<Option<window::Id>> = std::sync::Mutex::new(None);
+
+fn definir_janela_principal(id: window::Id) {
+    if let Ok(mut j) = JANELA_PRINCIPAL.lock() {
+        *j = Some(id);
+    }
+}
+
+/// Sem janela registrada (testes), vale qualquer uma.
+fn eh_janela_principal(id: window::Id) -> bool {
+    JANELA_PRINCIPAL.lock().map_or(true, |j| j.is_none_or(|p| p == id))
 }
 
 /// O Iced entrega a tecla "sem modificadores", e o NumLock conta como um: o 8

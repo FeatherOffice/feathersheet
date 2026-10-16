@@ -12,6 +12,7 @@ mod bordas_comuns;
 mod estilos_comuns;
 mod edicao_formula;
 mod campo_fx;
+mod escopo_app;
 
 use app::App;
 
@@ -65,6 +66,7 @@ fn preparar_backend_da_caneta() {
 
 fn main() -> iced::Result {
     preparar_backend_da_caneta();
+    escopo_app::entrar_no_escopo_do_app();
     feathersheet_core::paralelismo::ajustar_alocador();
     iced::daemon(App::titulo, App::update, App::view)
         .subscription(App::subscription)

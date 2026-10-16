@@ -1752,14 +1752,14 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "feathersheet-gui"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -1793,7 +1793,7 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-io"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "arrow",
  "feather-charts",
@@ -1811,7 +1811,7 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-macros"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "feather-macros",
  "feathersheet-core",
@@ -1820,7 +1820,7 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-mcp"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "feather-macros",
  "feathersheet-core",
@@ -1831,7 +1831,7 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-vba"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "cfb",
  "quick-xml 0.39.4",

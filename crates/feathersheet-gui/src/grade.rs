@@ -16,7 +16,7 @@ use feathersheet_core::formula::ref_drag::drag_rect;
 mod auxiliares;
 pub(crate) mod lista_suspensa;
 pub(crate) mod modelo;
-pub use modelo::Grade;
+pub use modelo::{CacheGrade, Grade};
 use modelo::{ajustes_texto,largura,altura};
 mod congelado;
 mod eixos;
@@ -117,7 +117,19 @@ impl canvas::Program<Msg> for Grade<'_> {
         // Guarda o tamanho real do Canvas: manter a célula à vista e o Page
         // Down contam com ele (zoom e alturas reais), não com 28 × 12 fixos.
         self.eixos.borrow_mut().tamanho_canvas = Some(tela.size());
-        let mut f = Frame::new(renderer, bounds.size());
+        // Desenho das células em cache: refeito quando o app processa qualquer mensagem
+        // que não esteja na lista das que não mexem na grade (`App::update` limpa o
+        // cache), quando o tamanho muda ou quando muda um arraste interno do Canvas.
+        // Assim os pulsos da soma do rodapé não redesenham a grade inteira.
+        {
+            let chave = format!("{:?}{:?}{:?}", state.referencia, state.alca, state.dimensao);
+            let mut mouse = self.cache.mouse.borrow_mut();
+            if *mouse != chave {
+                self.cache.desenho.clear();
+                *mouse = chave;
+            }
+        }
+        let celulas = self.cache.desenho.draw(renderer, bounds.size(), |mut f| {
         f.scale(self.zoom);
         let bounds = Rectangle::new(Point::ORIGIN, Size::new(bounds.width / self.zoom,bounds.height / self.zoom));
         // O Canvas lê apenas regiões JSON da aba UMA vez por quadro. Tabelas
@@ -893,7 +905,8 @@ impl canvas::Program<Msg> for Grade<'_> {
         self.desenhar_impressao(&mut f, bounds, &colunas_visiveis, &linhas_visiveis);
         self.desenhar_alca(&mut f, bounds.size(), state.alca.as_ref(), &colunas_visiveis, &linhas_visiveis, ativo, bg);
         if let Some(a) = state.dimensao { desenhar_guia_dimensao(&mut f, bounds, a, ativo, self.zoom); }
-        vec![f.into_geometry(), self.desenhar_barras(renderer, tela, state.barra)]
+        });
+        vec![celulas, self.desenhar_barras(renderer, tela, state.barra)]
     }
 
     fn update(
