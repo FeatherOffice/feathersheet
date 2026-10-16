@@ -383,14 +383,14 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "feathersheet-macros"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "feather-macros",
  "feathersheet-core",

@@ -754,6 +754,10 @@ impl App {
                 ..Default::default()
             });
         let recentes = self.inicio_recentes(largura, tela_cheia);
+        let recentes: Element<'_, Msg> = match self.cartao_recuperacao() {
+            Some(cartao) => iced::widget::column![cartao, recentes].spacing(16).into(),
+            None => recentes,
+        };
 
         if tela_cheia {
             // Só os recentes rolam; cabeçalho e modelos ficam fixos na janela.

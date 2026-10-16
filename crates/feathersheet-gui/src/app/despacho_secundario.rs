@@ -942,6 +942,12 @@ impl App {
                 self.alternar(Auxiliar::Ajuda)
             }
             Msg::Monitor => { self.menu_aberto = false; self.alternar(Auxiliar::Monitor) }
+            Msg::PrimeirosPassosAbrir => { self.menu_aberto = false; self.alternar(Auxiliar::PrimeirosPassos) }
+            Msg::PrimeirosPassos(evento) => self.evento_primeiros_passos(evento),
+            Msg::NovidadesAbrir => { self.menu_aberto = false; self.novidades_versao = 0; self.alternar(Auxiliar::Novidades) }
+            Msg::Novidades(evento) => self.evento_novidades(evento),
+            Msg::FaixaSalvamentoFechar => { self.faixa_salvamento = None; Task::none() }
+            Msg::AvisoXlsxFechar => { self.aviso_xlsx = None; Task::none() }
             Msg::ProgressoPulso => { progresso_abertura::animar(); Task::none() },
             Msg::ResumoPulso => {
                 self.avancar_resumo();
@@ -1125,6 +1131,32 @@ impl App {
                         if std::env::var("FEATHERSHEET_CAPTURAR_JANELA").as_deref() == Ok("busca_macros") {
                             return self.preparar_captura_busca_macros();
                         }
+                        // FEATHERSHEET_CAPTURAR_JANELA=primeiros:<passo 1–5> ou novidades[:<versão 1–3>].
+                        if let Ok(janela) = std::env::var("FEATHERSHEET_CAPTURAR_JANELA") {
+                            let (nome, numero) = janela.split_once(':').map_or((janela.as_str(), 1), |(n, i)| (n, i.parse().unwrap_or(1)));
+                            match nome {
+                                // Faixa "sem salvamento automático" (1 = .parquet, 2 = pasta grande).
+                                "faixa_salvamento" => {
+                                    self.origem = Some(PathBuf::from("dados.parquet"));
+                                    self.aviso_salvamento_de = Some(self.nome_documento());
+                                    self.faixa_salvamento = Some(if numero == 2 {
+                                        ("Esta pasta tem 633 milhões de células: grande demais para cópia automática. Nem a recuperação nem o salvamento automático a gravam; salve com Ctrl+S.".into(), true)
+                                    } else {
+                                        ("O salvamento automático não vale para arquivos .parquet. Até salvar como .fshz, só a recuperação automática protege esta planilha.".into(), false)
+                                    });
+                                    return Task::none();
+                                }
+                                "primeiros" => {
+                                    self.primeiros_passos_passo = numero.max(1) - 1;
+                                    return self.alternar(Auxiliar::PrimeirosPassos);
+                                }
+                                "novidades" => {
+                                    self.novidades_versao = numero.max(1) - 1;
+                                    return self.alternar(Auxiliar::Novidades);
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                     1 => {
                         // Clique só depois do primeiro desenho da grade: o
@@ -1162,6 +1194,8 @@ impl App {
                             match std::env::var("FEATHERSHEET_CAPTURAR_JANELA").as_deref() {
                                 Ok("inspecao") => self.janelas.id(Auxiliar::Inspecao),
                                 Ok("historico_macros" | "busca_macros") => self.janelas.id(Auxiliar::Macros),
+                                Ok(j) if j.starts_with("primeiros") => self.janelas.id(Auxiliar::PrimeirosPassos),
+                                Ok(j) if j.starts_with("novidades") => self.janelas.id(Auxiliar::Novidades),
                                 _ => None,
                             }
                         };
@@ -1200,9 +1234,13 @@ impl App {
                     self.aviso_abas = None;
                 }
                 self.monitor.amostrar();
+                let recuperar = self.pulso_recuperacao();
+                self.avisar_fora_do_salvamento_automatico();
                 // Apenas documentos FSHZ existentes, após inatividade e sem editor ativo.
                 // Nunca escolhe um caminho ou grava uma importação XLSX sobre o original.
-                if self.config.auto_salvar && self.alterado && !self.carregando
+                // Nunca junto com a cópia de recuperação: seriam duas fotografias
+                // da pasta na memória e duas gravações no disco ao mesmo tempo.
+                if self.config.auto_salvar && self.alterado && !self.carregando && !self.recuperacao.gravando
                     // Não gravar um FSHZ parcial enquanto a conversão está
                     // dentro de uma transação ainda não publicada.
                     && !self.assistente_divisao.as_ref()
@@ -1223,14 +1261,15 @@ impl App {
                             u64::from(self.config.intervalo_auto_salvar) * 1_000,
                             self.auto_salvar_ultimo_custo_ms, celulas, false,
                         );
-                        t.elapsed() >= Duration::from_millis(intervalo)
+                        !feathersheet_io::backup_policy::grande_demais_para_copia_automatica(celulas)
+                            && t.elapsed() >= Duration::from_millis(intervalo)
                     })
                 {
                     // Mesmo em falha de disco, aguarda novo intervalo antes de tentar outra vez.
                     self.auto_salvar_desde = Some(Instant::now());
-                    return self.update(Msg::Salvar);
+                    return Task::batch([recuperar, self.update(Msg::Salvar)]);
                 }
-                Task::none()
+                recuperar
             }
             Msg::MonitorEvento(evento) => self.monitor.atualizar(evento),
             Msg::AjudaSecao(secao) => {
@@ -1374,6 +1413,7 @@ impl App {
                     self.confirmar();
                     self.config.idioma = codigo.to_owned();
                     feathersheet_core::set_locale_config(self.regionalizacao());
+                    ajuda::definir_idioma(codigo);
                     self.config.gravar();
                     self.trocar_selecao(self.linha, self.coluna);
                     self.status = format!("Regionalização: {codigo}; separador de fórmulas e texto: {}", self.regionalizacao().formula_arg_separator);

@@ -44,6 +44,9 @@ pub struct Configuracao {
     /// Gravação periódica apenas de documentos .fshz já salvos.
     pub auto_salvar: bool,
     pub intervalo_auto_salvar: u16,
+    /// Cópia de recuperação de toda planilha alterada (inclusive nunca
+    /// salva), para voltar depois de queda de energia ou travamento.
+    pub recuperacao_automatica: bool,
     /// Limite da vigia RSS na abertura em GB: 0 desliga, 2 a 128 ativa.
     pub limite_memoria_gb: u16,
     /// Threads para abrir arquivo e calcular em paralelo: 1 até o total − 1
@@ -67,6 +70,16 @@ pub struct Configuracao {
     /// ou o Esc voltam à seleção), como o "Desenhar com caneta
     /// automaticamente" do Excel.
     pub caneta_auto_desenhar: bool,
+    /// "Seus dados" (Primeiros passos): autor dos comentários e das
+    /// propriedades do arquivo. Vazio usa o nome do sistema.
+    pub autor_nome: String,
+    pub autor_iniciais: String,
+    pub autor_organizacao: String,
+    /// A janela Primeiros passos já foi mostrada (abre sozinha só uma vez).
+    pub primeiros_passos_vistos: bool,
+    /// Última versão cujas novidades a pessoa viu; diferente da atual abre
+    /// "O que há de novo" sozinha.
+    pub versao_vista: String,
 }
 fn csv_detectar_padrao() -> bool { true }
 
@@ -91,7 +104,7 @@ impl Default for Configuracao {
             faixa_recolhida: false, faixa_aba: "inicio".into(), linhas_visiveis: 28, colunas_visiveis: 12, zoom: 100, zoom_minimo: 50, zoom_maximo: 200,
             fonte_grade: "sans".into(), tamanho_fonte_grade: 13,
             realce_eixos: true, linhas_grade: true, barra_formulas: true,
-            mostrar_formulas: false, calculo_manual: false, funcoes_recentes: Vec::new(), auto_salvar: false, intervalo_auto_salvar: 15,
+            mostrar_formulas: false, calculo_manual: false, funcoes_recentes: Vec::new(), auto_salvar: false, intervalo_auto_salvar: 15, recuperacao_automatica: true,
             limite_memoria_gb: 6,
             nucleos: 0,
             atalhos: std::collections::BTreeMap::new(),
@@ -101,6 +114,11 @@ impl Default for Configuracao {
             caneta_velocidade: true,
             caneta_mostrar_pressao: false,
             caneta_auto_desenhar: true,
+            autor_nome: String::new(),
+            autor_iniciais: String::new(),
+            autor_organizacao: String::new(),
+            primeiros_passos_vistos: false,
+            versao_vista: String::new(),
         }
     }
 }
@@ -179,6 +197,9 @@ impl Configuracao {
             c.nucleos = 0;
         }
         c.atalhos.retain(|id, valor| !id.is_empty() && valor.len() <= 40);
+        c.autor_nome = c.autor_nome.chars().take(80).collect();
+        c.autor_iniciais = c.autor_iniciais.chars().take(4).collect();
+        c.autor_organizacao = c.autor_organizacao.chars().take(80).collect();
         if !matches!(c.janela_linux.as_str(), "auto" | "x11" | "wayland") {
             c.janela_linux = "auto".into();
         }

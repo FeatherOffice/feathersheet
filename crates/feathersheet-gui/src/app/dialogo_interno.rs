@@ -33,6 +33,10 @@ impl App {
     pub(super) fn preparar_captura_dialogo(&mut self, nome: &str) {
         let _ = match nome {
             "nomes" => self.update(Msg::NomesAbrir(false)),
+            "aviso_xlsx" => {
+                self.aviso_xlsx = Some(vec!["CONT.ÚNICO".into(), "IMPORTARJSON".into()]);
+                Task::none()
+            }
             "nomes_novo" => self.update(Msg::NomesAbrir(true)),
             // Três nomes de exemplo, o segundo escolhido.
             "nomes_exemplo" => {

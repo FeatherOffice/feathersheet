@@ -220,10 +220,22 @@ mod testes {
         let mut w = base();
         alternar_totais(&mut w, 0, "tab_Tabela1", true).unwrap();
         assert_eq!(num(&w, 4, 1), Some(60.0));
-        w.aba_mut(0).unwrap().sheet.row_heights.insert(2, 0); // filtro esconde "y" (20)
+        w.editar(0, |s| { s.row_heights.insert(2, 0); }); // filtro esconde "y" (20)
         assert_eq!(num(&w, 4, 1), Some(40.0));
         definir_total(&mut w, 0, "tab_Tabela1", 1, "contagem").unwrap();
         assert_eq!(num(&w, 4, 1), Some(2.0));
+    }
+
+    #[test]
+    fn total_acompanha_o_filtro_de_verdade_da_tabela() {
+        let mut w = base();
+        alternar_totais(&mut w, 0, "tab_Tabela1", true).unwrap();
+        assert_eq!(num(&w, 4, 1), Some(60.0));
+        // Filtro da coluna b > 15: sobra y (20) e z (30).
+        super::super::migracao::filtrar(&mut w, 0, "tab_Tabela1", 1, Some(serde_json::json!({"op":"gt","val":15}))).unwrap();
+        assert_eq!(num(&w, 4, 1), Some(50.0));
+        super::super::migracao::filtrar(&mut w, 0, "tab_Tabela1", 1, None).unwrap();
+        assert_eq!(num(&w, 4, 1), Some(60.0));
     }
 
     #[test]

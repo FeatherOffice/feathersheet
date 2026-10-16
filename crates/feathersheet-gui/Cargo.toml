@@ -1,6 +1,6 @@
 [package]
 name = "feathersheet-gui"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 description = "Interface nativa FeatherSheet em Rust/Iced usando o template FeatherOffice"
 
@@ -10,10 +10,10 @@ path = "src/main.rs"
 
 [dependencies]
 feather-charts = { path = "../../../feather-charts" }
-feather-ui = { git = "https://github.com/FeatherOffice/feather-ui", tag = "v0.2.5" }
+feather-ui = { git = "https://github.com/FeatherOffice/feather-ui", tag = "v0.2.6" }
 feather-draw = { git = "https://github.com/FeatherOffice/feather-draw", tag = "v0.1.1" }
 # Formas, ícones e SmartArt comuns da suíte (camada de objetos soltos, app/objetos).
-feather-shapes = { git = "https://github.com/FeatherOffice/feather-shapes", tag = "v0.1.0" }
+feather-shapes = { git = "https://github.com/FeatherOffice/feather-shapes", tag = "v0.1.1" }
 # Efeitos RGBA compartilhados com FeatherDocs; codecs ficam na GUI.
 feather-image = { path = "../../../feather-io/crates/feather-image" }
 base64 = "0.22"
@@ -65,14 +65,3 @@ opt-level = 1
 
 [profile.dev.package."*"]
 opt-level = 3
-
-# Provisório: feather-ui 0.2.6 (pressão da caneta) em desenvolvimento na
-# pasta irmã, até a tag v0.2.6 ser publicada. Remover este bloco depois.
-[patch."https://github.com/FeatherOffice/feather-ui"]
-feather-ui = { path = "../../../feather-ui" }
-
-
-# Provisório: feather-shapes 0.1.1 (estilos prontos do WordArt, wordart::ESTILOS) em
-# desenvolvimento na pasta irmã, até a tag v0.1.1 ser publicada. Remover este bloco depois.
-[patch."https://github.com/FeatherOffice/feather-shapes"]
-feather-shapes = { path = "../../../feather-shapes" }

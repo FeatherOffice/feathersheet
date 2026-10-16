@@ -65,6 +65,22 @@ pub struct Nomeado {
     pub area: Rect,
 }
 
+/// Propriedades do arquivo (no Excel, Arquivo → Informações): quem criou,
+/// quem alterou por último e a organização. A interface preenche com os
+/// "Seus dados" das Configurações; nada sai do computador.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Propriedades {
+    pub autor: String,
+    pub modificado_por: String,
+    pub organizacao: String,
+}
+
+impl Propriedades {
+    pub fn vazia(&self) -> bool {
+        self.autor.is_empty() && self.modificado_por.is_empty() && self.organizacao.is_empty()
+    }
+}
+
 /// A pasta inteira, viva na memória do Rust.
 pub struct Workbook {
     abas: Vec<AbaViva>,
@@ -89,6 +105,8 @@ pub struct Workbook {
     /// estilo), como JSON opaco: quem lê e escreve é a interface, como os
     /// outros metadados (o motor não lê JSON).
     pub estilos_celula: Option<String>,
+    /// Autor, última alteração e organização (gravados no .fshz e no .xlsx).
+    pub propriedades: Propriedades,
 }
 
 /// Uma duplicação de aba, desfazível. `aba` é `Some` enquanto a cópia está
@@ -136,6 +154,7 @@ impl Workbook {
             externas_adiadas: Vec::new(),
             hist_abas: HistoricoAbas::default(),
             estilos_celula: None,
+            propriedades: Propriedades::default(),
         }
     }
 

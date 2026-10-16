@@ -90,11 +90,24 @@ fn construir(idioma:&str) -> Catalogo {
         ],
     }
 }
+/// Idioma da Ajuda: segue Configurações → Idioma (ver [`definir_idioma`]).
+static EM_INGLES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Chamado na abertura e ao trocar o idioma nas Configurações.
+pub fn definir_idioma(idioma: &str) {
+    // Global do processo: nos testes (paralelos) a Ajuda fica sempre em pt-BR.
+    if cfg!(test) { return; }
+    EM_INGLES.store(idioma.starts_with("en"), std::sync::atomic::Ordering::Relaxed);
+}
+
 pub fn modelo() -> &'static Catalogo {
-    static CATALOGO:OnceLock<Catalogo>=OnceLock::new();
-    CATALOGO.get_or_init(|| construir(
-        &std::env::var("FEATHEROFFICE_LANG").unwrap_or_else(|_| "pt-BR".into())
-    ))
+    static PT:OnceLock<Catalogo>=OnceLock::new();
+    static EN:OnceLock<Catalogo>=OnceLock::new();
+    if EM_INGLES.load(std::sync::atomic::Ordering::Relaxed) {
+        EN.get_or_init(|| construir("en-US"))
+    } else {
+        PT.get_or_init(|| construir("pt-BR"))
+    }
 }
 /// F1 dentro de fórmula: busca a assinatura da função ativa; não altera célula.
 pub fn abrir_funcao(estado:&mut Estado, nome: &str) {

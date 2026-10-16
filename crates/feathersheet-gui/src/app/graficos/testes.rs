@@ -540,7 +540,9 @@ use super::editor::svg_do_grafico_salvo;
         let camada = a.graficos_da_camada();
         assert_eq!(camada.len(), 1);
         assert_eq!(camada[0].0, 4, "o z do desenho do Excel");
-        assert!(camada[0].2.contains("fundo-excel") && camada[0].2.contains("R$ 2,00"), "SVG vestido");
+        let svg = &camada[0].2;
+        assert!(svg.contains("linearGradient") && svg.contains("#14223b") && svg.contains("#d9d9d9"), "degradê e contorno do Excel");
+        assert!(svg.contains("#f2f2f2") && svg.contains("R$ 2,00"), "cor do texto e formato do Excel");
 
         // Clique: seleciona; segundo clique logo depois: abre o editor.
         let _ = a.evento_grafico(Evento::Arrastar("chart_x".into()));
@@ -741,3 +743,126 @@ fn boletim_configurar_series_copiar_e_pizza_por_situacao() {
     let o = lista.iter().find(|v| v["id"].as_str() == Some(original.as_str())).unwrap();
     assert_eq!(o["style"]["hiddenSeries"], serde_json::json!([0, 4, 5]));
 }
+
+    /// Gráfico parado na planilha: o mouse sobre a coluna mostra a dica com
+    /// categoria, série e valor; clicar no item da legenda desliga a série
+    /// (fica hachurado, um passo de Ctrl+Z) com transição, e clicar de novo liga.
+    #[test]
+    fn dica_do_mouse_e_clique_na_legenda_liga_e_desliga_a_serie() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar("Mês\tVendas\tMeta\nJan\t10\t8\nFev\t30\t20".into()));
+        let g = serde_json::json!([{
+            "id": "g1", "type": "column", "title": "Vendas",
+            "range": {"r0": 0, "c0": 0, "r1": 2, "c1": 2},
+            "seriesInColumns": true, "hasHeaders": true, "hasCategoryLabels": true,
+            "position": {"x": 300.0, "y": 100.0, "width": 480.0, "height": 300.0}
+        }]);
+        a.workbook.aba_mut(0).unwrap().sheet.g = Some(g.to_string());
+        a.config.zoom = 100;
+        let v = feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap().remove(0);
+        let d = super::editor::desenhar_grafico_salvo(&a.workbook.aba(0).unwrap().sheet, &v).unwrap();
+        let mapa = d.mapa.unwrap();
+
+        // Dica sobre a coluna de Fev da série Vendas.
+        let alvo = mapa.pontos.iter().find(|p| p.serie == 0 && p.ponto == 1).unwrap();
+        let feather_charts::formatado::FormaAlvo::Retangulo { x, y, largura, altura } = alvo.forma else { panic!("coluna") };
+        let _ = a.evento_grafico(Evento::Pairar("g1".into(), iced::Point::new(x + largura / 2.0, y + altura / 2.0)));
+        let dica = a.graficos.interacao.pairar.as_ref().and_then(|p| p.dica.clone()).expect("dica");
+        assert_eq!((dica.titulo.as_str(), dica.serie.as_str(), dica.valor.as_str()), ("Fev", "Vendas", "30"));
+        // Dica personalizada: sem a série, com prefixo e porcentagem da categoria.
+        let mut e = feather_charts::estilo::EstiloGrafico::default();
+        e.dica.serie = Some(false);
+        e.dica.prefixo = "R$ ".into();
+        e.dica.percentual = true;
+        let mut ap: Aparencia = Default::default();
+        ap.estilo = Some(e);
+        a.workbook.aba_mut(0).unwrap().sheet.g = Some(serde_json::json!([{
+            "id": "g1", "type": "column", "title": "Vendas",
+            "range": {"r0": 0, "c0": 0, "r1": 2, "c1": 2},
+            "seriesInColumns": true, "hasHeaders": true, "hasCategoryLabels": true,
+            "position": {"x": 300.0, "y": 100.0, "width": 480.0, "height": 300.0},
+            "_featherNative": ap
+        }]).to_string());
+        let v2 = feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap().remove(0);
+        let mapa2 = super::editor::desenhar_grafico_salvo(&a.workbook.aba(0).unwrap().sheet, &v2).unwrap().mapa.unwrap();
+        let alvo2 = mapa2.pontos.iter().find(|p| p.serie == 0 && p.ponto == 1).unwrap();
+        let feather_charts::formatado::FormaAlvo::Retangulo { x, y, largura, altura } = alvo2.forma else { panic!("coluna") };
+        let _ = a.evento_grafico(Evento::Pairar("g1".into(), iced::Point::new(x + largura / 2.0, y + altura / 2.0)));
+        let dica = a.graficos.interacao.pairar.as_ref().and_then(|p| p.dica.clone()).expect("dica");
+        assert_eq!((dica.serie.as_str(), dica.valor.as_str()), ("", "R$ 30 (60,0%)"));
+        a.workbook.aba_mut(0).unwrap().sheet.g = Some(g.to_string());
+        assert!(a.dica_do_grafico("g1", 480.0, 300.0).is_some());
+        let _ = a.evento_grafico(Evento::SairDoGrafico("g1".into()));
+        assert!(a.graficos.interacao.pairar.is_none());
+
+        // Clique no item "Meta" da legenda: desliga, sem arrastar o gráfico.
+        let item = mapa.legenda.iter().find(|i| i.indice == 1).unwrap();
+        let (lx, ly) = (item.x + item.largura / 2.0, item.y + item.altura / 2.0);
+        let _ = a.evento_grafico(Evento::Pairar("g1".into(), iced::Point::new(lx, ly)));
+        let _ = a.evento_grafico(Evento::Arrastar("g1".into()));
+        assert!(a.graficos.arraste.is_none(), "clique na legenda não vira arraste");
+        assert!(a.grafico_em_transicao());
+        let salvo = |a: &App| feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap().remove(0);
+        assert_eq!(salvo(&a)[super::interacao::CAMPO_DESLIGADOS], serde_json::json!([1]));
+        let svg = &a.graficos_da_camada()[0].2;
+        assert!(svg.contains("legenda-amostra desligado"), "item hachurado");
+        assert!(svg.contains("barra s1") && svg.contains("<g opacity=\""), "antes por baixo, depois esmaecendo por cima");
+
+        // Fim da transição: Meta some do desenho, a legenda continua.
+        a.graficos.interacao.transicao.as_mut().unwrap().inicio -= std::time::Duration::from_secs(1);
+        let _ = a.evento_grafico(Evento::QuadroTransicao);
+        assert!(!a.grafico_em_transicao());
+        let svg = &a.graficos_da_camada()[0].2;
+        assert!(!svg.contains("barra s1") && svg.contains("legenda-amostra desligado"));
+
+        // Ctrl+Z religa; clicar de novo também.
+        let _ = a.update(Msg::Desfazer);
+        assert!(salvo(&a)[super::interacao::CAMPO_DESLIGADOS].is_null());
+        let _ = a.update(Msg::Refazer);
+        let _ = a.evento_grafico(Evento::Pairar("g1".into(), iced::Point::new(lx, ly)));
+        let _ = a.evento_grafico(Evento::Arrastar("g1".into()));
+        assert_eq!(salvo(&a)[super::interacao::CAMPO_DESLIGADOS], serde_json::json!([]));
+    }
+
+    /// A vitrine dos prints monta o gráfico com a dica aberta.
+    #[test]
+    fn vitrine_dos_prints_abre_a_dica() {
+        let mut a = App::default();
+        a.config.zoom = 100;
+        let _ = a.preparar_captura_grafico("vitrine");
+        let p = a.graficos.interacao.pairar.as_ref().expect("mouse sobre o gráfico");
+        let d = p.dica.as_ref().expect("dica");
+        assert_eq!(d.titulo, "Junho");
+        assert!(d.valor.starts_with("R$ "), "{}", d.valor);
+    }
+
+    /// Arrastar e redimensionar o gráfico: cada gesto é um passo de Ctrl+Z.
+    #[test]
+    fn mover_e_redimensionar_entram_no_ctrl_z() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar("Mês\tVendas\nJan\t10\nFev\t30".into()));
+        a.workbook.aba_mut(0).unwrap().sheet.g = Some(serde_json::json!([{
+            "id": "g1", "type": "column", "title": "V",
+            "range": {"r0": 0, "c0": 0, "r1": 2, "c1": 1},
+            "seriesInColumns": true, "hasHeaders": true, "hasCategoryLabels": true,
+            "position": {"x": 300.0, "y": 100.0, "width": 400.0, "height": 250.0}
+        }]).to_string());
+        a.config.zoom = 100;
+        let pos = |a: &App| feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap()[0]["position"].clone();
+        let _ = a.evento_grafico(Evento::Cursor(iced::Point::new(10.0, 10.0)));
+        let _ = a.evento_grafico(Evento::Arrastar("g1".into()));
+        let _ = a.evento_grafico(Evento::Cursor(iced::Point::new(60.0, 40.0)));
+        let _ = a.evento_grafico(Evento::Cursor(iced::Point::new(110.0, 70.0)));
+        let _ = a.evento_grafico(Evento::Soltar);
+        assert_eq!(pos(&a)["x"], 400.0);
+        let _ = a.evento_grafico(Evento::Redimensionar("g1".into(), super::posicionamento::Alca::Sudeste));
+        let _ = a.evento_grafico(Evento::Cursor(iced::Point::new(160.0, 120.0)));
+        let _ = a.evento_grafico(Evento::Soltar);
+        assert_eq!(pos(&a)["width"], 450.0);
+        let _ = a.update(Msg::Desfazer);
+        assert_eq!((pos(&a)["x"].clone(), pos(&a)["width"].clone()), (serde_json::json!(400.0), serde_json::json!(400.0)), "desfaz só o redimensionamento");
+        let _ = a.update(Msg::Desfazer);
+        assert_eq!(pos(&a)["x"], 300.0, "o arraste inteiro num passo");
+        let _ = a.update(Msg::Refazer);
+        assert_eq!(pos(&a)["x"], 400.0);
+    }

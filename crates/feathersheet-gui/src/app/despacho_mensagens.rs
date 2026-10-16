@@ -782,6 +782,13 @@ impl App {
             }
             Msg::DestinoCopia(None) => Task::none(),
             Msg::Gravado(path, copia, resultado) => self.gravacao_terminou(path, copia, resultado),
+            Msg::Recuperacao(evento) => self.evento_recuperacao(evento),
+            Msg::RecuperacaoAutomatica(ativo) => {
+                self.config.recuperacao_automatica = ativo;
+                self.config.gravar();
+                if !ativo { self.descartar_recuperacao(); }
+                Task::none()
+            }
             Msg::ExportarXlsx => { self.menu_aberto = false; self.confirmar(); self.dialogo_exportar_xlsx() },
             Msg::DestinoXlsx(Some(mut path)) => {
                 if path.extension().and_then(|s|s.to_str()) != Some("xlsx") { path.set_extension("xlsx"); }

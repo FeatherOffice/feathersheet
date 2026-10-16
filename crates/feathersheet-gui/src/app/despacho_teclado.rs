@@ -178,6 +178,7 @@ impl App {
                         Auxiliar::Imprimir => None,
                         Auxiliar::OpenQuery => None,
                         Auxiliar::Inspecao => None,
+                        Auxiliar::PrimeirosPassos | Auxiliar::Novidades => None,
                         // Outros painéis não respondem a F1/F12, somente a Esc.
                         Auxiliar::Macros => None,
                     };

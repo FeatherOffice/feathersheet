@@ -151,7 +151,7 @@ fn macro_limites_invalidos_nao_aplicam_mudancas_parciais() {
         "sheet.setRowHeight(0,50);",
         "sheet.setRowHeight(1,-3);",
         "sheet.setColumnWidth('XFE',90);",
-        "sheet.hideRow(10000001);",
+        "sheet.hideRow(100000001);",
         "sheet.hideColumn(0);",
     ];
     for codigo in erros {
@@ -170,7 +170,7 @@ fn contagem_linha_coluna_nao_aloca_planilha_gigante() {
         "log(sheet.rowCount('B2:D9'));log(sheet.columnCount('B2:D9'));         log(sheet.rowCount('C:C'));log(sheet.columnCount('1:1'));");
     assert!(resposta.erro.is_none(),"{:?}",resposta.erro);
     assert!(!resposta.alterou);
-    assert_eq!(resposta.saida,vec!["8","3","10000000","16384"]);
+    assert_eq!(resposta.saida,vec!["8","3","100000000","16384"]);
     assert_eq!(wb.aba(0).unwrap().sheet.len(),0);
 }
 

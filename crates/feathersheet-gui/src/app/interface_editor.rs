@@ -311,6 +311,7 @@ impl App {
         } else { Space::with_height(0).into() };
         let corpo = column![
             editor_visivel,
+            self.view_faixa_salvamento(),
             self.com_graficos_salvos(centro),
             container(rodape).style(estilo_rodape),
         ].height(Length::Fill);
@@ -628,6 +629,7 @@ impl App {
         if self.erro_explicando.is_some() {
             return self.sobrepor_explicacao_erro(base);
         }
+        let base = self.sobrepor_aviso_xlsx(base);
         // Validação de dados e o alerta de erro, no diálogo interno comum.
         let base = self.sobrepor_serie(base);
         self.sobrepor_validacao(base)
@@ -1171,6 +1173,8 @@ impl App {
             "deleteSheet" if self.workbook.len() > 1 => Msg::RemoverAba,
             "openSettings" => Msg::Configuracoes,
             "openHelp" | "showShortcuts" => Msg::Ajuda,
+            "openPrimeirosPassos" => Msg::PrimeirosPassosAbrir,
+            "openNovidades" => Msg::NovidadesAbrir,
             "fullscreen" => Msg::TelaInteira,
             "renameFile" => Msg::RenomearArquivo,
             "duplicateSheet" => Msg::DuplicarAba,

@@ -22,6 +22,11 @@ struct Chave {
     folha: usize,
     versao: u32,
     area: Rect,
+    /// Toda pasta recém-aberta começa na versão 1: sem estes dois, abrir
+    /// outro arquivo com a mesma seleção reaproveitava a conta do anterior
+    /// (ou emendava os lotes dos dois) e mostrava como terminada.
+    usado: Rect,
+    celulas: usize,
 }
 /// Folha, versão, linha e coluna da célula cujo erro está em cache.
 type ChaveErro = (usize, u32, u32, u32);
@@ -129,7 +134,10 @@ impl App {
         }
         let area = self.area_selecionada();
         let versao = self.workbook.versao(self.folha);
-        let chave = Chave { folha: self.folha, versao, area: area.clone() };
+        let (usado, celulas) = self.workbook.aba(self.folha)
+            .map(|a| (a.sheet.used_rect(), a.sheet.len()))
+            .unwrap_or((Rect::new(0, 0, 0, 0), 0));
+        let chave = Chave { folha: self.folha, versao, area: area.clone(), usado, celulas };
         let mut estado = self.resumo_selecao.borrow_mut();
         if estado.chave.as_ref() == Some(&chave) {
             return;

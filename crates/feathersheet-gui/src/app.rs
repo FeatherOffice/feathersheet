@@ -98,6 +98,10 @@ mod menu_orientacao;
 mod formatar_celulas;
 pub use formatar_celulas::Evento as EventoFormatoCelula;
 mod graficos;
+mod recuperacao;
+mod primeiros_passos;
+mod novidades;
+mod aviso_xlsx;
 mod efeitos_imagem;
 mod imagens_importadas;
 pub(crate) mod tabelas;
@@ -130,7 +134,7 @@ pub(crate) mod dinamica_ui;
 use crate::condicional;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Auxiliar { Configuracoes, Ajuda, Monitor, Macros, FormatarCelulas, DividirTexto, RemoverDuplicados, Imprimir, OpenQuery, Inspecao }
+pub enum Auxiliar { Configuracoes, Ajuda, Monitor, Macros, FormatarCelulas, DividirTexto, RemoverDuplicados, Imprimir, OpenQuery, Inspecao, PrimeirosPassos, Novidades }
 
 /// Opções da faixa Preencher, migradas dos gestos de preenchimento do TypeScript.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -441,6 +445,16 @@ pub enum Msg {
     Configuracoes, Ajuda, Monitor, AuxAberta, AuxFechada(window::Id),
     AjudaSecao(usize),
     AjudaEvento(feather_ui::ajuda::Evento),
+    /// Ajuda ▸ Primeiros passos e o assistente da primeira abertura.
+    PrimeirosPassosAbrir,
+    PrimeirosPassos(primeiros_passos::Evento),
+    /// Ajuda ▸ O que há de novo (abre sozinha depois de atualizar).
+    NovidadesAbrir,
+    /// Fecha a faixa "sem salvamento automático" acima da grade.
+    FaixaSalvamentoFechar,
+    /// Fecha o aviso de funções que o Excel não tem.
+    AvisoXlsxFechar,
+    Novidades(novidades::Evento),
     MonitorEvento(EventoMonitor),
     Fechar(window::Id), FecharAux(Auxiliar), Minimizar(window::Id),
     Maximizar(window::Id), Arrastar(window::Id),
@@ -492,6 +506,8 @@ pub enum Msg {
     CapturarTela, TelaCapturada(window::Screenshot),
     /// Redesenha a barra de abertura do rodapé enquanto o arquivo carrega.
     ProgressoPulso,
+    Recuperacao(recuperacao::Evento),
+    RecuperacaoAutomatica(bool),
 }
 
 /// Cópia interna com texto (clipboard do sistema) e estilos (motor Rust).
@@ -728,6 +744,11 @@ pub struct App {
     janelas: Janelas<Auxiliar>,
     ultimo_clique_barra: Option<Instant>,
     caminho: Option<PathBuf>,
+    /// Cópia de recuperação automática e as cópias de sessões que morreram.
+    recuperacao: recuperacao::Estado,
+    /// Arquivo de outro formato aberto (`.xlsx`, `.csv`…): ainda sem
+    /// `.fshz`, mas é o nome que o título e os diálogos de salvar sugerem.
+    origem: Option<PathBuf>,
     alterado: bool,
     /// Estado de tela inteira da janela principal (F11 / Msg::TelaInteira).
     tela_inteira: bool,
@@ -877,6 +898,17 @@ pub struct App {
     /// Iced 0.13 não filtra), e o F12 abria e fechava o monitor várias vezes.
     ultima_alternancia: Option<(Auxiliar, std::time::Instant)>,
     ajuda_estado: feather_ui::ajuda::Estado,
+    /// Passo aberto na janela Primeiros passos.
+    primeiros_passos_passo: usize,
+    /// Versão escolhida na lateral de O que há de novo.
+    novidades_versao: usize,
+    /// Documento já avisado de que o salvamento automático não o cobre.
+    aviso_salvamento_de: Option<String>,
+    /// Faixa acima da grade: o documento não tem cópia automática
+    /// (texto, e se é por ser grande demais).
+    faixa_salvamento: Option<(String, bool)>,
+    /// Depois de exportar .xlsx: funções usadas que o Excel não tem.
+    aviso_xlsx: Option<Vec<String>>,
     ctrl_pressionado: bool,
 }
 
@@ -977,7 +1009,7 @@ impl Default for App {
             workbook: Workbook::new(), eixos_grade: RefCell::new(Default::default()), duplicados:None, impressao: Default::default(), resumo_selecao: RefCell::new(status_selecao::Estado::default()), atualizacao: Default::default(), cache_grade: Default::default(),
             config: Configuracao::default(),
             janelas: Janelas::default(), ultimo_clique_barra: None,
-            caminho: None, alterado: false, tela_inteira: false, folha: 0,
+            caminho: None, recuperacao: Default::default(), origem: None, alterado: false, tela_inteira: false, folha: 0,
             linha: 0, coluna: 0, fim_selecao: (0, 0), linha_inicio: 0, coluna_inicio: 0,
             ancorar_rodape: false,
             edicao: String::new(), edicao_inline: None, multilinha: None, editor_formula:EditorFormula::default(), endereco: "A1".into(), endereco_digitado: false,
@@ -1032,6 +1064,11 @@ impl Default for App {
             monitor: feather_ui::monitor::Monitor::novo("FeatherSheet"),
             ultima_alternancia: None,
             ajuda_estado: Default::default(),
+            primeiros_passos_passo: 0,
+            novidades_versao: 0,
+            aviso_salvamento_de: None,
+            faixa_salvamento: None,
+            aviso_xlsx: None,
             ctrl_pressionado: false,
         }
     }
@@ -1057,10 +1094,12 @@ impl App {
     /// Sem arquivo na linha de comando, a janela abre na tela inicial; com arquivo, vai direto à planilha.
     fn novo_com(inicial: Option<PathBuf>) -> (Self, Task<Msg>) {
         let mut app = Self { config: Configuracao::carregar(), em_tela_inicio: inicial.is_none(), ..Default::default() };
+        app.recuperacao.orfas = recuperacao::procurar_orfas();
         // A vigia de memória da suíte segue o limite das Configurações.
         feathersheet_io::memoria::definir_limite_gb(app.config.limite_memoria_gb);
         feathersheet_core::paralelismo::definir(app.config.nucleos as usize);
         feathersheet_core::set_locale_config(app.regionalizacao());
+        ajuda::definir_idioma(&app.config.idioma);
         app.linhas_grade = app.config.linhas_grade;
         app.mostrar_fx = app.config.barra_formulas;
         app.mostrar_formulas = app.config.mostrar_formulas;
@@ -1084,7 +1123,10 @@ impl App {
             }
         }
         let (id, task) = window::open(feather_ui::marca::preparar_janela(window::Settings {
-            size: Size::new(1280., 800.), min_size: Some(Size::new(760., 520.)),
+            size: std::env::var("FEATHERSHEET_CAPTURAR_TAMANHO").ok()
+                .and_then(|t| t.split_once('x').and_then(|(w, h)| Some(Size::new(w.parse().ok()?, h.parse().ok()?))))
+                .unwrap_or(Size::new(1280., 800.)),
+            min_size: Some(Size::new(760., 520.)),
             decorations: !app.config.barra_propria, exit_on_close_request: false,
             ..Default::default()
         }));
@@ -1093,7 +1135,12 @@ impl App {
         if let Some(aviso) = mcp_vivo::iniciar() {
             app.monitor.registrar(Nivel::Info, "MCP", &aviso);
         }
-        let janela = Task::batch([task.map(|_| Msg::AuxAberta), app.ligar_caneta(id)]);
+        // Primeira vez ou recém-atualizado: Primeiros passos / O que há de
+        // novo abrem por cima, depois da janela principal.
+        // `batch`, nunca `chain`: no Iced 0.13, `chain` com tarefa vazia
+        // DESCARTA a primeira, e a janela principal não abriria.
+        let boas_vindas = app.janela_de_boas_vindas().map_or_else(Task::none, |aux| app.alternar(aux));
+        let janela = Task::batch([task.map(|_| Msg::AuxAberta), boas_vindas, app.ligar_caneta(id)]);
         let tarefas = if let Some(p) = inicial {
             Task::batch([janela, Self::carregar_em_background(p, app.config.separador_csv())])
         } else {
@@ -1133,14 +1180,21 @@ impl App {
             Some(Auxiliar::Imprimir) => "Imprimir — FeatherSheet".into(),
             Some(Auxiliar::OpenQuery) => "OpenQuery — Editor de consultas · FeatherOffice".into(),
             Some(Auxiliar::Inspecao) => "Janela de inspeção — FeatherSheet".into(),
+            Some(Auxiliar::PrimeirosPassos) => "Primeiros passos — FeatherSheet".into(),
+            Some(Auxiliar::Novidades) => "O que há de novo — FeatherSheet".into(),
             None => format!("{}{} — FeatherSheet",
                 if self.alterado { "* " } else { "" }, self.nome_documento()),
         }
     }
     pub fn tema(&self, _id: window::Id) -> iced::Theme { tema_iced() }
     fn nome_documento(&self) -> String {
-        self.caminho.as_ref().and_then(|p| p.file_name()).map(|p| p.to_string_lossy().to_string())
+        self.caminho.as_ref().or(self.origem.as_ref()).and_then(|p| p.file_name()).map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| "Sem título.fshz".into())
+    }
+    /// O nome sem extensão que os diálogos de salvar/exportar sugerem.
+    pub(super) fn nome_base_documento(&self) -> String {
+        self.caminho.as_ref().or(self.origem.as_ref()).and_then(|p| p.file_stem())
+            .map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "Sem título".into())
     }
     fn acoes(id: window::Id) -> cromo::AcoesJanela<Msg> {
         cromo::AcoesJanela {
@@ -1171,6 +1225,7 @@ impl App {
             Auxiliar::Imprimir => Size::new(1000., 680.),
             Auxiliar::OpenQuery => Size::new(1280., 800.),
             Auxiliar::Inspecao => Size::new(820., 360.),
+            Auxiliar::PrimeirosPassos | Auxiliar::Novidades => Size::new(1100., 720.),
         };
         self.janelas.alternar(tipo, tam, self.config.barra_propria).map(|_| Msg::AuxAberta)
     }
@@ -1303,6 +1358,10 @@ impl App {
                     _ => None,
                 })
             } else { Subscription::none() },
+            if self.grafico_em_transicao() {
+                // Transição da legenda do gráfico: um quadro por tela.
+                iced::window::frames().map(|_| Msg::Grafico(graficos::Evento::QuadroTransicao))
+            } else { Subscription::none() },
             if self.resumo_selecao.borrow().pendente {
                 // 8 ms de soma a cada 16 ms: a tela continua a 60 quadros.
                 iced::time::every(std::time::Duration::from_millis(16))
@@ -1409,6 +1468,8 @@ impl App {
                 Auxiliar::Imprimir => self.view_impressao(),
                 Auxiliar::OpenQuery => self.view_openquery(),
                 Auxiliar::Inspecao => self.view_inspecao(),
+                Auxiliar::PrimeirosPassos => self.view_primeiros_passos(),
+                Auxiliar::Novidades => self.view_novidades(),
             };
             return if self.config.barra_propria {
                 cromo::janela_com_barra(&self.titulo(id), body, Self::acoes(id))

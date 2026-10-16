@@ -308,6 +308,20 @@ fn ler_aba(
     Ok(meta)
 }
 
+/// Autor, última alteração e empresa (`docProps/core.xml` e `app.xml`);
+/// vazio quando o arquivo não traz essas partes.
+fn propriedades(arquivo: &mut ZipArchive<Cursor<Vec<u8>>>) -> feathersheet_core::planilha::workbook::Propriedades {
+    let mut ler = |parte: &str, campos: &[&str]| -> Vec<String> {
+        let no = entry_text(arquivo, parte).ok().and_then(|t| xml::parse_xml(&t).ok());
+        campos.iter().map(|c| no.as_ref().and_then(|n| n.child(c)).map(|n| n.text.trim().to_owned()).unwrap_or_default()).collect()
+    };
+    let core = ler("docProps/core.xml", &["creator", "lastModifiedBy"]);
+    let app = ler("docProps/app.xml", &["Company"]);
+    feathersheet_core::planilha::workbook::Propriedades {
+        autor: core[0].clone(), modificado_por: core[1].clone(), organizacao: app[0].clone(),
+    }
+}
+
 /// Verifica o tamanho antes de reservar a memória do ZIP compactado.
 pub fn ler_xlsx_arquivo(path: &std::path::Path) -> Result<(Workbook, usize), String> {
     let tamanho = std::fs::metadata(path)
@@ -382,6 +396,7 @@ pub fn ler_xlsx_workbook(bytes: Vec<u8>) -> Result<(Workbook, usize), String> {
         }
     }
     if workbook.is_empty() { workbook.criar_aba("Planilha1"); }
+    workbook.propriedades = propriedades(&mut arquivo);
     // Aba com desenho: linhas na altura do arquivo, antes de ancorar
     // gráficos e formas (ver `desenho_objetos::alturas_das_abas_com_desenho`).
     {

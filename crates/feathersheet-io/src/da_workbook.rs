@@ -58,6 +58,7 @@ pub fn da_workbook(workbook: &Workbook, ativa: u32) -> PastaBruta {
         a: ativa,
         names: Some(crate::para_workbook::nomes_para_json(workbook)),
         es: workbook.estilos_celula.as_deref().and_then(|t| serde_json::from_str(t).ok()),
+        pr: crate::para_workbook::propriedades_para_json(&workbook.propriedades),
         sheets,
     }
 }
@@ -483,6 +484,25 @@ mod testes {
         let vazia = Workbook::new();
         let (de_volta, _) = crate::xlsx_read::ler_xlsx_workbook(crate::xlsx_write::gerar_xlsx(&vazia).unwrap()).unwrap();
         assert_eq!(de_volta.aba(0).unwrap().sheet.largura_padrao, Some(122));
+    }
+
+    #[test]
+    fn propriedades_do_arquivo_vao_e_voltam_no_fshz_e_no_xlsx() {
+        use feathersheet_core::planilha::workbook::Propriedades;
+        let mut wb = Workbook::new();
+        // Sem autor, nenhum dos dois formatos ganha o campo.
+        let lida = crate::fshz_read::ler_fshz(&pasta_gravar_bytes(&wb, 0).unwrap()).unwrap();
+        assert!(lida.pr.is_none());
+        let xlsx = crate::xlsx_write::gerar_xlsx(&wb).unwrap();
+        assert!(!String::from_utf8_lossy(&xlsx).contains("docProps/core.xml"));
+        wb.propriedades = Propriedades {
+            autor: "Ana & Cia".into(), modificado_por: "João".into(), organizacao: "Feather <Ltda>".into(),
+        };
+        let lida = crate::fshz_read::ler_fshz(&pasta_gravar_bytes(&wb, 0).unwrap()).unwrap();
+        assert_eq!(crate::para_workbook::para_workbook(&lida).propriedades, wb.propriedades);
+        let xlsx = crate::xlsx_write::gerar_xlsx(&wb).unwrap();
+        let (de_volta, _) = crate::xlsx_read::ler_xlsx_workbook(xlsx).unwrap();
+        assert_eq!(de_volta.propriedades, wb.propriedades);
     }
 
     /// Medida, não roda no `cargo test`: `cargo test --release -p sheet-io

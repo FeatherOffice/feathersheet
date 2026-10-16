@@ -4,13 +4,15 @@
 //! então o estado é global: o leitor soma os bytes, a janela consulta.
 
 use std::io::Read;
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicU8, Ordering};
 use std::sync::Mutex;
 
 static LIDOS: AtomicU64 = AtomicU64::new(0);
 static TOTAL: AtomicU64 = AtomicU64::new(0);
 static FASE: AtomicU8 = AtomicU8::new(0);
 static NOME: Mutex<String> = Mutex::new(String::new());
+/// O leitor conta linhas (Parquet) em vez de bytes.
+static EM_LINHAS: AtomicBool = AtomicBool::new(false);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Fase {
@@ -28,6 +30,7 @@ pub fn comecar(caminho: &std::path::Path) {
     LIDOS.store(0, Ordering::Relaxed);
     TOTAL.store(total, Ordering::Relaxed);
     FASE.store(0, Ordering::Relaxed);
+    EM_LINHAS.store(false, Ordering::Relaxed);
     if let Ok(mut nome) = NOME.lock() {
         *nome = caminho.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     }
@@ -61,6 +64,12 @@ impl<R: Read> Read for Contador<R> {
 
 /// Leitores que contam linhas em vez de bytes (Parquet): `feito` de `total`.
 pub fn andamento(feito: u64, total: u64) {
+    EM_LINHAS.store(true, Ordering::Relaxed);
     TOTAL.store(total, Ordering::Relaxed);
     LIDOS.store(feito.min(total), Ordering::Relaxed);
+}
+
+/// `true` quando `agora()` devolve linhas, não bytes.
+pub fn em_linhas() -> bool {
+    EM_LINHAS.load(Ordering::Relaxed)
 }

@@ -127,6 +127,8 @@ pub fn icone_tabler(nome: &str) -> &'static str {
         "ajuda" => "help",
         "config" | "configuracoes" => "settings",
         "teclado" => "keyboard",
+        "rocket" => "rocket",
+        "sparkles" => "sparkles",
         _ => "list",
     }
 }

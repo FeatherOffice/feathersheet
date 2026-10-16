@@ -31,10 +31,20 @@ impl App {
         }
         let (lidos, total, fase, nome) = progresso::agora();
         let mb = |b: u64| b as f64 / 1_048_576.0;
+        let linhas = |n: u64| match n {
+            0..=9_999 => n.to_string(),
+            10_000..=999_999 => format!("{} mil", n / 1_000),
+            _ => format!("{:.1} mi", n as f64 / 1e6).replace('.', ","),
+        };
         let (pct, texto) = match fase {
             Fase::Lendo if total > 0 => {
                 let pct = (lidos as f64 / total as f64 * 100.0).min(100.0);
-                (pct, format!("Abrindo {nome} · {pct:.0}% · {:.0} de {:.0} MB", mb(lidos), mb(total)))
+                let quanto = if progresso::em_linhas() {
+                    format!("{} de {} linhas", linhas(lidos), linhas(total))
+                } else {
+                    format!("{:.0} de {:.0} MB", mb(lidos), mb(total))
+                };
+                (pct, format!("Abrindo {nome} · {pct:.0}% · {quanto}"))
             }
             Fase::Lendo => (0.0, format!("Abrindo {nome}…")),
             Fase::Montando => (100.0, format!("Montando {nome} na memória…")),

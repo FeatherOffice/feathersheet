@@ -616,7 +616,8 @@
                 "args": []
               },
               "filhos": []
-            },            {
+            },
+            {
               "rotulo": "Pintar linha/coluna",
               "icone": "",
               "dica": "",
@@ -3008,6 +3009,32 @@
           "catalogo": false,
           "acao": {
             "id": "openHelp",
+            "args": []
+          },
+          "filhos": []
+        },
+        {
+          "rotulo": "Primeiros passos",
+          "icone": "rocket",
+          "dica": "",
+          "atalho": "",
+          "separador": false,
+          "catalogo": false,
+          "acao": {
+            "id": "openPrimeirosPassos",
+            "args": []
+          },
+          "filhos": []
+        },
+        {
+          "rotulo": "O que há de novo",
+          "icone": "sparkles",
+          "dica": "",
+          "atalho": "",
+          "separador": false,
+          "catalogo": false,
+          "acao": {
+            "id": "openNovidades",
             "args": []
           },
           "filhos": []

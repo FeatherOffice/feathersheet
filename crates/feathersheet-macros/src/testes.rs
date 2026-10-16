@@ -95,7 +95,7 @@ fn macro_geometria_de_intervalos_quatro_operacoes() {
         "log(sheet.offset('C:C',0,1).rows);"
     ));
     assert!(out.erro.is_none(),"{:?}",out.erro);
-    assert_eq!(out.saida,vec!["A4:B5","C7:E8","C2:C5","B4:D4","10000000"]);
+    assert_eq!(out.saida,vec!["A4:B5","C7:E8","C2:C5","B4:D4","100000000"]);
     assert!(!out.alterou);
     assert_eq!(wb.aba(0).unwrap().sheet.len(),0);
 }
@@ -106,7 +106,7 @@ fn macro_geometria_invalida_reverte_uma_edicao_anterior() {
         "sheet.offset('A1',-1,0)",
         "sheet.offset('XFD1',0,1)",
         "sheet.resize('A1',0,4)",
-        "sheet.resize('XFD10000000',2,1)",
+        "sheet.resize('XFD100000000',2,1)",
         "sheet.columnOf('B2:D5',4)",
         "sheet.rowOf('A1:C3',0)",
     ] {
@@ -498,7 +498,7 @@ fn get_address_normaliza_intervalos_e_aceita_range_e_rect() {
     let res=executar(&mut wb,0,
         "log(sheet.getAddress('D8:B2')); log(sheet.getAddress(sheet.range('A5:C9'))); log(sheet.range('B3:C3').getAddress()); log(sheet.getAddress({r0:1,c0:0,r1:3,c1:1})); log(sheet.getAddress('C:C')); log(sheet.getAddress({address:'EXTERNO!A1'}));");
     assert!(res.erro.is_none(),"{:?}",res.erro);
-    assert_eq!(res.saida,vec!["B2:D8","A5:C9","B3:C3","A2:B4","C1:C10000000","EXTERNO!A1"]);
+    assert_eq!(res.saida,vec!["B2:D8","A5:C9","B3:C3","A2:B4","C1:C100000000","EXTERNO!A1"]);
     assert!(!res.alterou);
     assert_eq!(wb.aba(0).unwrap().sheet.len(),0);
 }
@@ -553,7 +553,7 @@ fn navegacao_macro_data_range_e_endereco_sao_somente_leitura() {
 fn navegacao_macro_validacao_invalida_preserva_rollback() {
     for code in [
         "sheet.set('A1',99); sheet.getLastRow(0);",
-        "sheet.set('A1',99); sheet.getLastColumn(10000001);",
+        "sheet.set('A1',99); sheet.getLastColumn(100000001);",
         "sheet.set('A1',99); sheet.address(0,1);",
         "sheet.set('A1',99); sheet.getLastRow('XFE');",
     ] {
@@ -672,4 +672,21 @@ fn texto_para_colunas_com_delimitadores_destino_e_coluna_inteira() {
     let s=&wb.aba(0).unwrap().sheet;
     assert_eq!((s.get_raw(3,0).as_str(), s.get_raw(9,2).as_str(), s.get_raw(9,3).as_str()), ("a;b","a","b"));
     assert!(executar(&mut wb,0,"sheet.textToColumns('A1:B2',{delimiters:';'});").erro.is_some(), "uma coluna só");
+}
+
+/// Como no VBA: `cell`/`range`/`cells` sem aba valem para a aba ativa
+/// (onde a macro roda); a outra aba só quando escrita (`sheets("Nome")`).
+#[test]
+fn cell_e_range_sem_aba_usam_a_aba_ativa() {
+    let mut wb = Workbook::new();
+    let outra = wb.inserir_aba("Vendas", 1);
+    let r = executar(&mut wb, outra,
+        "cell('A1').value = 5; cells(2, 1).value = 6; range('B1:B2').set([[1],[2]]); \
+         sheets(1).cell('A1').value = 7; sheets('Vendas').cell('C1').value = 8;");
+    assert!(r.erro.is_none(), "{:?}", r.erro);
+    assert_eq!(wb.valor(outra, 0, 0), Value::Number(5.));
+    assert_eq!(wb.valor(outra, 1, 0), Value::Number(6.));
+    assert_eq!(wb.valor(outra, 1, 1), Value::Number(2.));
+    assert_eq!(wb.valor(outra, 0, 2), Value::Number(8.));
+    assert_eq!(wb.valor(0, 0, 0), Value::Number(7.), "a primeira aba só pelo nome/número");
 }

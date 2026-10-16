@@ -6,6 +6,7 @@
 //! de um [`AlvoCor`]) ficam em funções puras, prontas para irem ao crate
 //! comum quando o FeatherSlide/FeatherDocs usarem o mesmo painel.
 use super::*;
+use feather_charts::analitico::{DirecaoErro, QuantiaErro, TipoTendencia};
 use feather_charts::estilo::{
     Alinhamento, CorEstilo, EstiloGrafico, FormaMarcador, FormatoNum, Linha, Margens,
     PosicaoLegenda, PosicaoRotulo, Preenchimento, Sombra, TemaGrafico, Traco,
@@ -30,21 +31,22 @@ pub enum Grupo {
     Margens,
     Fonte,
     Analiticos,
+    Dica,
     Formas,
     Tamanho,
     TextoAlt,
 }
 impl Grupo {
     /// Os grupos da aba Personalizar (Dados virou a aba Configurar).
-    pub const PERSONALIZAR: [Self; 15] = [
+    pub const PERSONALIZAR: [Self; 16] = [
         Self::TipoEstilo, Self::Titulo, Self::Legenda, Self::Eixos, Self::Grades,
         Self::Series, Self::Pontos, Self::Rotulos, Self::Area, Self::Margens, Self::Fonte,
-        Self::Analiticos, Self::Formas, Self::Tamanho, Self::TextoAlt,
+        Self::Analiticos, Self::Dica, Self::Formas, Self::Tamanho, Self::TextoAlt,
     ];
-    pub const TODOS: [Self; 16] = [
+    pub const TODOS: [Self; 17] = [
         Self::TipoEstilo, Self::Dados, Self::Titulo, Self::Legenda, Self::Eixos, Self::Grades,
         Self::Series, Self::Pontos, Self::Rotulos, Self::Area, Self::Margens, Self::Fonte,
-        Self::Analiticos, Self::Formas, Self::Tamanho, Self::TextoAlt,
+        Self::Analiticos, Self::Dica, Self::Formas, Self::Tamanho, Self::TextoAlt,
     ];
     fn nome(self) -> &'static str {
         match self {
@@ -61,6 +63,7 @@ impl Grupo {
             Self::Margens => "Margens e espaçamento",
             Self::Fonte => "Fonte",
             Self::Analiticos => "Elementos analíticos",
+            Self::Dica => "Dica do mouse",
             Self::Formas => "Formas no gráfico",
             Self::Tamanho => "Tamanho e posição",
             Self::TextoAlt => "Texto alternativo",
@@ -81,6 +84,7 @@ impl Grupo {
             Self::Margens => "arrows-maximize",
             Self::Fonte => "bold",
             Self::Analiticos => "sparkline-line",
+            Self::Dica => "pointer",
             Self::Formas => "shapes",
             Self::Tamanho => "arrow-autofit-width",
             Self::TextoAlt => "message-circle",
@@ -89,7 +93,6 @@ impl Grupo {
     /// Sem motor ainda: aparece desabilitado com a dica.
     fn em_breve(self) -> Option<&'static str> {
         match self {
-            Self::Analiticos => Some("Em breve: linhas de tendência, barras de erro, linhas de máximo e mínimo"),
             Self::Formas => Some("Em breve: círculo, seta e texto livre dentro do gráfico"),
             _ => None,
         }
@@ -161,6 +164,8 @@ pub enum AlvoCor {
     Contorno(usize),
     Ponto(usize, usize),
     Rotulos,
+    DicaFundo,
+    DicaTexto,
 }
 
 /// Uma edição do estilo (o que o painel manda).
@@ -224,6 +229,30 @@ pub enum Mudanca {
     FonteNegrito(bool),
     FonteItalico(bool),
     TextoAlt(String),
+    /// `None` tira a linha de tendência.
+    Tendencia(usize, Option<TipoTendencia>),
+    TendenciaGrau(usize, String),
+    TendenciaPeriodo(usize, String),
+    TendenciaAvancar(usize, String),
+    TendenciaRecuar(usize, String),
+    TendenciaEquacao(usize, bool),
+    TendenciaR2(usize, bool),
+    /// Tipo de barra de erro (0 fixo, 1 porcentagem, 2 desvio-padrão, 3 erro-padrão); `None` tira.
+    Erro(usize, Option<u8>),
+    ErroValor(usize, String),
+    ErroDirecao(usize, DirecaoErro),
+    ErroSemPonta(usize, bool),
+    /// Linha de referência (0 máximo, 1 mínimo, 2 média).
+    Referencia(usize, u8, bool),
+    DicaVisivel(bool),
+    DicaCategoria(bool),
+    DicaSerie(bool),
+    DicaPercentual(bool),
+    /// `None` = o formato dos rótulos.
+    DicaFormato(Option<FormatoNum>),
+    DicaPrefixo(String),
+    DicaSufixo(String),
+    DicaTamanho(String),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -382,6 +411,14 @@ pub fn chave(m: &Mudanca) -> Option<String> {
         Mudanca::BarrasRaio(_) => "barras.raio".into(),
         Mudanca::FonteTamanho(_) => "fonte.tamanho".into(),
         Mudanca::TextoAlt(_) => "texto_alt".into(),
+        Mudanca::TendenciaGrau(i, _) => format!("tendencia{i}.grau"),
+        Mudanca::TendenciaPeriodo(i, _) => format!("tendencia{i}.periodo"),
+        Mudanca::TendenciaAvancar(i, _) => format!("tendencia{i}.avancar"),
+        Mudanca::TendenciaRecuar(i, _) => format!("tendencia{i}.recuar"),
+        Mudanca::ErroValor(i, _) => format!("erro{i}.valor"),
+        Mudanca::DicaPrefixo(_) => "dica.prefixo".into(),
+        Mudanca::DicaSufixo(_) => "dica.sufixo".into(),
+        Mudanca::DicaTamanho(_) => "dica.tamanho".into(),
         _ => return None,
     })
 }
@@ -393,7 +430,10 @@ fn texto_da(m: &Mudanca) -> Option<&str> {
         | Mudanca::SerieContornoEspessura(_, s) | Mudanca::PontoDestacar(_, _, s) | Mudanca::RotulosCasas(s)
         | Mudanca::RotulosTamanho(s) | Mudanca::AreaAngulo(_, s) | Mudanca::AreaBordaEspessura(_, s) | Mudanca::AreaRaio(_, s)
         | Mudanca::Margem(_, _, s) | Mudanca::BarrasEspaco(s) | Mudanca::BarrasSobrepor(s) | Mudanca::BarrasRaio(s)
-        | Mudanca::FonteTamanho(s) | Mudanca::TextoAlt(s) => Some(s),
+        | Mudanca::FonteTamanho(s) | Mudanca::TextoAlt(s)
+        | Mudanca::TendenciaGrau(_, s) | Mudanca::TendenciaPeriodo(_, s) | Mudanca::TendenciaAvancar(_, s)
+        | Mudanca::TendenciaRecuar(_, s) | Mudanca::ErroValor(_, s)
+        | Mudanca::DicaPrefixo(s) | Mudanca::DicaSufixo(s) | Mudanca::DicaTamanho(s) => Some(s),
         _ => None,
     }
 }
@@ -414,6 +454,64 @@ pub fn aplicar(e: &mut EstiloGrafico, m: &Mudanca) -> bool {
         };
     }
     match m.clone() {
+        Mudanca::Tendencia(i, tipo) => {
+            let a = &mut e.serie_mut(i).analise;
+            match tipo {
+                None => a.tendencia = None,
+                Some(t) => a.tendencia.get_or_insert_with(Default::default).tipo = t,
+            }
+        }
+        Mudanca::TendenciaGrau(i, s) => return ok!(numero(&s), v => {
+            if let Some(t) = e.serie_mut(i).analise.tendencia.as_mut() { t.grau = v.unwrap_or(2.0).round().clamp(2.0, 6.0) as u8; }
+        }),
+        Mudanca::TendenciaPeriodo(i, s) => return ok!(numero(&s), v => {
+            if let Some(t) = e.serie_mut(i).analise.tendencia.as_mut() { t.periodo = v.unwrap_or(2.0).round().clamp(2.0, 255.0) as u8; }
+        }),
+        Mudanca::TendenciaAvancar(i, s) => return ok!(numero(&s), v => {
+            if let Some(t) = e.serie_mut(i).analise.tendencia.as_mut() { t.avancar = v.unwrap_or(0.0).max(0.0); }
+        }),
+        Mudanca::TendenciaRecuar(i, s) => return ok!(numero(&s), v => {
+            if let Some(t) = e.serie_mut(i).analise.tendencia.as_mut() { t.recuar = v.unwrap_or(0.0).max(0.0); }
+        }),
+        Mudanca::TendenciaEquacao(i, v) => if let Some(t) = e.serie_mut(i).analise.tendencia.as_mut() { t.mostrar_equacao = v },
+        Mudanca::TendenciaR2(i, v) => if let Some(t) = e.serie_mut(i).analise.tendencia.as_mut() { t.mostrar_r2 = v },
+        Mudanca::Erro(i, tipo) => {
+            let a = &mut e.serie_mut(i).analise;
+            match tipo {
+                None => a.erro = None,
+                Some(k) => a.erro.get_or_insert_with(Default::default).quantia = match k {
+                    0 => QuantiaErro::Fixo(1.0),
+                    1 => QuantiaErro::Percentual(5.0),
+                    2 => QuantiaErro::DesvioPadrao(1.0),
+                    _ => QuantiaErro::ErroPadrao,
+                },
+            }
+        }
+        Mudanca::ErroValor(i, s) => return ok!(numero(&s), v => {
+            if let Some(b) = e.serie_mut(i).analise.erro.as_mut() {
+                let v = v.unwrap_or(0.0).abs();
+                b.quantia = match b.quantia {
+                    QuantiaErro::Fixo(_) => QuantiaErro::Fixo(v),
+                    QuantiaErro::Percentual(_) => QuantiaErro::Percentual(v),
+                    QuantiaErro::DesvioPadrao(_) => QuantiaErro::DesvioPadrao(v),
+                    QuantiaErro::ErroPadrao => QuantiaErro::ErroPadrao,
+                };
+            }
+        }),
+        Mudanca::ErroDirecao(i, d) => if let Some(b) = e.serie_mut(i).analise.erro.as_mut() { b.direcao = d },
+        Mudanca::ErroSemPonta(i, v) => if let Some(b) = e.serie_mut(i).analise.erro.as_mut() { b.sem_ponta = v },
+        Mudanca::Referencia(i, k, v) => {
+            let a = &mut e.serie_mut(i).analise;
+            match k { 0 => a.maximo = v, 1 => a.minimo = v, _ => a.media = v }
+        }
+        Mudanca::DicaVisivel(v) => e.dica.visivel = Some(v),
+        Mudanca::DicaCategoria(v) => e.dica.categoria = Some(v),
+        Mudanca::DicaSerie(v) => e.dica.serie = Some(v),
+        Mudanca::DicaPercentual(v) => e.dica.percentual = v,
+        Mudanca::DicaFormato(f) => e.dica.formato = f,
+        Mudanca::DicaPrefixo(t) => e.dica.prefixo = t,
+        Mudanca::DicaSufixo(t) => e.dica.sufixo = t,
+        Mudanca::DicaTamanho(t) => return ok!(tam(&t), v => e.dica.tamanho = v),
         Mudanca::Tema(id) => e.aplicar_tema(id),
         Mudanca::TituloVisivel(v) => e.titulo.visivel = Some(v),
         Mudanca::TituloAlinhar(a) => e.titulo.alinhamento = Some(a),
@@ -555,6 +653,8 @@ pub fn cor_de(e: &EstiloGrafico, alvo: AlvoCor) -> Option<CorEstilo> {
         AlvoCor::Contorno(i) => e.serie(i).and_then(|s| s.contorno),
         AlvoCor::Ponto(s, p) => e.serie(s).and_then(|x| x.pontos.get(&p)).and_then(|q| q.cor),
         AlvoCor::Rotulos => e.rotulos.fonte.cor,
+        AlvoCor::DicaFundo => e.dica.fundo,
+        AlvoCor::DicaTexto => e.dica.texto,
     }
 }
 
@@ -597,6 +697,8 @@ pub fn definir_cor(e: &mut EstiloGrafico, alvo: AlvoCor, cor: Option<CorEstilo>)
         AlvoCor::Contorno(i) => e.serie_mut(i).contorno = cor,
         AlvoCor::Ponto(s, p) => e.serie_mut(s).pontos.entry(p).or_default().cor = cor,
         AlvoCor::Rotulos => e.rotulos.fonte.cor = cor,
+        AlvoCor::DicaFundo => e.dica.fundo = cor,
+        AlvoCor::DicaTexto => e.dica.texto = cor,
     }
 }
 
@@ -650,8 +752,9 @@ pub fn migrar(a: &Aparencia, excel: Option<&Map<String, Value>>) -> EstiloGrafic
                 e.area_grafico.preenchimento = Some(Preenchimento::Degrade { inicio: i, fim: f, angulo });
             }
         } else if let Some(c) = txt("fundo") {
-            e.area_grafico.preenchimento = Some(Preenchimento::Solido { cor: c });
-        } else if x.contains_key("fundo") || !x.contains_key("fundoDegrade") {
+            e.area_grafico.preenchimento = Some(if c.0.a == 0 { Preenchimento::Nenhum } else { Preenchimento::Solido { cor: c } });
+        } else if x.contains_key("fundo") {
+            // `null` (importado por versão antiga): sem preenchimento.
             e.area_grafico.preenchimento = Some(Preenchimento::Nenhum);
         }
         if let Some(c) = txt("contorno") {
@@ -746,7 +849,17 @@ fn mud(m: Mudanca) -> Msg {
 fn rotulo<'a>(t: &str) -> iced::widget::Text<'a> {
     text(t.to_owned()).size(12).color(COR_TEXTO_MUTED())
 }
+/// Título de seção com uma linha fina em cima: mostra onde a parte
+/// anterior termina.
 fn secao<'a>(t: &str) -> Element<'a, Msg> {
+    let divisor = container(Space::new(Length::Fill, Length::Fixed(1.0))).style(|_| container::Style {
+        background: Some(iced::Background::Color(COR_BORDA())),
+        ..Default::default()
+    });
+    iced::widget::column![Space::with_height(4), divisor, Space::with_height(2), secao_inicial(t)].into()
+}
+/// Título da primeira seção (sem linha: nada termina antes dela).
+fn secao_inicial<'a>(t: &str) -> Element<'a, Msg> {
     text(t.to_uppercase()).size(10.5).color(COR_TEXTO_MUTED())
         .font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::DEFAULT }).into()
 }
@@ -806,7 +919,7 @@ fn amostra<'a>(c: CorEstilo, ativo: bool, m: Msg) -> Element<'a, Msg> {
 }
 
 impl App {
-    fn estilo_vista(&self) -> EstiloGrafico {
+    pub(super) fn estilo_vista(&self) -> EstiloGrafico {
         let a = &self.graficos.aparencia;
         a.estilo.clone().unwrap_or_else(|| migrar(a, self.graficos.painel.excel.as_ref()))
     }
@@ -975,7 +1088,7 @@ impl App {
         let g = &self.graficos;
         let pizza = g.tipo == TipoUi::Pizza;
         let mut col = iced::widget::column![].spacing(8).padding([6, 4]);
-        col = col.push(secao("Tipo de gráfico"));
+        col = col.push(secao_inicial("Tipo de gráfico"));
         col = col.push(button(row![text(g.tipo.to_string()).size(12).width(Length::Fill), feather_ui::icones::icone("chevron-down", 14.0)]
             .align_y(Alignment::Center)).padding([6, 8]).width(Length::Fill)
             .style(estilo_botao_secundario).on_press(ev(Evento::AlternarSeletor)));
@@ -1148,11 +1261,6 @@ impl App {
                 col = col.push(grade);
                 col = col.push(button(text("Sem tema (aparência padrão)").size(12)).width(Length::Fill).padding([5, 8])
                     .style(estilo_botao_pequeno(e.tema.is_none())).on_press(mud(Mudanca::Tema(None))));
-                col = col.push(tooltip(
-                    linha("3D e rotação", text("Em breve").size(11).color(COR_TEXTO_MUTED())),
-                    container(text("Em breve: profundidade, rotação X/Y e perspectiva").size(11)).padding([4, 8]).style(estilo_dica),
-                    tooltip::Position::Top,
-                ));
                 col.into()
             }
             Grupo::Dados => {
@@ -1424,7 +1532,86 @@ impl App {
                 .push(alternar("Itálico", e.fonte.italico.unwrap_or(false), |v| mud(Mudanca::FonteItalico(v))))
                 .push(self.campo_cor("Cor do texto", AlvoCor::FonteGeral, e, texto_padrao))
                 .into(),
-            Grupo::Analiticos | Grupo::Formas => col.into(),
+            Grupo::Analiticos => {
+                if n_series == 0 || pizza {
+                    return col.push(rotulo(if pizza { "A pizza não tem elementos analíticos." } else { "Sem séries nos dados." })).into();
+                }
+                let i = p.serie.min(n_series - 1);
+                let an = e.serie(i).map(|x| x.analise.clone()).unwrap_or_default();
+                let mut col = col.push(self.seletor_serie()).push(secao("Linha de tendência"));
+                let atual = an.tendencia.as_ref().map(|t| t.tipo);
+                let mut opcoes = vec![("Nenhuma".to_owned(), atual.is_none(), mud(Mudanca::Tendencia(i, None)))];
+                opcoes.extend(TipoTendencia::TODOS.iter().map(|t| (t.nome().to_owned(), atual == Some(*t), mud(Mudanca::Tendencia(i, Some(*t))))));
+                col = col.push(escolhas(opcoes, 2));
+                if let Some(t) = &an.tendencia {
+                    match t.tipo {
+                        TipoTendencia::Polinomial => col = col.push(linha("Grau (2 a 6)", self.campo_num(format!("tendencia{i}.grau"), Some(f64::from(t.grau)), "2", move |s| Mudanca::TendenciaGrau(i, s)))),
+                        TipoTendencia::MediaMovel => col = col.push(linha("Período", self.campo_num(format!("tendencia{i}.periodo"), Some(f64::from(t.periodo)), "2", move |s| Mudanca::TendenciaPeriodo(i, s)))),
+                        _ => {
+                            col = col
+                                .push(linha("Prever para a frente", self.campo_num(format!("tendencia{i}.avancar"), Some(t.avancar).filter(|v| *v > 0.0), "0", move |s| Mudanca::TendenciaAvancar(i, s))))
+                                .push(linha("Prever para trás", self.campo_num(format!("tendencia{i}.recuar"), Some(t.recuar).filter(|v| *v > 0.0), "0", move |s| Mudanca::TendenciaRecuar(i, s))))
+                                .push(alternar("Mostrar a equação", t.mostrar_equacao, move |v| mud(Mudanca::TendenciaEquacao(i, v))))
+                                .push(alternar("Mostrar o R²", t.mostrar_r2, move |v| mud(Mudanca::TendenciaR2(i, v))));
+                        }
+                    }
+                }
+                col = col.push(secao("Barras de erro"));
+                let tipo_erro = an.erro.as_ref().map(|b| match b.quantia {
+                    QuantiaErro::Fixo(_) => 0u8,
+                    QuantiaErro::Percentual(_) => 1,
+                    QuantiaErro::DesvioPadrao(_) => 2,
+                    QuantiaErro::ErroPadrao => 3,
+                });
+                let nomes = ["Valor fixo", "Porcentagem", "Desvio-padrão", "Erro-padrão"];
+                let mut opcoes = vec![("Nenhuma".to_owned(), tipo_erro.is_none(), mud(Mudanca::Erro(i, None)))];
+                opcoes.extend(nomes.iter().enumerate().map(|(k, n)| (n.to_string(), tipo_erro == Some(k as u8), mud(Mudanca::Erro(i, Some(k as u8))))));
+                col = col.push(escolhas(opcoes, 2));
+                if let Some(b) = &an.erro {
+                    let valor = match b.quantia {
+                        QuantiaErro::Fixo(v) => Some(("Valor", v)),
+                        QuantiaErro::Percentual(v) => Some(("Porcentagem (%)", v)),
+                        QuantiaErro::DesvioPadrao(v) => Some(("Quantos desvios", v)),
+                        QuantiaErro::ErroPadrao => None,
+                    };
+                    if let Some((r, v)) = valor {
+                        col = col.push(linha(r, self.campo_num(format!("erro{i}.valor"), Some(v), "1", move |s| Mudanca::ErroValor(i, s))));
+                    }
+                    col = col
+                        .push(escolhas(DirecaoErro::TODAS.iter().map(|d| (d.nome().to_owned(), b.direcao == *d, mud(Mudanca::ErroDirecao(i, *d)))).collect(), 3))
+                        .push(alternar("Sem ponta", b.sem_ponta, move |v| mud(Mudanca::ErroSemPonta(i, v))));
+                }
+                col.push(secao("Linhas de referência"))
+                    .push(alternar("Máximo", an.maximo, move |v| mud(Mudanca::Referencia(i, 0, v))))
+                    .push(alternar("Mínimo", an.minimo, move |v| mud(Mudanca::Referencia(i, 1, v))))
+                    .push(alternar("Média", an.media, move |v| mud(Mudanca::Referencia(i, 2, v))))
+                    .into()
+            }
+            Grupo::Dica => {
+                let d = &e.dica;
+                let atual = d.formato;
+                let mut formatos = vec![("Como os rótulos".to_owned(), atual.is_none(), mud(Mudanca::DicaFormato(None)))];
+                formatos.extend([FormatoNum::Automatico, FormatoNum::Decimal { casas: 2 }, FormatoNum::Moeda { casas: 2 }, FormatoNum::Percentual { casas: 1 }]
+                    .into_iter().map(|o| (o.nome().to_owned(), atual.is_some_and(|a| std::mem::discriminant(&a) == std::mem::discriminant(&o)), mud(Mudanca::DicaFormato(Some(o))))));
+                col.push(rotulo("Aparece ao passar o mouse sobre um ponto do gráfico na planilha."))
+                    .push(alternar("Mostrar a dica", d.visivel.unwrap_or(true), |v| mud(Mudanca::DicaVisivel(v))))
+                    .push(secao("Conteúdo"))
+                    .push(alternar("Categoria no título", d.categoria.unwrap_or(true), |v| mud(Mudanca::DicaCategoria(v))))
+                    .push(alternar("Nome da série", d.serie.unwrap_or(true), |v| mud(Mudanca::DicaSerie(v))))
+                    .push(alternar(if pizza { "Porcentagem do total" } else { "Porcentagem da categoria" }, d.percentual, |v| mud(Mudanca::DicaPercentual(v))))
+                    .push(secao("Número"))
+                    .push(escolhas(formatos, 2))
+                    .push(rotulo("Antes do valor"))
+                    .push(text_input("Ex.: R$ ", &d.prefixo).size(12).on_input(|t| mud(Mudanca::DicaPrefixo(t))))
+                    .push(rotulo("Depois do valor"))
+                    .push(text_input("Ex.:  kg", &d.sufixo).size(12).on_input(|t| mud(Mudanca::DicaSufixo(t))))
+                    .push(secao("Aparência"))
+                    .push(linha("Tamanho da letra", self.campo_num("dica.tamanho".into(), d.tamanho.map(f64::from), "12", Mudanca::DicaTamanho)))
+                    .push(self.campo_cor("Fundo", AlvoCor::DicaFundo, e, CorEstilo::hex(0xffffff)))
+                    .push(self.campo_cor("Texto", AlvoCor::DicaTexto, e, CorEstilo::hex(0x202020)))
+                    .into()
+            }
+            Grupo::Formas => col.into(),
             Grupo::Tamanho => col
                 .push(linha("Largura (px)", text_input("480", &g.aparencia.largura).size(12).width(Length::Fixed(96.0))
                     .on_input(|s| ev(Evento::Estilo(CampoEstilo::Largura, s)))))
@@ -1526,6 +1713,14 @@ impl App {
     /// tamanho, alt, cor ou nenhum): tabela e gráfico de exemplo com tema, um
     /// ponto pintado e margens alteradas, e o painel aberto nesse grupo.
     pub(in crate::app) fn preparar_captura_grafico(&mut self, modo: &str) -> Task<Msg> {
+        // `tipo:<nome>`: um tipo especial com dados próprios, sem o painel.
+        if let Some(nome) = modo.strip_prefix("tipo:") {
+            return self.preparar_captura_tipo(nome);
+        }
+        // `vitrine`, `vitrine-painel`, `vitrine-legenda`: os prints do README.
+        if let Some(variante) = modo.strip_prefix("vitrine") {
+            return self.preparar_vitrine(variante.trim_start_matches('-'));
+        }
         // `boletim`: o modelo Boletim de notas, A7:G22 em colunas empilhadas
         // com Prova 1, Prova 2 e Trabalho, e a aba Configurar aberta.
         if modo == "boletim" || modo == "boletim-pizza" {
@@ -1587,8 +1782,23 @@ impl App {
             "fonte" => Some(Grupo::Fonte),
             "tamanho" => Some(Grupo::Tamanho),
             "alt" => Some(Grupo::TextoAlt),
+            "analiticos" => Some(Grupo::Analiticos),
+            "dica" => Some(Grupo::Dica),
             _ => None,
         };
+        if modo == "analiticos" {
+            for m in [
+                Mudanca::Tendencia(1, Some(TipoTendencia::Linear)),
+                Mudanca::TendenciaEquacao(1, true),
+                Mudanca::TendenciaR2(1, true),
+                Mudanca::Erro(0, Some(1)),
+                Mudanca::Referencia(0, 0, true),
+                Mudanca::Referencia(0, 2, true),
+            ] {
+                let _ = self.evento_grafico(Evento::Formatar(m));
+            }
+            self.graficos.painel.serie = 1;
+        }
         self.graficos.painel.grupo = grupo;
         if grupo.is_some() || modo == "nenhum" {
             self.graficos.painel.aba = AbaPainel::Personalizar;
@@ -1664,5 +1874,125 @@ mod testes {
         sincronizar_legado(&mut b);
         assert!(!b.titulo && !b.legenda && b.valores);
         assert_eq!(b.fundo, "#000000");
+    }
+}
+
+impl App {
+    /// Vitrine para os prints: o modelo Fluxo de caixa com o gráfico de
+    /// entradas e saídas (tema, tendência e média) ao lado da tabela, a dica
+    /// aberta numa coluna e, conforme a variante, o painel ou um item da
+    /// legenda desligado.
+    fn preparar_vitrine(&mut self, variante: &str) -> Task<Msg> {
+        if let Some(wb) = feathersheet_core::modelos::criar("fluxo-caixa") {
+            self.workbook = wb;
+            self.folha = 0;
+        }
+        (self.linha, self.coluna, self.fim_selecao) = (6, 0, (18, 5));
+        let _ = self.evento_grafico(Evento::Abrir);
+        let _ = self.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        let _ = self.evento_grafico(Evento::Titulo("Entradas e saídas em 2026".into()));
+        // Séries pela ordem de origem: 0 Saldo inicial, 1 Entradas, 2 Saídas,
+        // 3 Resultado do mês, 4 Saldo acumulado.
+        for n in [0, 3, 4] {
+            let _ = self.evento_grafico(Evento::SerieVisivel(n, false));
+        }
+        for m in [
+            Mudanca::Tema(Some("corporativo")),
+            Mudanca::Subtitulo("Fluxo de caixa mensal, em R$".into()),
+            Mudanca::BarrasRaio("4".into()),
+            Mudanca::GradeVisivel(EixoSel::Y, true, true),
+            Mudanca::Tendencia(0, Some(TipoTendencia::Linear)),
+            Mudanca::TendenciaEquacao(0, true),
+            Mudanca::TendenciaR2(0, true),
+            Mudanca::Referencia(1, 2, true),
+            Mudanca::DicaPercentual(true),
+            Mudanca::DicaPrefixo("R$ ".into()),
+        ] {
+            let _ = self.evento_grafico(Evento::Formatar(m));
+        }
+        let Some(id) = self.graficos.id.clone() else { return Task::none() };
+        // Ao lado da tabela (colunas A:F), alto o bastante para os 12 meses.
+        if let Some(aba) = self.workbook.aba_mut(self.folha) {
+            let _ = feathersheet_io::graficos_salvos::salvar(&mut aba.sheet, &id,
+                serde_json::json!({"position": {"x": 880.0, "y": 96.0, "width": 620.0, "height": 380.0}}));
+        }
+        self.graficos.aparencia.largura = "620".into();
+        self.graficos.aparencia.altura = "380".into();
+        if variante == "painel" {
+            self.graficos.painel.aba = AbaPainel::Personalizar;
+            self.graficos.painel.grupo = Some(Grupo::Analiticos);
+            self.graficos.painel.serie = 0;
+            (self.linha, self.coluna, self.fim_selecao) = (0, 3, (0, 3));
+            self.origem = Some("Fluxo de caixa 2026.fshz".into());
+            // O painel ocupa a direita: a planilha começa na coluna D para o
+            // gráfico aparecer inteiro ao lado dele.
+            self.coluna_inicio = 3;
+            return self.rolar_para_grupo();
+        }
+        let _ = self.evento_grafico(Evento::Fechar);
+        self.graficos.selecionado = None;
+        let Some(aba) = self.workbook.aba(self.folha) else { return Task::none() };
+        let Ok(lista) = feathersheet_io::graficos_salvos::listar(&aba.sheet) else { return Task::none() };
+        let Some(v) = lista.into_iter().find(|v| v["id"].as_str() == Some(&id)) else { return Task::none() };
+        let Some(mapa) = super::editor::desenhar_grafico_salvo(&aba.sheet, &v).and_then(|d| d.mapa) else { return Task::none() };
+        let zoom = (self.config.zoom as f32 / 100.).max(0.01);
+        if variante == "legenda" {
+            if let Some(item) = mapa.legenda.iter().find(|i| i.indice == 1) {
+                let p = iced::Point::new((item.x + item.largura / 2.0) * zoom, (item.y + item.altura / 2.0) * zoom);
+                let _ = self.evento_grafico(Evento::Pairar(id.clone(), p));
+                let _ = self.evento_grafico(Evento::Arrastar(id.clone()));
+                self.graficos.interacao.transicao = None;
+                self.graficos.selecionado = None;
+            }
+        }
+        // Dica sobre a coluna de junho da primeira série.
+        if let Some(alvo) = mapa.pontos.iter().find(|p| p.serie == 0 && p.ponto == 5) {
+            if let feather_charts::formatado::FormaAlvo::Retangulo { x, y, largura, .. } = alvo.forma {
+                let p = iced::Point::new((x + largura / 2.0) * zoom, (y + 12.0) * zoom);
+                let _ = self.evento_grafico(Evento::Pairar(id, p));
+            }
+        }
+        self.graficos.interacao.fixa = true;
+        // Sem a seleção azul em cima da tabela; título com o nome do modelo.
+        (self.linha, self.coluna, self.fim_selecao) = (0, 0, (0, 0));
+        self.origem = Some("Fluxo de caixa 2026.fshz".into());
+        Task::none()
+    }
+}
+
+impl App {
+    /// Foto de um tipo especial (radar, cascata, Gantt…) com dados que
+    /// fazem sentido para ele, desenhado na planilha com o tema Oceano.
+    fn preparar_captura_tipo(&mut self, nome: &str) -> Task<Msg> {
+        let (tipo, dados) = match nome {
+            "radar" => (TipoUi::Radar, "Critério\tProduto A\tProduto B\nPreço\t8\t6\nQualidade\t7\t9\nPrazo\t9\t6\nSuporte\t6\t8\nDesign\t7\t8\nGarantia\t5\t7"),
+            "cascata" => (TipoUi::Cascata, "Item\tValor\nReceita\t120\nCustos\t-45\nImpostos\t-18\nServiços\t30\nDespesas\t-22\nOutros\t9"),
+            "histograma" => (TipoUi::Histograma, "Aluno\tNota\nA\t4,5\nB\t6\nC\t7,5\nD\t8\nE\t5,5\nF\t9\nG\t6,5\nH\t7\nI\t7,2\nJ\t8,8\nK\t3,9\nL\t6,1\nM\t7,8\nN\t5,2\nO\t9,4\nP\t6,9"),
+            "combinado" => (TipoUi::Combinado, "Mês\tVendas\tMeta\tMédia do setor\nJan\t120\t110\t100\nFev\t135\t115\t104\nMar\t128\t120\t110\nAbr\t150\t125\t112\nMai\t162\t130\t118\nJun\t158\t135\t121"),
+            "bolhas" => (TipoUi::Bolhas, "Preço\tVendas\tLucro\n10\t120\t30\n15\t95\t45\n22\t80\t60\n30\t52\t40\n38\t40\t72\n45\t25\t35"),
+            "velas" => (TipoUi::Candlestick, "Dia\tAbertura\tMáxima\tMínima\tFechamento\nSeg\t20\t24\t18\t23\nTer\t23\t26\t21\t22\nQua\t22\t25\t19\t24\nQui\t24\t29\t23\t28\nSex\t28\t30\t25\t26"),
+            "gantt" => (TipoUi::Gantt, "Tarefa\tInício\tFim\nLevantamento\t1\t5\nProjeto\t4\t12\nCompras\t10\t16\nObra\t14\t28\nEntrega\t27\t30"),
+            "calor" => (TipoUi::MapaCalor, "Hora\tSeg\tTer\tQua\tQui\tSex\n8h\t12\t15\t9\t14\t20\n10h\t30\t28\t35\t31\t26\n12h\t45\t50\t41\t47\t55\n14h\t25\t22\t30\t27\t33\n16h\t18\t20\t16\t21\t40"),
+            "linha3d" => (TipoUi::Linha3d, "X\tY\tZ\n1\t2\t1\n2\t4\t3\n3\t3\t5\n4\t6\t4\n5\t5\t7\n6\t8\t6"),
+            "area-empilhada" => (TipoUi::AreaDegrausEmpilhada, "Mês\tNorte\tSul\tLeste\nJan\t12\t8\t5\nFev\t15\t9\t7\nMar\t11\t12\t8\nAbr\t18\t10\t9\nMai\t16\t14\t11\nJun\t20\t13\t12"),
+            _ => (TipoUi::Colunas, "A\tB\nx\t1"),
+        };
+        let _ = self.update(Msg::Colar(dados.into()));
+        let linhas = dados.lines().count() as u32;
+        let colunas = dados.lines().next().map_or(1, |l| l.split('\t').count()) as u32;
+        (self.linha, self.coluna, self.fim_selecao) = (0, 0, (linhas - 1, colunas - 1));
+        let _ = self.evento_grafico(Evento::Abrir);
+        let _ = self.evento_grafico(Evento::Tipo(tipo));
+        let _ = self.evento_grafico(Evento::Titulo(tipo.to_string()));
+        let _ = self.evento_grafico(Evento::Formatar(Mudanca::Tema(Some("oceano"))));
+        let Some(id) = self.graficos.id.clone() else { return Task::none() };
+        if let Some(aba) = self.workbook.aba_mut(self.folha) {
+            let _ = feathersheet_io::graficos_salvos::salvar(&mut aba.sheet, &id,
+                serde_json::json!({"position": {"x": 560.0, "y": 30.0, "width": 600.0, "height": 380.0}}));
+        }
+        let _ = self.evento_grafico(Evento::Fechar);
+        self.graficos.selecionado = None;
+        (self.linha, self.coluna, self.fim_selecao) = (0, 0, (0, 0));
+        Task::none()
     }
 }

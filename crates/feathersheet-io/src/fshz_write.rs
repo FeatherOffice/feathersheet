@@ -198,6 +198,9 @@ pub struct PastaBruta {
     /// Estilos de célula da pessoa (Novo estilo de célula).
     #[serde(default)]
     pub es: Option<Json>,
+    /// Propriedades do arquivo (autor, modificadoPor, organizacao).
+    #[serde(default)]
+    pub pr: Option<Json>,
     pub sheets: Vec<AbaBruta>,
 }
 
@@ -307,6 +310,8 @@ struct LivroMeta<'a> {
     names: Option<Json>,
     #[serde(skip_serializing_if = "Option::is_none")]
     es: Option<Json>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pr: Option<Json>,
     t: Vec<Json>,
     s: Vec<AbaMeta<'a>>,
 }
@@ -630,6 +635,7 @@ fn montar_partes(pasta: &PastaBruta) -> Result<(LivroMeta<'_>, Vec<Vec<u8>>), St
         a: pasta.a,
         names: pasta.names.clone(),
         es: pasta.es.clone(),
+        pr: pasta.pr.clone(),
         t: estilos.valores,
         s: abas_meta,
     };
@@ -731,6 +737,7 @@ mod testes {
             a: 0,
             names: None,
             es: None,
+            pr: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -790,6 +797,7 @@ mod testes {
             a: 0,
             names: None,
             es: None,
+            pr: None,
             sheets: vec![AbaBruta {
                 n: "Dados".into(),
                 tc: None,
@@ -858,6 +866,7 @@ mod testes {
             a: 0,
             names: None,
             es: None,
+            pr: None,
             sheets: vec![AbaBruta {
                 n: "Dados".into(),
                 tc: None,
@@ -911,6 +920,7 @@ mod testes {
             a: 0,
             names: None,
             es: None,
+            pr: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -975,6 +985,7 @@ mod testes {
             a: 0,
             names: None,
             es: None,
+            pr: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -1044,6 +1055,7 @@ mod testes {
             a: 0,
             names: None,
             es: None,
+            pr: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,

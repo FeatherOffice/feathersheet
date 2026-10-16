@@ -325,11 +325,13 @@ pub(super) fn estilo_excel(raiz: &XmlNode) -> Option<(serde_json::Value, serde_j
     }
     let angulo = fundo_pr.and_then(|p| p.child("gradFill")).and_then(|g| g.child("lin")).and_then(|l| l.attr("ang"))
         .and_then(|v| v.parse::<f64>().ok()).map_or(90.0, |a| a / 60_000.0);
-    // Sem `spPr`: fundo branco do Excel. `noFill`: transparente.
-    let fundo = match cor_do_sppr(fundo_pr) {
-        None if fundo_pr.is_none() => Some("#ffffff".to_string()),
-        None => None,
-        Some(c) => c,
+    // Só `noFill` é transparente. Sem `spPr`, sem preenchimento dentro dele
+    // (só a borda) ou com cor que não se resolve: o automático do Excel, branco.
+    let transparente = fundo_pr.is_some_and(|p| p.child("noFill").is_some());
+    let fundo = if transparente {
+        "#00000000".to_string()
+    } else {
+        cor_do_sppr(fundo_pr).flatten().unwrap_or_else(|| "#ffffff".to_string())
     };
     let tamanho = tam_eixo.or(tam_geral).unwrap_or(10.0);
     let nativa = serde_json::json!({

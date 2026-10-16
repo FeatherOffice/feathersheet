@@ -168,7 +168,7 @@ impl HospedeiroMacros for HospedeiroSheet {
                             "Linha deve ser número inteiro a partir de 1"
                         )?;
                         if n==0 || n>u64::from(MAX_ROWS) {
-                            return Err("Linha fora dos limites (1 a 10000000)".into());
+                            return Err(format!("Linha fora dos limites (1 a {MAX_ROWS})"));
                         }
                         Ok(json!(s.ultima_coluna_na_linha((n-1) as u32)))
                     }
@@ -810,7 +810,7 @@ function __sheet(i) {
             if(r!==null && typeof r==='object' && 'r0' in r){
                 if(!['r0','c0','r1','c1'].every(k=>Number.isInteger(r[k]))
                     || r.r0<0 || r.r1<0 || r.c0<0 || r.c1<0
-                    || r.r0>=10000000 || r.r1>=10000000
+                    || r.r0>=100000000 || r.r1>=100000000
                     || r.c0>=16384 || r.c1>=16384) throw new Error('Retângulo inválido');
                 r=__nome(r.r0,r.c0)+':'+__nome(r.r1,r.c1);
             }

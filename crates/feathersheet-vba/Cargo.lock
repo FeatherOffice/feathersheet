@@ -770,26 +770,26 @@ version = "0.1.1"
 source = "git+https://github.com/FeatherOffice/feather-draw?tag=v0.1.1#17404b4dad3cec398967d948d858ab46eed57d08"
 
 [[package]]
-name = "featheroffice-image"
+name = "feather-image"
 version = "0.1.0"
 dependencies = [
  "image",
 ]
 
 [[package]]
-name = "featheroffice-io"
+name = "feather-io"
 version = "0.1.0"
 dependencies = [
  "feather-charts",
  "feather-draw",
- "featheroffice-image",
- "featheroffice-tables",
+ "feather-image",
+ "feather-tables",
  "image",
  "zip",
 ]
 
 [[package]]
-name = "featheroffice-macros"
+name = "feather-macros"
 version = "0.1.0"
 dependencies = [
  "boa_engine",
@@ -799,24 +799,24 @@ dependencies = [
 ]
 
 [[package]]
-name = "featheroffice-tables"
+name = "feather-tables"
 version = "0.1.0"
 
 [[package]]
 name = "feathersheet-core"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "feathersheet-io"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "arrow",
  "feather-charts",
  "feather-draw",
- "featheroffice-io",
+ "feather-io",
  "feathersheet-core",
  "flate2",
  "parquet",
@@ -829,16 +829,16 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-macros"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
- "featheroffice-macros",
+ "feather-macros",
  "feathersheet-core",
  "serde_json",
 ]
 
 [[package]]
 name = "feathersheet-vba"
-version = "0.1.0"
+version = "0.0.2"
 dependencies = [
  "cfb",
  "feathersheet-core",

@@ -28,7 +28,7 @@ pub use impressao::ImpressaoVisual;
 mod desenho_auxiliar;
 mod mesclas_visuais;
 mod referencias;
-mod barras;
+pub(crate) mod barras;
 mod setas;
 mod topicos;
 mod alca;
@@ -1271,6 +1271,8 @@ impl canvas::Program<Msg> for Grade<'_> {
                     if self.ctrl_pressionado && y.abs() >= 0.1 {
                         return (event::Status::Captured, Some(Msg::Roda(y.signum() as i32)));
                     }
+                    // Shift+roda rola na horizontal, como no Excel.
+                    let (x, y) = if state.shift && x.abs() < 0.01 { (y, 0.0) } else { (x, y) };
                     let dr = (y*3.0).round() as i32;
                     let dc = (x*2.0).round() as i32;
                     if dr != 0 || dc != 0 {

@@ -120,7 +120,8 @@
         "corpo": [
           "The native format is .fshz. Ctrl+S saves and Ctrl+Shift+S saves under another name. Open also reads .xlsx, .csv and .tsv.",
           "Arquivo → Exportar writes the workbook as .xlsx or the current sheet as .csv.",
-          "Autosave writes the file at the interval chosen in Settings.",
+          "Autosave works ONLY for .fshz files that were already saved: it writes over them at the interval chosen in Settings. An opened .xlsx, .csv or .parquet file, or a new spreadsheet, is never written automatically — to use autosave, choose Save as… and pick .fshz.",
+          "Automatic recovery covers everything else: it keeps a copy of any changed spreadsheet (including .xlsx, .parquet and never-saved ones) in Documents/FeatherSheet/Temporarios/Recuperacao. If the computer shuts down, it shows up on the start screen to recover. It does not replace saving: the copy is removed when you save or discard. Very large workbooks (over 100 million cells) get no automatic copy, because each copy would freeze the window and double the memory: save them with Ctrl+S.",
           "Everything runs on your machine: no account, no login, none of your content leaves it."
         ]
       },
@@ -204,6 +205,7 @@
       "excel-fn": "Worksheet functions (app.fn)"
     },
     "funcoes": {
+      "cell": "Like VBA: cell, cells and range without a sheet use the active sheet (where the macro runs). Another sheet only when written: sheets(\"Sales\").cell(\"A1\") or sheets(2).",
       "value": "The computed value of the cell.",
       "formula": "The text typed in the cell, starting with \"=\" when it is a formula.",
       "set": "Writes a value or a formula into the cell. Returns `sheet`, so calls chain: `sheet.set(\"A1\", 1).set(\"A2\", 2)`.",

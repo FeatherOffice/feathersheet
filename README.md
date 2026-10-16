@@ -6,6 +6,8 @@ inteira na sua máquina: sem conta, sem login, sem telemetria.
 
 > **Estado:** em desenvolvimento ativo. Versão alpha prevista para **30/10/2026**.
 
+![FeatherSheet com o modelo Fluxo de caixa e um gráfico de entradas e saídas, com a dica do mouse aberta em junho](docs/imagens/planilha-e-grafico.png)
+
 ## Baixar
 
 | Sistema | Arquivo | Como instalar |
@@ -24,6 +26,13 @@ instalador do Windows substituem a versão anterior.
 
 ---
 
+## Novidades da v0.0.3
+
+![Janela "O que há de novo" da versão 0.0.3: 25 tipos de gráfico, dica do mouse, legenda clicável, elementos analíticos, recuperação automática, Ctrl+Z nos gráficos, Primeiros passos e Seus dados](docs/imagens/novidades-0.0.3.png)
+
+A mesma janela abre sozinha na primeira vez depois de atualizar (e fica no
+menu Ajuda, em *O que há de novo*).
+
 ## O que já faz
 
 | Área | Destaques |
@@ -31,11 +40,20 @@ instalador do Windows substituem a versão anterior.
 | **Fórmulas** | 457 das 520 funções do Excel, com nomes em português ou inglês conforme o idioma da interface; avaliar fórmula passo a passo; matrizes dinâmicas, `LAMBDA`, voláteis |
 | **Arquivos grandes** | até 100 milhões de linhas; abre `.parquet` e `.csv` grande; cálculo paralelo com invalidação seletiva; rodapé com soma e contagem instantâneas |
 | **Excel** | abre e grava `.xlsx` com cores do tema, formas, imagens, degradês e gráficos na posição certa; lê `.xlsm` e converte as macros VBA para JavaScript |
-| **Gráficos** | gráficos editáveis com o painel *Formatar gráfico* (temas, cor por ponto, eixos, rótulos), pelo motor comum [`feather-charts`](https://github.com/FeatherOffice/feather-charts) |
+| **Gráficos** | 25 tipos (combinado, cascata, radar, Gantt, mapa de calor…), dica do mouse e legenda clicável; gráficos editáveis com o painel *Formatar gráfico* (temas, cor por ponto, eixos, rótulos), pelo motor comum [`feather-charts`](https://github.com/FeatherOffice/feather-charts) |
 | **Dados** | tabelas, tabela dinâmica, formatação condicional, validação, agrupar/subtotal, proteger planilha, Texto para colunas |
 | **Macros** | editor Alt+F11 com macros em JavaScript (interpretador Boa, local) guardadas dentro do próprio arquivo |
 | **IA local** | servidor MCP (`feathersheet-mcp`) para uma IA ler, escrever e conferir planilhas por stdio |
 | **Desenho** | caneta com pressão (mesa digitalizadora) sobre a planilha |
+
+### Gráficos
+
+![Quatro gráficos do FeatherSheet: combinado (colunas de vendas com linhas de meta e média do setor), radar comparando dois produtos, cascata de receita e custos até o total, e mapa de calor por dia e hora](docs/imagens/galeria-graficos.png)
+
+| | |
+|---|---|
+| ![Painel Formatar gráfico com os elementos analíticos: tendência linear com equação e R², linha de média](docs/imagens/formatar-grafico.png) | ![Gráfico com a série Saídas desligada pela legenda, o item hachurado e a dica mostrando a porcentagem](docs/imagens/legenda-clicavel.png) |
+| **Formatar gráfico:** tendência (linear, exponencial, logarítmica, polinomial, potência, média móvel) com equação e R², barras de erro e linhas de máximo, mínimo e média | **Legenda clicável e dica do mouse:** clique num item para ocultar a série (fica hachurado); a dica mostra categoria, série, valor e porcentagem, e é personalizável |
 
 ## Paridade com o Excel
 

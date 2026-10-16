@@ -5,7 +5,7 @@
 use super::*;
 
 /// Espessura da barra em pixels de tela (não acompanha o zoom).
-pub(super) const ESPESSURA: f32 = 13.0;
+pub(crate) const ESPESSURA: f32 = 13.0;
 /// Alça nunca menor que isto, para continuar fácil de pegar.
 const ALCA_MINIMA: f32 = 28.0;
 

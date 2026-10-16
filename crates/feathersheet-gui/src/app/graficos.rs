@@ -1,12 +1,12 @@
 //! Painel Iced: extração no motor Sheet, desenho no Charts compartilhado.
 use super::*;
 mod editor;
-mod excel;
+mod interacao;
 mod painel;
 mod posicionamento;
 mod seletor_tipo;
 use posicionamento::{Alca, Quadro};
-use feather_charts::{Grafico, Tipo, TipografiaGrafico};
+use feather_charts::{Grafico, Tipo};
 use feathersheet_core::celulas::refs::{format_ref, parse_range_ref};
 use feathersheet_core::grafico::chart::{AggregateFn, ChartConfig, ChartRange, ChartType};
 use feather_ui::seletor_cor::{self, Evento as EventoCor};
@@ -142,6 +142,11 @@ pub enum Evento {
     Fechar,
     FecharSeletor,
     Cursor(iced::Point),
+    /// Mouse sobre o gráfico parado (posição relativa ao canto dele).
+    Pairar(String, iced::Point),
+    SairDoGrafico(String),
+    /// Um quadro da transição da legenda.
+    QuadroTransicao,
     Arrastar(String),
     Redimensionar(String, Alca),
     Soltar,
@@ -244,7 +249,7 @@ pub enum CampoVisivel {
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 #[serde(default)]
-struct Aparencia {
+pub(super) struct Aparencia {
     eixo_x: String,
     eixo_y: String,
     fundo: String,
@@ -308,6 +313,9 @@ pub(super) struct Estado {
     /// Último clique num gráfico (o Iced 0.13 não tem duplo clique no `mouse_area`).
     ultimo_clique: Option<(String, std::time::Instant)>,
     redimensionamento: Option<(String, u32, iced::Point, Quadro, Alca)>,
+    /// Os gráficos da aba antes de arrastar/redimensionar: ao soltar, o gesto
+    /// inteiro vira um passo de Ctrl+Z.
+    antes_do_gesto: Option<(u32, Option<String>)>,
     selecionado: Option<String>,
     id: Option<String>,
     aparencia: Aparencia,
@@ -343,6 +351,8 @@ pub(super) struct Estado {
     copiado: Option<serde_json::Value>,
     /// Interface do painel Formatar gráfico (grupo aberto, seleções).
     pub(super) painel: painel::EstadoPainel,
+    /// Dica do mouse e clique na legenda do gráfico parado.
+    interacao: interacao::Estado,
     svg: Option<String>,
     mensagem: String,
 }
@@ -402,6 +412,75 @@ fn empilhamento(t: ChartType) -> Option<(ChartType, feather_charts::estilo::Empi
     })
 }
 
+/// Como os tipos fora dos sete básicos chegam ao desenhista novo: os de
+/// linha/área em degraus e empilhados viram o tipo básico com empilhamento
+/// e degraus; os demais têm desenho próprio (`TipoAvancado`).
+enum Rota {
+    Basico(Tipo, feather_charts::estilo::Empilhar, bool),
+    Avancado(feather_charts::formatado::TipoAvancado),
+}
+fn rota_especial(t: ChartType) -> Option<Rota> {
+    use feather_charts::estilo::Empilhar as E;
+    use feather_charts::formatado::TipoAvancado as A;
+    Some(match t {
+        ChartType::StepLineStacked => Rota::Basico(Tipo::Degraus, E::Empilhado, true),
+        ChartType::StepLineStacked100 => Rota::Basico(Tipo::Degraus, E::Cem, true),
+        ChartType::StepArea => Rota::Basico(Tipo::Area, E::Nenhum, true),
+        ChartType::StepAreaStacked => Rota::Basico(Tipo::Area, E::Empilhado, true),
+        ChartType::StepAreaStacked100 => Rota::Basico(Tipo::Area, E::Cem, true),
+        ChartType::Combo => Rota::Avancado(A::Combinado),
+        ChartType::Histogram => Rota::Avancado(A::Histograma),
+        ChartType::Waterfall => Rota::Avancado(A::Cascata),
+        ChartType::Radar => Rota::Avancado(A::Radar),
+        ChartType::Bubble => Rota::Avancado(A::Bolhas),
+        ChartType::Candlestick => Rota::Avancado(A::Velas),
+        ChartType::Gantt => Rota::Avancado(A::Gantt),
+        ChartType::Heatmap => Rota::Avancado(A::MapaCalor),
+        ChartType::Line3d => Rota::Avancado(A::Linha3d),
+        _ => return None,
+    })
+}
+
+/// Desenho de um tipo especial (ver [`Rota`]) com a moldura e o estilo do
+/// desenhista novo. Devolve também o mapa (dica, legenda), os dados e o estilo.
+pub(super) fn desenhar_especial(
+    config: &ChartConfig,
+    dados: &feathersheet_core::grafico::chart::ChartData,
+    aparencia: &Aparencia,
+    excel: Option<&serde_json::Map<String, serde_json::Value>>,
+    largura: f32,
+    altura: f32,
+) -> Result<(String, feather_charts::formatado::MapaGrafico, Grafico, feather_charts::estilo::EstiloGrafico), String> {
+    let rota = rota_especial(config.tipo).ok_or("Tipo de gráfico não reconhecido.")?;
+    let series = dados.series.iter().enumerate().map(|(i, s)| feather_charts::Serie {
+        nome: s.name.clone(),
+        valores: s.values.iter().map(|v| if v.is_finite() { *v } else { 0.0 }).collect(),
+        cor: cor_rgb(&feathersheet_core::grafico::chart::get_series_color(&config.style, i as u32))
+            .unwrap_or(feather_draw::Cor::rgba(66, 133, 244, 255)),
+    }).collect();
+    let mut g = Grafico { titulo: dados.title.clone(), tipo: Tipo::Colunas, categorias: dados.categories.clone(), series };
+    if !aparencia.nomes_origem.is_empty() || !aparencia.cores.is_empty() || !aparencia.nomes.is_empty() {
+        aplicar_aparencia_grafico(&mut g, aparencia)?;
+    }
+    let mut e = aparencia.estilo.clone().unwrap_or_else(|| painel::migrar(aparencia, excel));
+    let falha = |_| "Não foi possível desenhar o gráfico com esses dados. Confira se a tabela tem as colunas que este tipo pede.".to_string();
+    let (svg, mapa) = match rota {
+        Rota::Basico(tipo, emp, degraus) => {
+            g.tipo = tipo;
+            e.empilhar = emp;
+            e.degraus = degraus;
+            g.exportar_svg_formatado_com_mapa(largura, altura, &e).map_err(falha)?
+        }
+        Rota::Avancado(tipo) => {
+            let pedido = feather_charts::formatado::PedidoAvancado {
+                tipo, x: dados.x_values.clone(), z: dados.z_values.clone(),
+            };
+            g.exportar_svg_avancado_com_mapa(largura, altura, &e, &pedido).map_err(falha)?
+        }
+    };
+    Ok((svg, mapa, g, e))
+}
+
 /// A aparência com o empilhamento do tipo (cria o estilo se ainda não há).
 fn aparencia_empilhada(a: &Aparencia, emp: feather_charts::estilo::Empilhar) -> Aparencia {
     let mut a = a.clone();
@@ -409,8 +488,12 @@ fn aparencia_empilhada(a: &Aparencia, emp: feather_charts::estilo::Empilhar) -> 
     a
 }
 
+/// A prévia do editor no tamanho em que o gráfico fica na planilha: assim
+/// o gráfico inserido sai idêntico ao que se viu no painel.
 fn preparar_svg(g: &Grafico, a: &Aparencia) -> Result<String, String> {
-    preparar_svg_em(g, a, 800., 450.)
+    let medida = |s: &str, padrao: f32| s.trim().replace(',', ".").parse::<f32>().ok()
+        .filter(|v| v.is_finite()).unwrap_or(padrao).clamp(120., 3200.);
+    preparar_svg_em(g, a, medida(&a.largura, 480.), medida(&a.altura, 300.))
 }
 
 /// `moeda:2` → `FormatoNumero::Moeda(2)`; vazio ou inválido = o padrão.
@@ -421,63 +504,17 @@ fn formato_numero(f: &str) -> Option<feather_charts::FormatoNumero> {
     Some(match tipo { "moeda" => F::Moeda(casas), "percentual" => F::Percentual(casas), "decimal" => F::Decimal(casas), _ => return None })
 }
 
-/// O SVG do gráfico em `largura` x `altura` (unidades da cena).
+/// O SVG do gráfico em `largura` x `altura` (unidades da cena), sempre pelo
+/// desenhista novo: com o estilo do painel ou o convertido da aparência antiga.
 fn preparar_svg_em(g: &Grafico, a: &Aparencia, largura: f32, altura: f32) -> Result<String, String> {
-    if let Some(e) = &a.estilo {
-        return g.exportar_svg_formatado(largura, altura, e)
-            .map_err(|_| "Não foi possível desenhar o gráfico com essas opções.".to_string());
+    if a.estilo.is_none() {
+        a.fonte.parse::<f32>().ok().filter(|v| (4.0..=32.0).contains(v))
+            .ok_or("O tamanho da fonte deve estar entre 4 e 32.")?;
+        cor_rgb(&a.fundo).ok_or("Use uma cor de fundo hexadecimal, como #ffffff.")?;
     }
-    let tamanho = a
-        .fonte
-        .parse::<f32>()
-        .ok()
-        .filter(|v| (4.0..=32.0).contains(v))
-        .ok_or("O tamanho da fonte deve estar entre 4 e 32.")?;
-    let fundo = cor_rgb(&a.fundo).ok_or("Use uma cor de fundo hexadecimal, como #ffffff.")?;
-    let mut saida = g
-        .exportar_svg_anotado(
-            largura,
-            altura,
-            &TipografiaGrafico {
-                formato: formato_numero(&a.formato).unwrap_or(feather_charts::FormatoNumero::Decimal(1)),
-                subtitulo: a.subtitulo.clone(),
-                unidade: a.unidade.clone(),
-                tamanho,
-                mostrar_titulo: a.titulo,
-                mostrar_legenda: a.legenda,
-                mostrar_eixos: a.eixos,
-                mostrar_valores: a.valores,
-                ..Default::default()
-            },
-        )
-        .map_err(|_| "Não foi possível desenhar o gráfico com essas opções.".to_string())?;
-    let escapar = |s: &str| {
-        s.replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-    };
-    let inicio = saida.find('>').ok_or("SVG inválido")? + 1;
-    let fundo_svg = if fundo.a == 255 {
-        format!("<rect width=\"{largura}\" height=\"{altura}\" fill=\"{}\"/>", a.fundo)
-    } else {
-        format!(
-            "<rect width=\"{largura}\" height=\"{altura}\" fill=\"#{:02x}{:02x}{:02x}\" fill-opacity=\"{:.3}\"/>",
-            fundo.r, fundo.g, fundo.b, fundo.a as f32 / 255.0,
-        )
-    };
-    saida.insert_str(inicio, &fundo_svg);
-    if a.eixos && g.tipo != Tipo::Pizza {
-        let fim = saida.rfind("</svg>").ok_or("SVG inválido")?;
-        let (cx, cy, base) = (largura / 2.0, altura / 2.0, altura - 3.0);
-        saida.insert_str(fim,&format!("<text x=\"{cx}\" y=\"{base}\" text-anchor=\"middle\" font-size=\"12\">{}</text><text x=\"12\" y=\"{cy}\" transform=\"rotate(-90 12 {cy})\" text-anchor=\"middle\" font-size=\"12\">{}</text>",escapar(&a.eixo_x),escapar(&a.eixo_y)));
-    }
-    // Famílias explícitas evitam rótulos invisíveis quando o SVG não resolve a fonte genérica.
-    saida = saida.replace(
-        "font-family=\"sans-serif\"",
-        "font-family=\"Noto Sans, DejaVu Sans, Liberation Sans, Arial, sans-serif\"",
-    );
-    Ok(saida)
+    let e = a.estilo.clone().unwrap_or_else(|| painel::migrar(a, None));
+    g.exportar_svg_formatado(largura, altura, &e)
+        .map_err(|_| "Não foi possível desenhar o gráfico com essas opções.".to_string())
 }
 /// Aceita a mesma codificação #RRGGBB/#RRGGBBAA do seletor compartilhado.
 /// Alfa segue até a Cena vetorial, sem converter RGB em outra paleta.
@@ -647,9 +684,11 @@ impl App {
                 self.graficos.series = dados.series.iter().enumerate()
                     .map(|(i,s)| format!("{} — {}",i+1,s.name)).collect();
                 self.graficos.painel.categorias = dados.categories.clone();
-                let svg = feathersheet_io::grafico_migrado::renderizar_dados(
-                    &config,&dados,800.,450.
-                )?;
+                let medida = |s: &str, padrao: f32| s.trim().replace(',', ".").parse::<f32>().ok()
+                    .filter(|v| v.is_finite()).unwrap_or(padrao).clamp(120., 3200.);
+                let (w, h) = (medida(&self.graficos.aparencia.largura, 480.), medida(&self.graficos.aparencia.altura, 300.));
+                let (svg, _, g, _) = desenhar_especial(&config, &dados, &self.graficos.aparencia, None, w, h)?;
+                self.graficos.painel.cores_base = g.series.iter().map(|s| s.cor).collect();
                 self.graficos.mensagem = dados.aviso.unwrap_or_else(|| format!(
                     "{} categorias, {} séries. Tipo {} em Rust.",
                     dados.categories.len(),dados.series.len(),self.graficos.tipo
@@ -932,8 +971,19 @@ impl App {
                     }
                 }
             }
+            Evento::Pairar(id, p) => {
+                if self.graficos.arraste.is_none() && self.graficos.redimensionamento.is_none() {
+                    self.pairar_grafico(id, p);
+                }
+            }
+            Evento::SairDoGrafico(id) => self.sair_do_grafico(&id),
+            Evento::QuadroTransicao => self.quadro_transicao_grafico(),
             Evento::Arrastar(id) => {
                 self.graficos.contexto = None;
+                if self.clique_na_legenda(&id) {
+                    self.graficos.selecionado = Some(id);
+                    return Task::none();
+                }
                 // Segundo clique no mesmo gráfico logo depois: abre o editor.
                 let duplo = self.graficos.ultimo_clique.as_ref()
                     .is_some_and(|(u, t)| *u == id && t.elapsed().as_millis() < 450);
@@ -946,6 +996,7 @@ impl App {
                 if let Some(aba) = self.workbook.aba(self.folha) {
                     if let Ok(lista) = feathersheet_io::graficos_salvos::listar(&aba.sheet) {
                         if let Some(v) = lista.iter().find(|v| v["id"].as_str() == Some(&id)) {
+                            self.graficos.antes_do_gesto = Some((aba.id, aba.sheet.g.clone()));
                             self.graficos.arraste = Some((
                                 id,
                                 aba.id,
@@ -964,6 +1015,7 @@ impl App {
                     if let Ok(lista) = feathersheet_io::graficos_salvos::listar(&aba.sheet) {
                         if let Some(v) = lista.iter().find(|v| v["id"].as_str() == Some(&id)) {
                             if let Some(quadro) = Quadro::da_posicao(&v["position"]) {
+                                self.graficos.antes_do_gesto = Some((aba.id, aba.sheet.g.clone()));
                                 self.graficos.redimensionamento = Some((
                                     id, aba.id, self.graficos.cursor, quadro, alca,
                                 ));
@@ -1000,6 +1052,14 @@ impl App {
             Evento::Soltar => {
                 self.graficos.arraste = None;
                 self.graficos.redimensionamento = None;
+                if let Some((aba_id, antes)) = self.graficos.antes_do_gesto.take() {
+                    if let Some(aba) = self.workbook.aba_mut(self.folha).filter(|a| a.id == aba_id) {
+                        if aba.sheet.g != antes {
+                            let depois = std::mem::replace(&mut aba.sheet.g, antes);
+                            aba.sheet.alterar_graficos(depois, false);
+                        }
+                    }
+                }
             }
             Evento::Fechar => {
                 self.graficos.aberto = false;

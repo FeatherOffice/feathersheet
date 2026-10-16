@@ -32,6 +32,58 @@ pub(super) fn svg_do_grafico_salvo(
     sheet: &feathersheet_core::Sheet,
     valor: &serde_json::Value,
 ) -> Option<String> {
+    desenhar_grafico_salvo(sheet, valor).map(|d| d.svg)
+}
+
+/// O desenho de um gráfico salvo e, nos tipos do desenhista novo, o mapa das
+/// partes clicáveis e os dados (para a dica do mouse e o clique na legenda).
+pub(super) struct Desenhado {
+    pub svg: String,
+    pub mapa: Option<feather_charts::formatado::MapaGrafico>,
+    pub grafico: Option<Grafico>,
+    pub estilo: Option<feather_charts::estilo::EstiloGrafico>,
+}
+
+/// Troca do desenho ao ligar/desligar um item da legenda, "atravessando o
+/// fundo": na 1ª metade o gráfico antigo some sobre o fundo do próprio
+/// gráfico; na 2ª o novo aparece. Os dois nunca ficam sobrepostos — antes,
+/// com escalas e larguras de barra diferentes, o meio da animação mostrava
+/// dois gráficos tremidos um sobre o outro.
+fn cruzar(antes: &str, depois: &str, t: f32) -> String {
+    let medida = |nome: &str| -> f32 {
+        let chave = format!("{nome}=\"");
+        depois.find(&chave).and_then(|i| depois[i + chave.len()..].split('"').next())
+            .and_then(|v| v.parse().ok()).unwrap_or(480.0)
+    };
+    let (w, h) = (medida("width"), medida("height"));
+    // O fundo do gráfico novo, sem sombra; com degradê (precisa das defs),
+    // fica sem fundo fixo.
+    let fundo = depois.find("<rect class=\"area-grafico\"")
+        .and_then(|i| depois[i..].find("/>").map(|f| &depois[i..i + f + 2]))
+        .map(|r| match r.find(" filter=\"url(") {
+            Some(i) => format!("{}{}", &r[..i], r[i + 1..].split_once('"').and_then(|(_, x)| x.split_once('"')).map_or("/>", |(_, x)| x)),
+            None => r.to_owned(),
+        })
+        .filter(|r| !r.contains("url("))
+        .unwrap_or_default();
+    let suave = |x: f32| { let x = x.clamp(0.0, 1.0); x * x * (3.0 - 2.0 * x) };
+    let (op_antes, op_depois) = if t < 0.5 { (1.0 - suave(t * 2.0), 0.0) } else { (0.0, suave(t * 2.0 - 1.0)) };
+    format!("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}\" height=\"{h}\" viewBox=\"0 0 {w} {h}\">\
+{fundo}<g opacity=\"{op_antes:.3}\">{antes}</g><g opacity=\"{op_depois:.3}\">{depois}</g></svg>")
+}
+
+/// Itens desligados pela legenda em gráfico sem estilo próprio.
+fn aplicar_desligados(e: &mut feather_charts::estilo::EstiloGrafico, valor: &serde_json::Value) {
+    let lista: Vec<usize> = serde_json::from_value(valor[super::interacao::CAMPO_DESLIGADOS].clone()).unwrap_or_default();
+    for i in lista {
+        e.legenda.itens.entry(i).or_default().desligado = true;
+    }
+}
+
+pub(super) fn desenhar_grafico_salvo(
+    sheet: &feathersheet_core::Sheet,
+    valor: &serde_json::Value,
+) -> Option<Desenhado> {
     let mut config = serde_json::from_value::<ChartConfig>(valor.clone()).ok()?;
     let linhas = u64::from(config.range.r1.checked_sub(config.range.r0)?) + 1;
     let colunas = u64::from(config.range.c1.checked_sub(config.range.c0)?) + 1;
@@ -49,21 +101,25 @@ pub(super) fn svg_do_grafico_salvo(
     if pizza {
         config.tipo = ChartType::Column;
     }
-    // Desenha os tipos especializados pelo mesmo motor Rust da prévia.
+    // Tipos especiais (degraus empilhados, radar, cascata, Gantt…): o mesmo
+    // desenhista novo da prévia, no tamanho do quadro.
     if !matches!(config.tipo,
         ChartType::Column | ChartType::Bar | ChartType::Line |
         ChartType::Area | ChartType::StepLine | ChartType::Scatter
     ) && !pizza {
         let aparencia: Aparencia =
             serde_json::from_value(valor["_featherNative"].clone()).unwrap_or_default();
-        if aparencia.nomes_origem.is_empty() {
-            return feathersheet_io::grafico_migrado::renderizar_sheet(
-                sheet, &config, 800., 450.
-            ).ok();
-        }
         let mut dados = feathersheet_core::grafico::chart::extract_chart_data(sheet, &config);
         super::renomear_series_dados(&mut dados, &config.style.hidden_series, &aparencia);
-        return feathersheet_io::grafico_migrado::renderizar_dados(&config, &dados, 800., 450.).ok();
+        let medida = |k: &str, padrao: f64| valor["position"][k].as_f64().unwrap_or(padrao).clamp(120., 3200.) as f32;
+        // O estilo já com os itens desligados pela legenda, antes do desenho.
+        let mut aparencia = aparencia;
+        let mut estilo = aparencia.estilo.take()
+            .unwrap_or_else(|| super::painel::migrar(&aparencia, valor["_excel"].as_object()));
+        aplicar_desligados(&mut estilo, valor);
+        aparencia.estilo = Some(estilo);
+        let (svg, mapa, g, estilo) = super::desenhar_especial(&config, &dados, &aparencia, None, medida("width", 480.), medida("height", 300.)).ok()?;
+        return Some(Desenhado { svg, mapa: Some(mapa), grafico: Some(g), estilo: Some(estilo) });
     }
     let mut contrato = if valor["_excel"].is_object() {
         // Gráfico do Excel: célula vazia na série é lacuna lá; o motor comum
@@ -103,23 +159,17 @@ pub(super) fn svg_do_grafico_salvo(
         // a aparência durante o redraw, apesar da configuração persistida.
         aplicar_aparencia_grafico(&mut contrato.grafico, &aparencia).ok()?;
     }
-    // Estilo novo (painel Formatar gráfico): desenhado no tamanho do quadro,
-    // com fundo, cores e textos do próprio estilo (o do Excel já foi convertido).
-    if aparencia.estilo.is_some() {
-        let medida = |k: &str, padrao: f64| valor["position"][k].as_f64().unwrap_or(padrao).clamp(120., 3200.) as f32;
-        return preparar_svg_em(&contrato.grafico, &aparencia, medida("width", 480.), medida("height", 300.)).ok();
-    }
-    // Documentos antigos sem _featherNative preservam as cores já
-    // resolvidas pelo adaptador a partir de ChartConfig.style.series_colors.
-    // Gráfico do `.xlsx`: desenhado no tamanho do quadro (letra em px reais)
-    // e vestido com o fundo, o contorno e as cores de texto do Excel.
-    if let Some(excel) = valor["_excel"].as_object() {
-        let medida = |k: &str, padrao: f64| valor["position"][k].as_f64().unwrap_or(padrao).clamp(120., 3200.) as f32;
-        let (w, h) = (medida("width", 480.), medida("height", 320.));
-        let svg = preparar_svg_em(&contrato.grafico, &aparencia, w, h).ok()?;
-        return Some(super::excel::vestir(svg, excel, w, h));
-    }
-    preparar_svg(&contrato.grafico, &aparencia).ok()
+    // Todos os tipos básicos saem do desenhista novo, no tamanho do quadro:
+    // com o estilo do painel ou, sem ele, o convertido da aparência antiga
+    // (fundo, contorno e cores de texto do `.xlsx` inclusive). Assim a dica
+    // do mouse e o clique na legenda valem para qualquer gráfico.
+    let medida = |k: &str, padrao: f64| valor["position"][k].as_f64().unwrap_or(padrao).clamp(120., 3200.) as f32;
+    let (w, h) = (medida("width", 480.), medida("height", 300.));
+    let mut estilo = aparencia.estilo.clone()
+        .unwrap_or_else(|| super::painel::migrar(&aparencia, valor["_excel"].as_object()));
+    aplicar_desligados(&mut estilo, valor);
+    let (svg, mapa) = contrato.grafico.exportar_svg_formatado_com_mapa(w, h, &estilo).ok()?;
+    Some(Desenhado { svg, mapa: Some(mapa), grafico: Some(contrato.grafico), estilo: Some(estilo) })
 }
 
 impl App {
@@ -409,6 +459,18 @@ impl App {
             // jeito que fechado (antes, a prévia do editor lia a aba errada no
             // gráfico do `.xlsx` e ele sumia ao abrir "Editar gráfico…").
             let svg = svg_do_grafico_salvo(dados, &v).unwrap_or_else(previa_indisponivel);
+            // Liga/desliga pela legenda: o desenho novo aparece por cima do
+            // antigo (esmaecimento cruzado), sem o eixo balançar no meio.
+            let svg = match v["id"].as_str().and_then(|id| self.transicao_do_grafico(id)) {
+                Some((item, t)) if t < 1.0 => {
+                    let (antes, _, _) = super::interacao::com_item_alternado(&v, item);
+                    match svg_do_grafico_salvo(dados, &antes) {
+                        Some(velho) => cruzar(&velho, &svg, t),
+                        None => svg,
+                    }
+                }
+                _ => svg,
+            };
             let ret = feathersheet_io::objetos_aba::Retangulo::novo(
                 quadro.x as f32, quadro.y as f32, quadro.largura as f32, quadro.altura as f32,
             );
@@ -468,7 +530,12 @@ impl App {
             // A roda sobre o gráfico rola a planilha (Ctrl+roda dá zoom),
             // como no Excel: a área de clique esconde o cursor da grade.
             let ctrl = self.ctrl_pressionado;
+            let sobre_legenda = self.graficos.interacao.pairar.as_ref()
+                .is_some_and(|p| p.id == id && p.legenda.is_some());
+            let id_mover = id.clone();
             let item = iced::widget::mouse_area(Space::new(Length::Fill, Length::Fill))
+                .on_move(move |p| Msg::Grafico(Evento::Pairar(id_mover.clone(), p)))
+                .on_exit(Msg::Grafico(Evento::SairDoGrafico(id.clone())))
                 .on_press(Msg::Grafico(Evento::Arrastar(id.clone())))
                 .on_right_press(Msg::Grafico(Evento::Contexto(id.clone())))
                 .on_scroll(move |d| {
@@ -482,7 +549,7 @@ impl App {
                         crate::app::botoes_macro::rolar_pela_roda(d)
                     }
                 })
-                .interaction(mouse::Interaction::Grab);
+                .interaction(if sobre_legenda { mouse::Interaction::Pointer } else { mouse::Interaction::Grab });
 
             // Conteúdo opaco e CLIPADO dentro da própria borda do gráfico:
             // SVG não deve ultrapassar o retângulo, nem consumir os handles.
@@ -499,7 +566,7 @@ impl App {
                 });
 
             let conteudo: Element<'_, Msg> = if selecionado {
-                // Oito quadradinhos no estilo Google Sheets, sobrepostos às
+                // Oito alças (barras nos lados, "L" nos cantos) sobrepostas às
                 // bordas sem adicionar largura/altura ao gráfico no .fshz.
                 let cantos = iced::widget::column![
                     iced::widget::row![
@@ -514,7 +581,7 @@ impl App {
                         alca_grafico(&id, Alca::Oeste),
                         Space::with_width(Length::Fill),
                         alca_grafico(&id, Alca::Leste),
-                    ],
+                    ].align_y(Alignment::Center),
                     Space::with_height(Length::Fill),
                     iced::widget::row![
                         alca_grafico(&id, Alca::Sudoeste),
@@ -522,11 +589,16 @@ impl App {
                         alca_grafico(&id, Alca::Sul),
                         Space::with_width(Length::Fill),
                         alca_grafico(&id, Alca::Sudeste),
-                    ]
+                    ].align_y(Alignment::End)
                 ].width(Length::Fixed(largura)).height(Length::Fixed(altura));
                 iced::widget::stack![painel, cantos].into()
             } else {
                 painel.into()
+            };
+            // Dica do ponto sob o mouse, por cima de tudo (sem pegar o clique).
+            let conteudo: Element<'_, Msg> = match self.dica_do_grafico(&id, largura, altura) {
+                Some(dica) => iced::widget::stack![conteudo, dica].into(),
+                None => conteudo,
             };
             graficos = graficos.push(
                 iced::widget::column![
@@ -541,10 +613,16 @@ impl App {
 
         // A área dos gráficos NÃO inclui os cabeçalhos; a máscara impede que
         // o SVG e as alças invadam bordas da grade, barra de abas e editor.
-        let celulas = container(graficos)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .clip(true);
+        // Sem cobrir as barras de rolagem da grade (direita e embaixo): as
+        // alças de um gráfico perto da borda ficavam por cima delas.
+        let barra = crate::grade::barras::ESPESSURA;
+        let celulas = iced::widget::column![
+            iced::widget::row![
+                container(graficos).width(Length::Fill).height(Length::Fill).clip(true),
+                Space::with_width(Length::Fixed(barra)),
+            ].height(Length::Fill),
+            Space::with_height(Length::Fixed(barra)),
+        ].width(Length::Fill).height(Length::Fill);
         let cobertura = iced::widget::column![
             Space::with_height(Length::Fixed(
                 crate::grade::CABECALHO_COLUNA * zoom as f32
@@ -570,23 +648,86 @@ impl App {
     }
 }
 
-/// Handle visível e clicável; com 8 pontos de captura independentes.
+/// Alça de redimensionar: barra grossa colada na borda (no meio dos lados)
+/// ou "L" grosso no canto, dentro de uma área de captura maior que o traço.
 fn alca_grafico<'a>(id: &str, direcao: Alca) -> Element<'a, Msg> {
-    let alvo = iced::widget::mouse_area(
-        container(Space::with_width(Length::Fixed(10.)).height(Length::Fixed(10.)))
-            .width(Length::Fixed(10.))
-            .height(Length::Fixed(10.))
+    use iced::alignment::{Horizontal, Vertical};
+    const ESPESSURA: f32 = 5.0;
+    const COMPRIMENTO: f32 = 28.0;
+    const CANTO: f32 = 16.0;
+    const CAPTURA: f32 = 12.0;
+    let barra = |w: f32, h: f32| -> Element<'a, Msg> {
+        container(Space::new(Length::Fixed(w), Length::Fixed(h)))
             .style(|_| container::Style {
-                background: Some(iced::Background::Color(feather_ui::tema::COR_PAINEL())),
-                border: iced::Border {
-                    color: feather_ui::tema::COR_AZUL_ACENTO(),
-                    width: 1.5,
-                    radius: 1.0.into(),
-                },
+                background: Some(iced::Background::Color(feather_ui::tema::COR_AZUL_ACENTO())),
+                border: iced::Border { radius: (ESPESSURA / 2.0).into(), ..Default::default() },
                 ..Default::default()
             })
-    )
-    .on_press(Msg::Grafico(Evento::Redimensionar(id.to_owned(), direcao)))
-    .interaction(mouse::Interaction::ResizingDiagonallyDown);
-    alvo.into()
+            .into()
+    };
+    let colada = |filho: Element<'a, Msg>, w: f32, h: f32, x: Horizontal, y: Vertical| -> Element<'a, Msg> {
+        container(filho).width(Length::Fixed(w)).height(Length::Fixed(h))
+            .align_x(x).align_y(y).into()
+    };
+    let (x, y) = match direcao {
+        Alca::Noroeste => (Horizontal::Left, Vertical::Top),
+        Alca::Norte => (Horizontal::Center, Vertical::Top),
+        Alca::Nordeste => (Horizontal::Right, Vertical::Top),
+        Alca::Oeste => (Horizontal::Left, Vertical::Center),
+        Alca::Leste => (Horizontal::Right, Vertical::Center),
+        Alca::Sudoeste => (Horizontal::Left, Vertical::Bottom),
+        Alca::Sul => (Horizontal::Center, Vertical::Bottom),
+        Alca::Sudeste => (Horizontal::Right, Vertical::Bottom),
+    };
+    let (desenho, cursor): (Element<'a, Msg>, _) = match direcao {
+        Alca::Norte | Alca::Sul => (
+            colada(barra(COMPRIMENTO, ESPESSURA), COMPRIMENTO + 8.0, CAPTURA, x, y),
+            mouse::Interaction::ResizingVertically,
+        ),
+        Alca::Oeste | Alca::Leste => (
+            colada(barra(ESPESSURA, COMPRIMENTO), CAPTURA, COMPRIMENTO + 8.0, x, y),
+            mouse::Interaction::ResizingHorizontally,
+        ),
+        _ => {
+            let l = iced::widget::stack![
+                colada(barra(CANTO, ESPESSURA), CANTO, CANTO, x, y),
+                colada(barra(ESPESSURA, CANTO), CANTO, CANTO, x, y),
+            ];
+            let cursor = if matches!(direcao, Alca::Noroeste | Alca::Sudeste) {
+                mouse::Interaction::ResizingDiagonallyDown
+            } else {
+                mouse::Interaction::ResizingDiagonallyUp
+            };
+            (colada(l.into(), CANTO + 4.0, CANTO + 4.0, x, y), cursor)
+        }
+    };
+    iced::widget::mouse_area(desenho)
+        .on_press(Msg::Grafico(Evento::Redimensionar(id.to_owned(), direcao)))
+        .interaction(cursor)
+        .into()
+}
+
+#[cfg(test)]
+mod testes_cruzar {
+    use super::cruzar;
+
+    #[test]
+    fn troca_da_legenda_nunca_sobrepoe_os_dois_desenhos() {
+        let svg = |barra: &str| format!("<svg width=\"200\" height=\"100\"><rect class=\"area-grafico\" x=\"0\" y=\"0\" width=\"200\" height=\"100\" rx=\"0\" fill=\"#ffffff\" filter=\"url(#sombra-grafico)\"/>{barra}</svg>");
+        let (antes, depois) = (svg("<rect class=\"a\"/>"), svg("<rect class=\"b\"/>"));
+        let opacidades = |t: f32| -> Vec<f32> {
+            let s = cruzar(&antes, &depois, t);
+            s.match_indices("<g opacity=\"").map(|(i, _)| s[i + 12..].split('"').next().unwrap().parse().unwrap()).collect()
+        };
+        for t in [0.0, 0.2, 0.49, 0.5, 0.8, 1.0] {
+            let o = opacidades(t);
+            assert!(o[0] == 0.0 || o[1] == 0.0, "t={t}: {o:?}");
+        }
+        assert_eq!(opacidades(0.0), [1.0, 0.0]);
+        assert_eq!(opacidades(1.0), [0.0, 1.0]);
+        // O fundo fixo vem sem a sombra (as defs ficam dentro dos grupos).
+        let s = cruzar(&antes, &depois, 0.5);
+        let fundo = &s[..s.find("<g ").unwrap()];
+        assert!(fundo.contains("area-grafico") && !fundo.contains("url("), "{fundo}");
+    }
 }

@@ -63,6 +63,9 @@ pub fn para_workbook(lida: &PastaLida) -> Workbook {
         nomes_de_json(&mut pasta, nomes);
     }
     pasta.estilos_celula = lida.es.as_ref().map(|v| v.to_string());
+    if let Some(pr) = &lida.pr {
+        pasta.propriedades = propriedades_de_json(pr);
+    }
     pasta
 }
 
@@ -80,6 +83,22 @@ pub fn nomes_de_json(pasta: &mut Workbook, nomes: &serde_json::Value) {
         let mut area = feathersheet_core::celulas::refs::Rect::new(r0, c0, r1, c1);
         area.sheet = r.get("sheet").and_then(|v| v.as_str()).map(str::to_string);
         pasta.definir_nome(nome, area);
+    }
+}
+
+/// Propriedades do arquivo como vão no `.fshz` (`pr`); `None` se vazias,
+/// para o arquivo sem autor não ganhar o campo.
+pub fn propriedades_para_json(p: &feathersheet_core::planilha::workbook::Propriedades) -> Option<serde_json::Value> {
+    (!p.vazia()).then(|| serde_json::json!({
+        "autor": p.autor, "modificadoPor": p.modificado_por, "organizacao": p.organizacao,
+    }))
+}
+
+/// O contrário de [`propriedades_para_json`]; campo ausente ou estranho fica vazio.
+pub fn propriedades_de_json(v: &serde_json::Value) -> feathersheet_core::planilha::workbook::Propriedades {
+    let campo = |nome: &str| v[nome].as_str().unwrap_or_default().to_owned();
+    feathersheet_core::planilha::workbook::Propriedades {
+        autor: campo("autor"), modificado_por: campo("modificadoPor"), organizacao: campo("organizacao"),
     }
 }
 
@@ -610,6 +629,7 @@ mod testes {
             a: 0,
             names: None,
             es: None,
+            pr: None,
             sheets: vec![AbaLida {
                 estilos: Default::default(),
                 n: "Planilha1".into(),
@@ -701,6 +721,7 @@ mod testes {
             a: 0,
             names: None,
             es: None,
+            pr: None,
             sheets: vec![AbaLida {
                 estilos: Default::default(),
                 n: "Planilha1".into(),

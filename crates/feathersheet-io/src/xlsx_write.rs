@@ -138,6 +138,9 @@ pub fn formula_to_excel(raw: &str) -> String {
             TokenType::Ident => {
                 let nome = canonical(&t.text).or_else(|| fora_do_motor(&t.text)).unwrap_or(&t.text);
                 if seguinte == Some(TokenType::LParen) {
+                    FUNCOES_USADAS.with(|f| if let Some(lista) = f.borrow_mut().as_mut() {
+                        lista.insert(nome.to_uppercase());
+                    });
                     if let Some(p) = crate::xlsx_write_futuras::prefixo(nome) {
                         out.push_str(p);
                     }
@@ -1570,6 +1573,16 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
     } else {
         String::new()
     };
+    // Propriedades do arquivo (Arquivo → Informações no Excel): só quando há autor.
+    let props = &pasta.propriedades;
+    let (tipo_props, rel_props) = if props.vazia() {
+        (String::new(), String::new())
+    } else {
+        (
+            "<Override PartName=\"/docProps/core.xml\" ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/><Override PartName=\"/docProps/app.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.extended-properties+xml\"/>".to_string(),
+            format!("<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" Target=\"docProps/core.xml\"/><Relationship Id=\"rId3\" Type=\"{NS_REL}/extended-properties\" Target=\"docProps/app.xml\"/>"),
+        )
+    };
     let rels_abas: String = (1..=n)
         .map(|i| format!("<Relationship Id=\"rId{i}\" Type=\"{NS_REL}/worksheet\" Target=\"worksheets/sheet{i}.xml\"/>"))
         .collect();
@@ -1578,14 +1591,14 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
         (
             "[Content_Types].xml".into(),
             format!(
-                "{XML_DECL}<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/>{tipo_vml}{tipo_metadata}<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>{tipos_abas}<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/><Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml\"/></Types>"
+                "{XML_DECL}<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"><Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/><Default Extension=\"xml\" ContentType=\"application/xml\"/>{tipo_vml}{tipo_metadata}{tipo_props}<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>{tipos_abas}<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/><Override PartName=\"/xl/sharedStrings.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml\"/></Types>"
             )
             .into_bytes(),
         ),
         (
             "_rels/.rels".into(),
             format!(
-                "{XML_DECL}<Relationships xmlns=\"{NS_PKG_REL}\"><Relationship Id=\"rId1\" Type=\"{NS_REL}/officeDocument\" Target=\"xl/workbook.xml\"/></Relationships>"
+                "{XML_DECL}<Relationships xmlns=\"{NS_PKG_REL}\"><Relationship Id=\"rId1\" Type=\"{NS_REL}/officeDocument\" Target=\"xl/workbook.xml\"/>{rel_props}</Relationships>"
             )
             .into_bytes(),
         ),
@@ -1608,6 +1621,16 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
     ];
     if ha_metadata {
         partes.push(("xl/metadata.xml".into(), METADATA_MATRIZ_DINAMICA.as_bytes().to_vec()));
+    }
+    if !props.vazia() {
+        partes.push(("docProps/core.xml".into(), format!(
+            "{XML_DECL}<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\"><dc:creator>{}</dc:creator><cp:lastModifiedBy>{}</cp:lastModifiedBy></cp:coreProperties>",
+            escape_xml(&props.autor), escape_xml(&props.modificado_por),
+        ).into_bytes()));
+        partes.push(("docProps/app.xml".into(), format!(
+            "{XML_DECL}<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\"><Application>FeatherSheet</Application><Company>{}</Company></Properties>",
+            escape_xml(&props.organizacao),
+        ).into_bytes()));
     }
     let mut relacoes = Vec::new();
     for (i, (xml, rels)) in abas.into_iter().enumerate() {
@@ -1634,6 +1657,22 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
 /// A pasta inteira num `.xlsx`.
 pub fn gerar_xlsx(pasta: &Workbook) -> Result<Vec<u8>, String> {
     zipar(montar_partes(pasta))
+}
+
+thread_local! {
+    /// Funções chamadas nas fórmulas exportadas (nome internacional), só
+    /// enquanto [`gerar_xlsx_com_funcoes`] está montando o arquivo.
+    static FUNCOES_USADAS: std::cell::RefCell<Option<std::collections::BTreeSet<String>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Como [`gerar_xlsx`], devolvendo também as funções usadas nas fórmulas
+/// (nome internacional, em maiúscula), para avisar das que o Excel não tem.
+pub fn gerar_xlsx_com_funcoes(pasta: &Workbook) -> Result<(Vec<u8>, std::collections::BTreeSet<String>), String> {
+    FUNCOES_USADAS.with(|f| *f.borrow_mut() = Some(Default::default()));
+    let partes = montar_partes(pasta);
+    let usadas = FUNCOES_USADAS.with(|f| f.borrow_mut().take()).unwrap_or_default();
+    Ok((zipar(partes)?, usadas))
 }
 
 // ============================================================== CSV
@@ -1703,6 +1742,19 @@ pub fn gerar_delimitado(pasta: &mut Workbook, indice: usize, separador: char) ->
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn exportar_lista_as_funcoes_usadas_para_avisar_das_fora_do_excel() {
+        let mut pasta = Workbook::new();
+        pasta.escrever_celula(0, 0, 0, "=SOMA(1;2)".into());
+        pasta.escrever_celula(0, 1, 0, "=COUNTUNIQUE(A1:A1)".into());
+        let (bytes, usadas) = gerar_xlsx_com_funcoes(&pasta).unwrap();
+        assert!(!bytes.is_empty());
+        assert!(usadas.contains("SUM") && usadas.contains("COUNTUNIQUE"), "{usadas:?}");
+        // Fora da exportação nada é coletado.
+        let _ = gerar_xlsx(&pasta).unwrap();
+        assert!(FUNCOES_USADAS.with(|f| f.borrow().is_none()));
+    }
 
     #[test]
     fn formato_personalizado_vai_e_volta_do_xlsx() {

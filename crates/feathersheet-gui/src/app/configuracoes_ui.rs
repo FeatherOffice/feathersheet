@@ -24,7 +24,7 @@ pub(super) const ATALHOS: &[(&str, &str, &str)] = &[
     ("colarValores", "Colar somente valores", "Ctrl+Shift+V"),
 ];
 
-fn opcao<'a>(rotulo: &str, icone: &str, ativo: bool, evento: Msg)
+pub(super) fn opcao<'a>(rotulo: &str, icone: &str, ativo: bool, evento: Msg)
     -> iced::widget::Button<'a, Msg>
 {
     button(row![
@@ -36,7 +36,7 @@ fn opcao<'a>(rotulo: &str, icone: &str, ativo: bool, evento: Msg)
         .on_press(evento)
 }
 
-fn linha<'a>(titulo: &str, dica: &str, controle: impl Into<Element<'a, Msg>>) -> Element<'a, Msg> {
+pub(super) fn linha<'a>(titulo: &str, dica: &str, controle: impl Into<Element<'a, Msg>>) -> Element<'a, Msg> {
     // Versão compacta (padding vertical 7) para a janela caber sem rolagem.
     iced::widget::column![
         row![
@@ -54,6 +54,87 @@ fn linha<'a>(titulo: &str, dica: &str, controle: impl Into<Element<'a, Msg>>) ->
     ].spacing(0).width(Length::Fill).into()
 }
 
+/// Recuperação e salvamento automáticos (Configurações e Primeiros passos).
+pub(super) fn linhas_salvamento(app: &App) -> Element<'_, Msg> {
+    iced::widget::column![
+        linha("Recuperação automática",
+            "Vale para qualquer planilha alterada: .fshz, .xlsx, .csv, .parquet e as nunca salvas. Guarda uma cópia à parte (não mexe no seu arquivo); se o computador desligar ou o app fechar sem salvar, ela aparece na tela inicial para recuperar.",
+            toggler(app.config.recuperacao_automatica).on_toggle(Msg::RecuperacaoAutomatica).style(estilo_toggle)),
+        linha("Salvamento automático",
+            "Só para arquivos .fshz já salvos: grava por cima deles. Um .xlsx, .csv ou .parquet aberto e planilhas novas NÃO são gravados sozinhos; use Salvar como… em .fshz para que passem a ser.",
+            toggler(app.config.auto_salvar).on_toggle(Msg::AutoSalvar).style(estilo_toggle)),
+        if app.config.auto_salvar {
+            linha("Gravar após inatividade", "Intervalo mínimo; pode aumentar se o arquivo for muito grande ou a gravação anterior for lenta.",
+                feather_ui::componentes::lista_suspensa(
+                    "Intervalo", &["2 s", "5 s", "15 s", "30 s", "60 s"],
+                    Some(match app.config.intervalo_auto_salvar {
+                        2 => "2 s", 5 => "5 s", 30 => "30 s", 60 => "60 s", _ => "15 s",
+                    }),
+                    |valor| Msg::IntervaloAutoSalvar(
+                        valor.split_whitespace().next().unwrap_or("15").parse().unwrap_or(15)
+                    ),
+                    110.0,
+                ))
+        } else {
+            Space::with_height(0).into()
+        },
+    ].spacing(0).into()
+}
+
+/// Automático / Claro / Escuro (Configurações e Primeiros passos).
+pub(super) fn opcoes_tema(app: &App) -> Element<'_, Msg> {
+    row![
+        opcao("Automático", "device-desktop", app.config.tema_auto, Msg::TemaAuto),
+        opcao("Claro", "eye", !app.config.tema_auto && !app.config.escuro, Msg::Tema(false)),
+        opcao("Escuro", "eye-off", !app.config.tema_auto && app.config.escuro, Msg::Tema(true)),
+    ].spacing(3).into()
+}
+
+/// Idioma da interface e das fórmulas (Configurações e Primeiros passos).
+pub(super) fn lista_idioma(app: &App) -> Element<'_, Msg> {
+    feather_ui::componentes::lista_suspensa(
+        "Idioma", &["Português (Brasil)", "English (United States)"],
+        Some(if app.config.idioma == "en-US" { "English (United States)" } else { "Português (Brasil)" }),
+        |v| Msg::Idioma(if v == "English (United States)" { "en-US" } else { "pt-BR" }),
+        210.0,
+    ).into()
+}
+
+/// As amostras da cor de destaque (Configurações e Primeiros passos).
+pub(super) fn amostras_acento(app: &App) -> Element<'_, Msg> {
+    let mut acentos = row![].spacing(5);
+    for (i, (nome, claro, escuro_hex)) in ACENTOS.iter().enumerate() {
+        let selecionado = app.config.acento == i;
+        let valor = u32::from_str_radix(
+            (if escuro() { escuro_hex } else { claro }).trim_start_matches('#'), 16
+        ).unwrap_or(0);
+        let cor = iced::Color::from_rgb8(
+            (valor >> 16) as u8, (valor >> 8) as u8, valor as u8
+        );
+        let amostra = container(Space::with_width(Length::Fixed(22.0)))
+            .width(Length::Fixed(24.0))
+            .height(Length::Fixed(24.0))
+            .style(move |_| container::Style {
+                background: Some(iced::Background::Color(cor)),
+                border: iced::Border {
+                    color: if selecionado { COR_FOCO(COR_PAINEL()) } else { COR_BORDA_SUAVE() },
+                    width: if selecionado { 2.0 } else { 1.0 },
+                    radius: 5.0.into(),
+                },
+                ..Default::default()
+            });
+        acentos = acentos.push(iced::widget::tooltip(
+            button(amostra).padding([4, 4])
+                .style(estilo_botao_pequeno(selecionado))
+                .on_press(Msg::Acento(i)),
+            container(text((*nome).to_owned()).size(11))
+                .padding([4, 7]).style(estilo_dica),
+            iced::widget::tooltip::Position::Bottom,
+        ));
+    }
+    acentos.into()
+}
+
 pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
     let secoes = ["Aparência", "Salvamento", "Planilha", "OpenQuery", "Atalhos", "Sobre"];
     let menu = feather_ui::configuracoes::menu(
@@ -63,47 +144,12 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
     );
     let corpo: Element<'_, Msg> = match app.config_secao {
         0 => {
-            let mut acentos = row![].spacing(5);
-            for (i, (nome, claro, escuro_hex)) in ACENTOS.iter().enumerate() {
-                let selecionado = app.config.acento == i;
-                let valor = u32::from_str_radix(
-                    (if escuro() { escuro_hex } else { claro }).trim_start_matches('#'), 16
-                ).unwrap_or(0);
-                let cor = iced::Color::from_rgb8(
-                    (valor >> 16) as u8, (valor >> 8) as u8, valor as u8
-                );
-                let amostra = container(Space::with_width(Length::Fixed(22.0)))
-                    .width(Length::Fixed(24.0))
-                    .height(Length::Fixed(24.0))
-                    .style(move |_| container::Style {
-                        background: Some(iced::Background::Color(cor)),
-                        border: iced::Border {
-                            color: if selecionado { COR_FOCO(COR_PAINEL()) } else { COR_BORDA_SUAVE() },
-                            width: if selecionado { 2.0 } else { 1.0 },
-                            radius: 5.0.into(),
-                        },
-                        ..Default::default()
-                    });
-                acentos = acentos.push(iced::widget::tooltip(
-                    button(amostra).padding([4, 4])
-                        .style(estilo_botao_pequeno(selecionado))
-                        .on_press(Msg::Acento(i)),
-                    container(text((*nome).to_owned()).size(11))
-                        .padding([4, 7]).style(estilo_dica),
-                    iced::widget::tooltip::Position::Bottom,
-                ));
-            }
             let escolhido = nome_zoom(ZOOM_OPCOES, app.config.zoom);
             let minimo = nome_zoom(ZOOM_LIMITES, app.config.zoom_minimo);
             let maximo = nome_zoom(ZOOM_LIMITES, app.config.zoom_maximo);
             iced::widget::column![
-                linha("Tema", "Automático acompanha o sistema na abertura.",
-                    row![
-                        opcao("Automático", "device-desktop", app.config.tema_auto, Msg::TemaAuto),
-                        opcao("Claro", "eye", !app.config.tema_auto && !app.config.escuro, Msg::Tema(false)),
-                        opcao("Escuro", "eye-off", !app.config.tema_auto && app.config.escuro, Msg::Tema(true)),
-                    ].spacing(3)),
-                linha("Cor de destaque", "Personaliza a interface.", acentos),
+                linha("Tema", "Automático acompanha o sistema na abertura.", opcoes_tema(app)),
+                linha("Cor de destaque", "Personaliza a interface.", amostras_acento(app)),
                 linha("Zoom padrão", "Aproximação aplicada à grade e salva localmente.",
                     feather_ui::componentes::lista_suspensa(
                         "Zoom", ZOOM_OPCOES,
@@ -167,24 +213,7 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
                         opcao("Salvar agora", "device-floppy", false, Msg::Salvar),
                         opcao("Salvar como…", "file-export", false, Msg::SalvarComo),
                     ].spacing(6)),
-                linha("Salvamento automático",
-                    "Somente em arquivos .fshz já salvos. Nunca abre um diálogo sozinho.",
-                    toggler(app.config.auto_salvar).on_toggle(Msg::AutoSalvar).style(estilo_toggle)),
-                if app.config.auto_salvar {
-                    linha("Gravar após inatividade", "Intervalo mínimo; pode aumentar se o arquivo for muito grande ou a gravação anterior for lenta.",
-                        feather_ui::componentes::lista_suspensa(
-                            "Intervalo", &["2 s", "5 s", "15 s", "30 s", "60 s"],
-                            Some(match app.config.intervalo_auto_salvar {
-                                2 => "2 s", 5 => "5 s", 30 => "30 s", 60 => "60 s", _ => "15 s",
-                            }),
-                            |valor| Msg::IntervaloAutoSalvar(
-                                valor.split_whitespace().next().unwrap_or("15").parse().unwrap_or(15)
-                            ),
-                            110.0,
-                        ))
-                } else {
-                    Space::with_height(0).into()
-                },
+                linhas_salvamento(app),
                 linha("Cópia de segurança",
                     "Cria uma cópia independente do último .fshz salvo, sem carregar seus dados na RAM.",
                     row![
@@ -196,13 +225,8 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
             ].spacing(0).into()
         }
         2 => iced::widget::column![
-            linha("Idioma e regionalização", "Português: argumentos e texto com ;. Inglês: argumentos e texto com ,.",
-                feather_ui::componentes::lista_suspensa(
-                    "Idioma", &["Português (Brasil)", "English (United States)"],
-                    Some(if app.config.idioma == "en-US" { "English (United States)" } else { "Português (Brasil)" }),
-                    |v| Msg::Idioma(if v == "English (United States)" { "en-US" } else { "pt-BR" }),
-                    210.0,
-                )),
+            linha("Idioma das fórmulas e da Ajuda", "Muda nomes das funções (SOMA ou SUM), separadores (; ou ,) e a Ajuda F1. Menus e janelas ainda são só em português.",
+                lista_idioma(app)),
             linha("Separadores de fórmulas e texto/CSV", "Definidos pelo idioma; Padrão aplicado às fórmulas e ao texto/CSV.",
                 text(if app.config.idioma == "en-US" { "Vírgula (,)" } else { "Ponto e vírgula (;)" }).size(12)),
             linha("Detectar separador do arquivo CSV", "Desligado: usa o idioma (; em português, , em inglês). Ligado: detecta um único separador; os demais ficam no texto.",

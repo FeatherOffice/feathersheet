@@ -451,6 +451,11 @@ impl App {
         // sobrescrever automaticamente o snapshot nem colocá-lo em Recentes.
         let recuperacao = path.starts_with(Self::pasta_temporarios());
         self.caminho = if ext == "fshz" && !recuperacao { Some(path.clone()) } else { None };
+        self.origem = (ext != "fshz" && !recuperacao).then(|| path.clone());
+        if recuperacao {
+            // Planilha recuperada: o nome do documento original volta.
+            if let Some(origem) = self.recuperacao.origem_pendente.take() { self.origem = origem; }
+        }
         self.alterado = ext != "fshz" || recuperacao;
         self.linha_inicio = 0;
         self.coluna_inicio = 0;
@@ -497,6 +502,7 @@ impl App {
 
     pub(super) fn gravar_em_segundo_plano(&mut self, path: PathBuf, copia: bool) -> Task<Msg> {
         self.confirmar();
+        self.carimbar_propriedades();
         if self.salvando {
             self.status = "Aguarde: o salvamento anterior ainda está em andamento.".into();
             return Task::none();
@@ -658,6 +664,8 @@ impl App {
     }
     pub(super) fn executar_pendente(&mut self, tipo: Pendente) -> Task<Msg> {
         self.pendente = None;
+        // Salvou ou descartou: a cópia de recuperação do documento atual sai.
+        self.descartar_recuperacao();
         match tipo {
             Pendente::Novo => {
                 self.em_tela_inicio = false;
@@ -679,6 +687,7 @@ impl App {
                 self.limpar_cache_imagens();
                 self.efeitos_imagem.aberto = false;
                 self.caminho = None;
+                self.origem = None;
                 self.alterado = false;
                 self.folha = 0; self.linha_inicio = 0; self.coluna_inicio = 0;
                 self.ancorar_rodape = false;
@@ -817,9 +826,10 @@ impl App {
     }
 
     pub(super) fn dialogo_salvar(&self) -> Task<Msg> {
-        Task::perform(async {
+        let nome = format!("{}.fshz", self.nome_base_documento());
+        Task::perform(async move {
             rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao()).add_filter("FeatherSheet", &["fshz"])
-                .set_file_name("Sem título.fshz")
+                .set_file_name(&nome)
                 .save_file().await.map(|f| f.path().to_path_buf())
         }, Msg::DestinoSalvar)
     }
@@ -879,10 +889,11 @@ impl App {
     }
 
     pub(super) fn dialogo_exportar_xlsx(&self) -> Task<Msg> {
-        Task::perform(async {
+        let nome = format!("{}.xlsx", self.nome_base_documento());
+        Task::perform(async move {
             rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao())
                 .add_filter("Pasta do Excel", &["xlsx"])
-                .set_file_name("Planilha.xlsx")
+                .set_file_name(&nome)
                 .save_file().await.map(|f| f.path().to_path_buf())
         }, Msg::DestinoXlsx)
     }
@@ -950,9 +961,13 @@ impl App {
 
     pub(super) fn gravar_xlsx(&mut self, path: PathBuf) {
         self.confirmar();
-        match feathersheet_io::xlsx_write::gerar_xlsx(&self.workbook) {
-            Ok(bytes) => match feathersheet_io::arquivo::gravar_atomico(&path, &bytes) {
-                Ok(()) => self.status = format!("Excel exportado: {}",path.display()),
+        self.carimbar_propriedades();
+        match feathersheet_io::xlsx_write::gerar_xlsx_com_funcoes(&self.workbook) {
+            Ok((bytes, usadas)) => match feathersheet_io::arquivo::gravar_atomico(&path, &bytes) {
+                Ok(()) => {
+                    self.status = format!("Excel exportado: {}",path.display());
+                    self.avisar_funcoes_fora_do_excel(&usadas);
+                }
                 Err(e) => self.status = format!("Erro ao gravar Excel: {e}"),
             },
             Err(e) => self.status = format!("Erro ao gerar Excel: {e}"),

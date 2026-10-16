@@ -1,6 +1,10 @@
 //! As funções da planilha, a ajuda de cada uma e o que elas usam.
 
 pub mod fn_complexo;
+/// Funções do FeatherSheet que o Excel não tem (nome internacional). Ao
+/// exportar .xlsx, a interface avisa: no Excel essas células mostram #NOME?.
+/// Função nova sem equivalente no Excel entra aqui.
+pub const FORA_DO_EXCEL: &[&str] = &["COUNTUNIQUE", "IMAGE.BASE64", "IMPORTDATA", "IMPORTJSON", "FETCHTEXT"];
 pub mod fn_conversao;
 pub mod fn_date;
 pub mod fn_db;
@@ -22,3 +26,13 @@ pub mod function_help_data;
 pub mod functions;
 pub mod imagem_base64;
 pub mod regex;
+
+#[cfg(test)]
+mod testes_fora_do_excel {
+    #[test]
+    fn toda_funcao_fora_do_excel_existe_no_catalogo() {
+        for nome in super::FORA_DO_EXCEL {
+            assert!(super::function_help::CATEGORIES.iter().any(|(_, nomes)| nomes.contains(nome)), "{nome}");
+        }
+    }
+}

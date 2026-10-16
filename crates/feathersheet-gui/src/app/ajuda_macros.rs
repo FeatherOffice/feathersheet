@@ -5,6 +5,7 @@ use serde_json::Value;
 
 const GUIA: &[(&str, &[(&str, &str, &str)])] = &[
     ("celulas", &[
+        ("cell", "cell(address) · cells(row, col) · range(address)", "cell(\"A1\").value = 10;\ncells(2, 1).value = cell(\"A1\").value * 2;\nsheets(\"Vendas\").cell(\"C1\").value = \"Total\";"),
         ("value", "sheet.value(address)", "sheet.log(sheet.value(\"A1\"));"),
         ("formula", "sheet.formula(address)", "sheet.log(sheet.formula(\"C2\"));"),
         ("set", "sheet.set(address, value)", "sheet.set(\"B2\", \"=A2*2\");"),
@@ -190,7 +191,7 @@ mod tests {
     use super::*;
     #[test] fn todas_as_funcoes_do_guia_ts_foram_portadas() {
         assert_eq!(GUIA.len(),15);
-        assert_eq!(GUIA.iter().map(|(_,e)|e.len()).sum::<usize>(),133);
+        assert_eq!(GUIA.iter().map(|(_,e)|e.len()).sum::<usize>(),134);
         let j:Value=serde_json::from_str(include_str!("../../../../src/idiomas/pt-BR.json")).unwrap();
         for (_,entries) in GUIA {
             for (nome,_,_) in *entries {

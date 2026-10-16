@@ -378,6 +378,10 @@ pub(in crate::app) fn filtrar(w: &mut Workbook, aba: usize, id: &str, col_rel: u
     } else {
         mudar(w, aba, id, |t| { *t = atualizado; Ok(()) })?;
     }
+    // As alturas mudaram direto na aba: avisa o motor, senão SUBTOTAL e
+    // AGREGAR (a linha de total da tabela) continuam somando as linhas
+    // que o filtro escondeu.
+    w.editar(aba, |_| {});
     Ok(contagem)
 }
 

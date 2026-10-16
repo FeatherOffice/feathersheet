@@ -80,7 +80,7 @@ impl App {
     fn abrir_editor_comentario(&mut self) -> Task<Msg> {
         if !self.confirmar() { return Task::none(); }
         let existente = self.comentario_ativo().cloned();
-        let autor = existente.as_ref().map(|c| c.autor.clone()).unwrap_or_else(autor_do_sistema);
+        let autor = existente.as_ref().map(|c| c.autor.clone()).unwrap_or_else(|| self.autor());
         self.comentario_editor = Some(Estado {
             folha: self.folha, linha: self.linha, coluna: self.coluna, autor,
             conteudo: text_editor::Content::with_text(existente.as_ref().map_or("", |c| c.texto.as_str())),
@@ -252,9 +252,16 @@ impl App {
         let painel = column![
             text(titulo).size(18).font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::DEFAULT }),
             row![
-                feather_ui::icones::icone("message-circle", 15.),
+                // As iniciais do autor (Primeiros passos ▸ Seus dados), num círculo.
+                container(text(self.iniciais_do_autor(&e.autor)).size(10).font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::DEFAULT }))
+                    .center_x(Length::Fixed(22.)).center_y(Length::Fixed(22.))
+                    .style(|_| container::Style {
+                        background: Some(iced::Background::Color(COR_AZUL_FUNDO())),
+                        border: iced::Border { radius: 11.0.into(), ..Default::default() },
+                        ..Default::default()
+                    }),
                 text(format!("Célula {} · {autor}", cell_name(e.linha, e.coluna))).size(12).color(COR_TEXTO_MUTED()),
-            ].spacing(6).align_y(Alignment::Center),
+            ].spacing(7).align_y(Alignment::Center),
             container(editor).id(iced::widget::container::Id::new(ID_EDITOR)),
             text("Enter quebra a linha · Ctrl+Enter salva · Esc cancela").size(11).color(COR_TEXTO_MUTED()),
             rodape,
@@ -290,7 +297,7 @@ impl App {
             let Some((endereco, texto)) = item.split_once('=') else { continue };
             let (endereco, visivel) = match endereco.strip_suffix('!') { Some(e) => (e, true), None => (endereco, false) };
             if let Some((r, c)) = parse_cell_ref(endereco) {
-                let nota = Comentario { autor: autor_do_sistema(), texto: texto.replace("\\n", "\n"), visivel };
+                let nota = Comentario { autor: self.autor(), texto: texto.replace("\\n", "\n"), visivel };
                 self.workbook.editar(self.folha, |s| { s.definir_comentario(r, c, Some(nota)); });
             }
         }

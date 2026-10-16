@@ -77,13 +77,13 @@ mod testes {
         assert_eq!(executar("offset",&json!([0,"B2:C3",2,-1])).unwrap(),json!("A4:B5"));
         assert_eq!(executar("resize",&json!([0,"C7:D9",2,3])).unwrap(),json!("C7:E8"));
         assert!(executar("offset",&json!([0,"A1",-1,0])).is_err());
-        assert!(executar("resize",&json!([0,"XFD10000000",2,1])).is_err());
+        assert!(executar("resize",&json!([0,"XFD100000000",2,1])).is_err());
     }
     #[test]
     fn linha_coluna_e_limites_dez_milhoes() {
         assert_eq!(executar("columnOf",&json!([0,"B2:D5",2])).unwrap(),json!("C2:C5"));
         assert_eq!(executar("rowOf",&json!([0,"B2:D5",3])).unwrap(),json!("B4:D4"));
-        assert_eq!(executar("offset",&json!([0,"C:C",0,1])).unwrap(),json!("D1:D10000000"));
+        assert_eq!(executar("offset",&json!([0,"C:C",0,1])).unwrap(),json!("D1:D100000000"));
         assert!(executar("rowOf",&json!([0,"A1:C3",4])).is_err());
     }
 }
