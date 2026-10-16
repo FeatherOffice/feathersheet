@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=FeatherSheet
+GenericName=Planilha
+Comment=Planilha da suíte FeatherOffice — tudo local, sem conta
+Exec=feathersheet %F
+Icon=feathersheet
+Terminal=false
+Categories=Office;Spreadsheet;
+Keywords=planilha;excel;xlsx;csv;fórmulas;
+StartupWMClass=feathersheet
+MimeType=application/x-feathersheet;application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;application/vnd.ms-excel.sheet.macroEnabled.12;text/csv;text/tab-separated-values;

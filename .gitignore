@@ -1,0 +1,20 @@
+# Compilação
+target/
+**/target/
+target-agentes/
+dist/
+
+# Interface web antiga (Tauri/TypeScript)
+node_modules/
+src-tauri/gen/
+
+# Planilhas grandes de teste geradas localmente
+planilha_*.csv
+
+# Sistema e editores
+.DS_Store
+__pycache__/
+*.py[cod]
+
+# Instaladores gerados por pacote/gerar.sh
+pacote/saida/

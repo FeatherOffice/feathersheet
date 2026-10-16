@@ -1,0 +1,43 @@
+//! Abrir e salvar sem o aplicativo, com os mesmos leitores e gravadores dele:
+//! `.fshz`, `.xlsx`, `.csv`/`.tsv` para abrir; `.fshz`, `.xlsx`, `.csv`/`.tsv` para salvar.
+use std::path::Path;
+
+use feathersheet_core::planilha::workbook::Workbook;
+
+fn extensao(caminho: &Path) -> String {
+    caminho.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase()
+}
+
+/// A pasta e o índice da aba que estava ativa, já calculada.
+pub fn abrir(caminho: &Path) -> Result<(Workbook, usize), String> {
+    let (mut pasta, aba) = match extensao(caminho).as_str() {
+        "fshz" => {
+            let lida = feathersheet_io::fshz_read::ler_fshz_arquivo(caminho)?;
+            let aba = lida.a as usize;
+            (feathersheet_io::para_workbook::para_workbook(&lida), aba)
+        }
+        "xlsx" => feathersheet_io::xlsx_read::ler_xlsx_arquivo(caminho)?,
+        e @ ("csv" | "tsv") => (feathersheet_io::csv_workbook::importar_csv_tsv_arquivo(caminho, e == "tsv", None)?, 0),
+        _ => return Err("Formato não suportado: abra .fshz, .xlsx, .csv ou .tsv.".into()),
+    };
+    pasta.calcular_em_paralelo();
+    Ok((pasta, aba))
+}
+
+/// Grava pela extensão do destino. A gravação do `.fshz` é atômica (`.parcial` + renomear).
+pub fn salvar(pasta: &Workbook, aba: usize, caminho: &Path) -> Result<(), String> {
+    match extensao(caminho).as_str() {
+        "fshz" => feathersheet_io::da_workbook::pasta_gravar_arquivo(pasta, aba as u32, caminho),
+        "xlsx" => {
+            let bytes = feathersheet_io::xlsx_write::gerar_xlsx(pasta)?;
+            std::fs::write(caminho, bytes).map_err(|e| format!("Não consegui gravar {}: {e}", caminho.display()))
+        }
+        e @ ("csv" | "tsv") => {
+            let mut destino = std::fs::File::create(caminho)
+                .map_err(|e| format!("Não consegui criar {}: {e}", caminho.display()))?;
+            feathersheet_io::csv_workbook::exportar_delimitado(pasta, aba, e == "tsv", &mut destino)
+                .map_err(|e| format!("Não consegui gravar {}: {e}", caminho.display()))
+        }
+        _ => Err("Salve como .fshz (padrão), .xlsx, .csv ou .tsv (CSV/TSV gravam só a aba ativa, com os valores).".into()),
+    }
+}

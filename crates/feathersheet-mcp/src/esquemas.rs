@@ -1,0 +1,73 @@
+//! Descrição das ferramentas para `tools/list`.
+use serde_json::{json, Value};
+
+fn f(nome: &str, descricao: &str, props: Value, obrigatorios: &[&str]) -> Value {
+    json!({ "name": nome, "description": descricao,
+        "inputSchema": { "type": "object", "properties": props, "required": obrigatorios } })
+}
+
+const ABA: &str = "Nome da aba (ou índice, base 0). Padrão: a ativa.";
+
+pub fn todas() -> Vec<Value> {
+    vec![
+        f("sheet_resumo", "Comece por aqui: arquivo, modo (ao vivo ou arquivo), abas com a área usada e a linha 1 (cabeçalho provável), nomes definidos, modo de cálculo e a seleção da tela.", json!({}), &[]),
+        f("sheet_ler", "Lê um intervalo como tabela TSV com letras e números (até 2000 células). modo: valores (padrão, números com ponto), formulas (fórmula onde houver), ambos (valor {fórmula}), formatado (como a célula mostra). Para muitas linhas use sheet_amostra/sheet_estatistica/sheet_consulta.",
+            json!({ "intervalo": { "type": "string", "description": "A1:C20, Dados!A1:B5, C:C" }, "aba": { "type": ["string", "integer"], "description": ABA },
+                "modo": { "type": "string", "enum": ["valores", "formulas", "ambos", "formatado"] } }), &["intervalo"]),
+        f("sheet_escrever", "Escreve na planilha; a chamada inteira é um Ctrl+Z. Forma 1: celula + valores (lista de linhas; texto que começa com = é fórmula em pt-BR: =SOMA(A1:A3;10), vírgula decimal). Forma 2: intervalo + formula: escreve na primeira célula e preenche o resto como a alça (referências relativas andam).",
+            json!({ "celula": { "type": "string", "description": "Canto superior esquerdo, ex.: A1 ou Dados!B2" }, "valores": { "type": "array", "items": { "type": "array" } },
+                "intervalo": { "type": "string" }, "formula": { "type": "string" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &[]),
+        f("sheet_limpar", "Apaga o conteúdo de um intervalo (o formato fica). Um Ctrl+Z.",
+            json!({ "intervalo": { "type": "string" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &["intervalo"]),
+        f("sheet_aba", "Abas: listar, ativar, criar, renomear (nome → novo_nome) ou excluir.",
+            json!({ "acao": { "type": "string", "enum": ["listar", "ativar", "criar", "renomear", "excluir"] }, "nome": { "type": "string" }, "novo_nome": { "type": "string" } }), &["acao"]),
+        f("sheet_nomes", "Nomes definidos (intervalos nomeados): listar, definir (nome + intervalo) ou remover.",
+            json!({ "acao": { "type": "string", "enum": ["listar", "definir", "remover"] }, "nome": { "type": "string" }, "intervalo": { "type": "string" } }), &["acao"]),
+        f("sheet_desfazer", "Desfaz (ou refaz, com refazer=true) o último passo de uma aba.",
+            json!({ "refazer": { "type": "boolean" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &[]),
+        f("sheet_formula", "Tudo sobre uma célula: conteúdo, valor, precedentes (o que ela lê), dependentes (quem a lê), matriz derramada, o passo a passo do cálculo (como Avaliar fórmula) e, se tiver erro, o caminho até a origem com uma dica.",
+            json!({ "celula": { "type": "string" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &["celula"]),
+        f("sheet_estatistica", "Perfil de uma coluna calculado pelo motor (qualquer tamanho): contagem por tipo, distintos, mín/máx/média, quartis, outliers, histograma e valores mais frequentes. Intervalo largo: até 10 colunas.",
+            json!({ "coluna": { "type": "string", "description": "C:C ou C2:C5000" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &["coluna"]),
+        f("sheet_amostra", "Algumas linhas (até 50) da área usada ou de um intervalo; espalhada=true pega linhas distribuídas pela planilha.",
+            json!({ "intervalo": { "type": "string" }, "linhas": { "type": "integer" }, "espalhada": { "type": "boolean" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &[]),
+        f("sheet_localizar", "Procura um texto (Ctrl+F): devolve endereços e valores (até 500).",
+            json!({ "texto": { "type": "string" }, "inteira": { "type": "boolean" }, "maiusculas": { "type": "boolean" }, "formulas": { "type": "boolean", "description": "procurar no texto das fórmulas" },
+                "todas_as_abas": { "type": "boolean" }, "limite": { "type": "integer" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &["texto"]),
+        f("sheet_consulta", "Consulta do OpenQuery sobre um intervalo, calculada pelo motor: devolve a prévia e, com destino, grava o resultado numa aba (criada se não existir). Passos (JSON, col = índice da coluna base 0): filtrar{col,criterio:{\"Text\":\"SP\"}|{\"Number\":5}}, ordenar{por:[{col,desc}]}, colunas{manter:[..]}, renomear{col,nome}, tipar{col,para}, distintas{cols}, agrupar{por:[..],agregar:[{col,como:soma|contagem|contarValores|media|maximo|minimo|mediana|distintos|primeiro|ultimo,nome}]}, pivotar{linhas,colunas,valores}, despivotar{manter}, dividir{col,separador}, mesclar{cols,separador}, limite{quantas}, indice{}, condicional{nome,col,operador,valor,entao,senao}.",
+            json!({ "fonte": { "type": "string", "description": "Dados!A1:F1000 (com cabeçalho na 1ª linha)" }, "cabecalho": { "type": "boolean" },
+                "passos": { "type": "array", "items": { "type": "object" } }, "destino": { "type": "string", "description": "aba onde gravar" }, "previa": { "type": "integer" } }), &["fonte"]),
+        f("sheet_macro", "Macros JavaScript com a API sheet (sheet.range(\"A1\").value, sheet.cell(l,c), sheet.lastRow(), log()…): listar, ler, escrever (guarda; não roda), excluir, executar (por nome ou codigo). Erro reverte as escritas da execução.",
+            json!({ "acao": { "type": "string", "enum": ["listar", "ler", "escrever", "excluir", "executar"] }, "nome": { "type": "string" }, "codigo": { "type": "string" },
+                "aba": { "type": ["string", "integer"], "description": ABA } }), &["acao"]),
+        f("sheet_formatar", "Formata um intervalo (um Ctrl+Z): só os campos informados mudam. Cores em \"#RRGGBB\" (null tira). Bordas: todas, externas (só o contorno), nenhuma, superior/inferior/esquerda/direita (a beira da seleção, somando às que já existem); o motor não tem espessura nem tracejado. limpar=true tira toda a formatação antes de aplicar o resto.",
+            json!({ "intervalo": { "type": "string", "description": "A1:C10, B:B, 1:1, Dados!A1:D1" }, "aba": { "type": ["string", "integer"], "description": ABA },
+                "negrito": { "type": "boolean" }, "italico": { "type": "boolean" }, "sublinhado": { "type": "boolean" }, "tachado": { "type": "boolean" },
+                "fonte": { "type": "string", "description": "família, ex.: Arial; vazio volta ao padrão" }, "tamanho": { "type": "number", "description": "6 a 96" },
+                "cor": { "type": ["string", "null"], "description": "cor do texto" }, "fundo": { "type": ["string", "null"], "description": "cor de preenchimento" },
+                "alinhamento": { "type": "string", "enum": ["esquerda", "centro", "direita", "auto"] }, "vertical": { "type": "string", "enum": ["topo", "meio", "base"] },
+                "quebrar": { "type": "boolean", "description": "quebra de texto automática" }, "rotacao": { "type": "number", "description": "graus, -90 a 90" }, "recuo": { "type": "integer", "description": "0 a 15" },
+                "formato": { "type": "string", "enum": ["geral", "numero", "inteiro", "moeda", "contabil", "porcentagem", "cientifico", "data", "data_hora", "hora", "duracao", "texto"] },
+                "casas": { "type": "integer", "description": "casas decimais, 0 a 30" },
+                "bordas": { "type": "string", "enum": ["todas", "externas", "nenhuma", "superior", "inferior", "esquerda", "direita"] }, "cor_borda": { "type": "string" },
+                "limpar": { "type": "boolean" } }), &["intervalo"]),
+        f("sheet_estrutura", "Linhas e colunas. acao: inserir/excluir (antes da primeira do intervalo, quantas ele tiver; as fórmulas da pasta se ajustam e a referência ao excluído vira #REF!; NÃO tem Ctrl+Z), ocultar/reexibir, tamanho (pixels: largura da coluna ou altura da linha) e autoajustar ao conteúdo (esses três com Ctrl+Z).",
+            json!({ "acao": { "type": "string", "enum": ["inserir", "excluir", "ocultar", "reexibir", "tamanho", "autoajustar"] },
+                "eixo": { "type": "string", "enum": ["linhas", "colunas"] }, "intervalo": { "type": "string", "description": "3:5, B:D ou A1:C4 (usa as linhas ou as colunas dele, pelo eixo)" },
+                "pixels": { "type": "integer", "description": "para tamanho: 1 a 2000 (padrão da grade: coluna 122, linha 28)" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &["acao", "eixo", "intervalo"]),
+        f("sheet_mesclar", "Mescla células (um Ctrl+Z): mesclar, centralizar (mesclar e centralizar), atraves (uma mescla por linha) ou desmesclar. O conteúdo das outras células fica guardado e volta ao desmesclar. Devolve as mesclagens da aba.",
+            json!({ "intervalo": { "type": "string" }, "acao": { "type": "string", "enum": ["mesclar", "centralizar", "atraves", "desmesclar"] },
+                "aba": { "type": ["string", "integer"], "description": ABA } }), &["intervalo"]),
+        f("sheet_abrir", "Abre um arquivo (.fshz, .xlsx, .csv, .tsv). Ao vivo, abre no aplicativo.",
+            json!({ "caminho": { "type": "string" } }), &["caminho"]),
+        f("sheet_salvar", "Grava (.fshz padrão; .xlsx; .csv/.tsv só a aba ativa). Sem caminho, no arquivo atual.",
+            json!({ "caminho": { "type": "string" } }), &[]),
+        f("sheet_selecionar", "AO VIVO: seleciona um intervalo na tela (e troca de aba se preciso).",
+            json!({ "intervalo": { "type": "string" }, "aba": { "type": ["string", "integer"], "description": ABA } }), &["intervalo"]),
+        f("sheet_comando", "AO VIVO: executa um comando da interface como se fosse pelo botão ou atalho. comando=\"listar\" mostra todos (aba da faixa, rastrear precedentes, F9, criar da seleção, janela de inspeção, menus por nome, tecla de atalho…). Devolve o que a barra de status disse.",
+            json!({ "comando": { "type": "string" }, "args": { "type": "object" } }), &["comando"]),
+        f("sheet_tela", "AO VIVO: o estado visível em texto: aba da faixa, menus, diálogos e janelas abertos, célula ativa, seleção e status.", json!({}), &[]),
+        f("sheet_ver", "AO VIVO: foto (PNG) da janela principal ou de uma janela auxiliar, para conferir o visual.",
+            json!({ "janela": { "type": "string", "enum": ["principal", "inspecao", "ajuda", "configuracoes", "monitor", "macros", "formatar", "imprimir", "openquery"] } }), &[]),
+    ]
+}

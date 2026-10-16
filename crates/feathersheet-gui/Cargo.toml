@@ -1,0 +1,78 @@
+[package]
+name = "feathersheet-gui"
+version = "0.0.1"
+edition = "2021"
+description = "Interface nativa FeatherSheet em Rust/Iced usando o template FeatherOffice"
+
+[[bin]]
+name = "feathersheet"
+path = "src/main.rs"
+
+[dependencies]
+feather-charts = { path = "../../../feather-charts" }
+feather-ui = { git = "https://github.com/FeatherOffice/feather-ui", tag = "v0.2.5" }
+feather-draw = { git = "https://github.com/FeatherOffice/feather-draw", tag = "v0.1.1" }
+# Formas, ícones e SmartArt comuns da suíte (camada de objetos soltos, app/objetos).
+feather-shapes = { git = "https://github.com/FeatherOffice/feather-shapes", tag = "v0.1.0" }
+# Efeitos RGBA compartilhados com FeatherDocs; codecs ficam na GUI.
+feather-image = { path = "../../../feather-io/crates/feather-image" }
+base64 = "0.22"
+# Compatibilidade exata com ui/protecao/protecao.ts (PBKDF2-HMAC-SHA256,
+# sal criptográfico e normalização Unicode NFC); nunca armazenar senha pura.
+pbkdf2 = "0.12"
+sha2 = "0.10"
+unicode-normalization = "0.1"
+getrandom = "0.2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# Apenas representacao/algoritmos de borda no Canvas; engine colunar permanece no core.
+feather-tables = { path = "../../../feather-io/crates/feather-tables" }
+feathersheet-core = { path = "../feathersheet-core" }
+feathersheet-io = { path = "../feathersheet-io" }
+feathersheet-macros = { path = "../feathersheet-macros" }
+# Leitor de .xlsm: VBA do Excel convertido para as macros em JavaScript.
+feathersheet-vba = { path = "../feathersheet-vba" }
+# MCP ao vivo: as ferramentas da IA agem na planilha da tela (canal local, sem rede).
+feathersheet-mcp = { path = "../feathersheet-mcp" }
+feather-macros = { path = "../../../feather-io/crates/feather-macros" }
+iced = { version = "0.13", features = ["canvas", "svg", "image", "tokio", "advanced", "highlighter"] }
+tokio = { version = "1", features = ["rt", "time"] }
+# Colar imagem da area de transferencia (print). Rust puro; wayland-data-control
+# cobre GNOME/Wayland sem libs C. iced::clipboard so le texto.
+arboard = { version = "3.6", features = ["wayland-data-control"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "tokio"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Fontes Web/API: HTTP(S) com TLS, tempo limite e corpo limitado.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+# Extrai tabelas HTML estáticas de páginas Web (sem executar JavaScript).
+scraper = "0.22"
+# Inspeciona o tamanho descomprimido do XLSX antes do importador OpenQuery.
+zip = { version = "4.2.0", default-features = false, features = ["deflate"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+# Só a ligação com a libc do sistema (que o Rust já usa): `malloc_trim`
+# devolve ao sistema a memória que uma operação grande já soltou.
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
+libc = "0.2"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+# Provisório: feather-ui 0.2.6 (pressão da caneta) em desenvolvimento na
+# pasta irmã, até a tag v0.2.6 ser publicada. Remover este bloco depois.
+[patch."https://github.com/FeatherOffice/feather-ui"]
+feather-ui = { path = "../../../feather-ui" }
+
+
+# Provisório: feather-shapes 0.1.1 (estilos prontos do WordArt, wordart::ESTILOS) em
+# desenvolvimento na pasta irmã, até a tag v0.1.1 ser publicada. Remover este bloco depois.
+[patch."https://github.com/FeatherOffice/feather-shapes"]
+feather-shapes = { path = "../../../feather-shapes" }

@@ -1,0 +1,13 @@
+medida	segundos	rss_mib	pico_mib
+abrir	4.621421	360.402	672.227
+corrente_valor	Number(11900498781.14117)
+corrente	0.000037	360.465	672.227
+resumo	6.580906	560.066	672.227
+resumo_soma	47603065537.698799133301
+calcular_tudo	7.051985	703.188	723.555
+calculada_consolidada	0.556642	447.625	723.555
+consolidados	2000798
+consultas_grade_ms	p50=0.104198	p95=0.123925	max=0.152128
+estrutura	Resumo	literais 40 · fórmulas empacotadas 199 · avulsas 8 · estilos 103 · textos 0 · resultados guardados 8 · sujas 0 · faixas lidas 0 células
+estrutura	Dados	literais 6000017 · fórmulas empacotadas 7000000 · avulsas 0 · estilos 6000000 · textos 0 · resultados guardados 0 · sujas 0 · faixas lidas 0 células
+estrutura	Produtos	literais 808 · fórmulas empacotadas 600 · avulsas 0 · estilos 600 · textos 0 · resultados guardados 0 · sujas 0 · faixas lidas 0 células

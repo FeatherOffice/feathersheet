@@ -1,0 +1,460 @@
+Matemática	SUM	N2:N11	n:86	
+Matemática	SUBTOTAL	9;N2:N11	n:86	
+Matemática	AGGREGATE	9;4;N2:N11	n:86	
+Matemática	PRODUCT	2;3;4	n:24	
+Matemática	ABS	-5,5	n:5.5	
+Matemática	SQRT	144	n:12	
+Matemática	POWER	2;10	n:1024	
+Matemática	EXP	1	n:2.718281828459045	
+Matemática	LN	10	n:2.302585092994046	
+Matemática	LOG	8;2	n:3	
+Matemática	LOG10	1000	n:3	
+Matemática	SIGN	-7	n:-1	
+Matemática	INT	-3,7	n:-4	
+Matemática	ROUND	2,567;2	n:2.57	
+Matemática	ROUNDUP	2,341;2	n:2.35	
+Matemática	ROUNDDOWN	2,349;2	n:2.34	
+Matemática	TRUNC	-8,9	n:-8	
+Matemática	MOD	10;3	n:1	
+Matemática	CEILING	2,5;2	n:4	
+Matemática	FLOOR	2,5;2	n:2	
+Matemática	PI		n:3.141592653589793	
+Matemática	RAND			
+Matemática	RANDBETWEEN	1;10		
+Matemática	SUMPRODUCT	N2:N11;O2:O11	n:1249	
+Matemática	FACT	5	n:120	
+Matemática	EVEN	3	n:4	
+Matemática	ODD	4	n:5	
+Matemática	GCD	24;36	n:12	
+Matemática	LCM	4;6	n:12	
+Matemática	MROUND	10;3	n:9	
+Matemática	QUOTIENT	17;5	n:3	
+Matemática	SUMSQ	3;4	n:25	
+Matemática	SQRTPI	2	n:2.5066282746310002	
+Matemática	FACTDOUBLE	7	n:105	
+Matemática	ROMAN	1994	t:MCMXCIV	
+Matemática	COMBIN	5;2	n:10	
+Matemática	PERMUT	5;2	n:20	
+Matemática	ISEVEN	4	b:1	
+Matemática	ISODD	4	b:0	
+Matemática	SIN	PI()/2	n:1	
+Matemática	COS	0	n:1	
+Matemática	TAN	PI()/4	n:1	
+Matemática	ASIN	1	n:1.5707963267948966	
+Matemática	ACOS	1	n:0	
+Matemática	ATAN	1	n:0.7853981633974483	
+Matemática	ATAN2	1;2	n:1.1071487177940904	
+Matemática	SINH	1	n:1.1752011936438014	
+Matemática	COSH	1	n:1.5430806348152437	
+Matemática	TANH	1	n:0.7615941559557649	
+Matemática	RADIANS	180	n:3.141592653589793	
+Matemática	DEGREES	PI()	n:180	
+Matemática	ACOSH	2	n:1.3169578969248168	
+Matemática	ASINH	1	n:0.881373587019543	
+Matemática	ATANH	0,5	n:0.5493061443340549	
+Matemática	ACOT	1	n:0.7853981633974483	
+Matemática	ACOTH	2	n:0.5493061443340549	
+Matemática	COT	1	n:0.6420926159343306	
+Matemática	COTH	1	n:1.3130352854993315	
+Matemática	CSC	1	n:1.1883951057781212	
+Matemática	CSCH	1	n:0.8509181282393216	
+Matemática	SEC	1	n:1.8508157176809255	
+Matemática	SECH	1	n:0.6480542736638855	
+Matemática	BASE	255;16	t:FF	
+Matemática	DECIMAL	"FF";16	n:255	
+Matemática	ARABIC	"MCMXCIV"	n:1994	
+Matemática	CEILING.MATH	-2,5;1	n:-2	
+Matemática	CEILING.PRECISE	4,3;1	n:5	
+Matemática	ISO.CEILING	4,3;1	n:5	
+Matemática	FLOOR.MATH	-2,5;1	n:-3	
+Matemática	FLOOR.PRECISE	2,5;1	n:2	
+Matemática	COMBINA	4;3	n:20	
+Matemática	MULTINOMIAL	2;3;4	n:1260	
+Matemática	MUNIT	3		
+Matemática	SERIESSUM	2;0;1;N2:N4	n:26	
+Matemática	SUMX2MY2	N2:N4;O2:O4	n:-34	
+Matemática	SUMX2PY2	N2:N4;O2:O4	n:106	
+Matemática	SUMXMY2	N2:N4;O2:O4	n:6	
+Matemática	PERCENTOF	N2:N3;N2:N11	n:0.06976744186046512	
+Estatística	AVERAGE	N2:N11	n:8.6	
+Estatística	MEDIAN	N2:N11	n:8	
+Estatística	MIN	N2:N11	n:2	
+Estatística	MAX	N2:N11	n:18	
+Estatística	LARGE	N2:N11;2	n:15	
+Estatística	SMALL	N2:N11;2	n:4	
+Estatística	COUNT	N2:N11;P2:P11	n:10	
+Estatística	COUNTA	N2:N11;P2:P11	n:20	
+Estatística	COUNTBLANK	AZ1:AZ5	n:5	
+Estatística	COUNTUNIQUE	N2:N11	n:9	
+Estatística	STDEV.S	N2:N11	n:5.211099265563414	
+Estatística	STDEV.P	N2:N11	n:4.94368283772331	
+Estatística	VAR.S	N2:N11	n:27.155555555555555	
+Estatística	VAR.P	N2:N11	n:24.44	
+Estatística	AVEDEV	N2:N11	n:4.2	
+Estatística	DEVSQ	N2:N11	n:244.4	
+Estatística	GEOMEAN	N2:N11	n:7.1023252067449025	
+Estatística	HARMEAN	N2:N11	n:5.683355886332882	
+Estatística	SKEW	N2:N11	n:0.590769736143447	
+Estatística	SKEW.P	N2:N11	n:0.49818078370933055	
+Estatística	KURT	N2:N11	n:-0.6129917110782093	
+Estatística	PERCENTILE.INC	N2:N11;0,3	n:4.699999999999999	
+Estatística	PERCENTILE.EXC	N2:N11;0,3	n:4.3	
+Estatística	QUARTILE.INC	N2:N11;1	n:4.25	
+Estatística	QUARTILE.EXC	N2:N11;1	n:4.0	
+Estatística	RANK.EQ	9;N2:N11	n:5	
+Estatística	RANK.AVG	4;N2:N11;0	n:8.5	
+Estatística	PERCENTRANK.INC	N2:N11;9	n:0.555	
+Estatística	PERCENTRANK.EXC	N2:N11;9	n:0.545	
+Estatística	SUMIF	Q2:Q11;"A";N2:N11	n:30	
+Estatística	SUMIFS	N2:N11;Q2:Q11;"B";N2:N11;">5"	n:35	
+Estatística	COUNTIF	Q2:Q11;"B"	n:4	
+Estatística	COUNTIFS	Q2:Q11;"B";N2:N11;">5"	n:3	
+Estatística	AVERAGEIF	Q2:Q11;"A";N2:N11	n:7.5	
+Estatística	AVERAGEIFS	N2:N11;Q2:Q11;"B";N2:N11;">5"	n:11.666666666666666	
+Estatística	MAXIFS	N2:N11;Q2:Q11;"C"	n:12	
+Estatística	MINIFS	N2:N11;Q2:Q11;"C"	n:5	
+Estatística	AVERAGEA	N2:N11;VERDADEIRO	n:7.909090909090909	
+Estatística	MAXA	N2:N11;VERDADEIRO	n:18	
+Estatística	MINA	N2:N11;FALSO	n:0	
+Estatística	STDEVA	N2:N11	n:5.211099265563414	
+Estatística	STDEVPA	N2:N11	n:4.94368283772331	
+Estatística	VARA	N2:N11	n:27.155555555555555	
+Estatística	VARPA	N2:N11	n:24.44	
+Estatística	CORREL	N2:N11;O2:O11	n:0.9920368002376819	
+Estatística	COVARIANCE.P	N2:N11;O2:O11	n:28.580000000000002	
+Estatística	COVARIANCE.S	N2:N11;O2:O11	n:31.755555555555556	
+Estatística	PEARSON	N2:N11;O2:O11	n:0.9920368002376819	
+Estatística	SLOPE	O2:O11;N2:N11	n:1.1693944353518821	
+Estatística	INTERCEPT	O2:O11;N2:N11	n:1.143207855973813	
+Estatística	RSQ	O2:O11;N2:N11	n:0.9841370130258185	
+Estatística	FORECAST.LINEAR	20;O2:O11;N2:N11	n:24.531096563011456	
+Estatística	STEYX	O2:O11;N2:N11	n:0.8205996569911607	
+Estatística	STANDARDIZE	9;8,6;5,211099265563414	n:0.07675923631762811	
+Estatística	TRIMMEAN	N2:N11;0,2	n:8.25	
+Estatística	MODE.SNGL	N2:N11	n:4	
+Estatística	MODE.MULT	N2:N11		
+Estatística	FISHER	0,75	n:0.9729550745276566	
+Estatística	FISHERINV	0,973	n:0.7500196542319053	
+Estatística	PROB	BG2:BG5;BH2:BH5;2;3	n:0.5	
+Estatística	F.TEST	N2:N11;O2:O11	n:0.6320040146337083	
+Estatística	Z.TEST	N2:N11;8	n:0.3578912848534729	
+Estatística	TREND	O2:O11;N2:N11		
+Estatística	GROWTH	O2:O11;N2:N11		
+Estatística	NORM.DIST	1;0;1;VERDADEIRO	n:0.8413447460685429	
+Estatística	NORM.INV	0,95;0;1	n:1.6448536269514715	
+Estatística	NORM.S.DIST	1;VERDADEIRO	n:0.8413447460685429	
+Estatística	NORM.S.INV	0,975	n:1.9599639845400536	
+Estatística	PHI	1	n:0.24197072451914337	
+Estatística	GAUSS	1	n:0.3413447460685429	
+Estatística	CONFIDENCE.NORM	0,05;2,5;50	n:0.6929519121748389	
+Estatística	CONFIDENCE.T	0,05;2,5;50	n:0.7104921387393233	
+Estatística	BINOM.DIST	3;10;0,5;FALSO	n:0.1171875	
+Estatística	BINOM.DIST.RANGE	10;0,5;3;5	n:0.568359375	
+Estatística	BINOM.INV	10;0,5;0,5	n:5	
+Estatística	POISSON.DIST	3;2;FALSO	n:0.1804470443154836	
+Estatística	NEGBINOM.DIST	3;5;0,5;FALSO	n:0.13671875	
+Estatística	HYPGEOM.DIST	1;4;8;20;FALSO	n:0.3632610939112487	
+Estatística	EXPON.DIST	1;2;VERDADEIRO	n:0.8646647167633873	
+Estatística	WEIBULL.DIST	1;2;3;VERDADEIRO	n:0.10516068318563021	
+Estatística	GAMMA	4,5	n:11.631728396567446	
+Estatística	GAMMALN	4,5	n:2.453736570842443	
+Estatística	GAMMALN.PRECISE	4,5	n:2.453736570842443	
+Estatística	GAMMA.DIST	5;3;2;VERDADEIRO	n:0.4561868841166707	
+Estatística	GAMMA.INV	0,5;3;2	n:5.34812062744712	
+Estatística	BETA.DIST	0,4;2;3;VERDADEIRO	n:0.5247999999999997	
+Estatística	BETA.INV	0,5;2;3	n:0.38572756813238973	
+Estatística	CHISQ.DIST	3;4;VERDADEIRO	n:0.44217459962892536	
+Estatística	CHISQ.DIST.RT	3;4	n:0.5578254003710746	
+Estatística	CHISQ.INV	0,5;4	n:3.356693980033321	
+Estatística	CHISQ.INV.RT	0,05;4	n:9.48772903678115	
+Estatística	CHISQ.TEST	BJ2:BK4;BL2:BM4	n:0.0003081920170082686	
+Estatística	T.DIST	1;10;VERDADEIRO	n:0.8295534338489703	
+Estatística	T.DIST.2T	2;10	n:0.07338803477074052	
+Estatística	T.DIST.RT	2;10	n:0.03669401738537026	
+Estatística	T.INV	0,95;10	n:1.8124611228116763	
+Estatística	T.INV.2T	0,05;10	n:2.228138851986274	
+Estatística	T.TEST	N2:N11;O2:O11;2;2	n:0.32093082589250566	
+Estatística	F.DIST	2;5;10;VERDADEIRO	n:0.8358050491002611	
+Estatística	F.DIST.RT	2;5;10	n:0.1641949508997389	
+Estatística	F.INV	0,9;5;10	n:2.521640686209624	
+Estatística	F.INV.RT	0,1;5;10	n:2.521640686209624	
+Estatística	LOGNORM.DIST	2;0;1;VERDADEIRO	n:0.7558914042144173	
+Estatística	LOGNORM.INV	0,5;0;1	n:1.0	
+Estatística	PERMUTATIONA	3;2	n:9	
+Compatibilidade	BETADIST	0,4;2;3	n:0.5247999999999997	
+Compatibilidade	BETAINV	0,5;2;3	n:0.38572756813238973	
+Compatibilidade	BINOMDIST	3;10;0,5;FALSO	n:0.1171875	
+Compatibilidade	CHIDIST	3;4	n:0.5578254003710746	
+Compatibilidade	CHIINV	0,05;4	n:9.48772903678115	
+Compatibilidade	CONFIDENCE	0,05;2,5;50	n:0.6929519121748389	
+Compatibilidade	COVAR	N2:N11;O2:O11	n:28.580000000000002	
+Compatibilidade	CRITBINOM	10;0,5;0,5	n:5	
+Compatibilidade	EXPONDIST	1;2;VERDADEIRO	n:0.8646647167633873	
+Compatibilidade	FDIST	2;5;10	n:0.1641949508997389	
+Compatibilidade	FINV	0,1;5;10	n:2.521640686209624	
+Compatibilidade	FORECAST	20;O2:O11;N2:N11	n:24.531096563011456	
+Compatibilidade	GAMMADIST	5;3;2;VERDADEIRO	n:0.4561868841166707	
+Compatibilidade	GAMMAINV	0,5;3;2	n:5.34812062744712	
+Compatibilidade	HYPGEOMDIST	1;4;8;20	n:0.3632610939112487	
+Compatibilidade	LOGINV	0,5;0;1	n:1.0	
+Compatibilidade	LOGNORMDIST	2;0;1	n:0.7558914042144173	
+Compatibilidade	MODE	N2:N11	n:4	
+Compatibilidade	NEGBINOMDIST	3;5;0,5	n:0.13671875	
+Compatibilidade	NORMDIST	1;0;1;VERDADEIRO	n:0.8413447460685429	
+Compatibilidade	NORMINV	0,95;0;1	n:1.6448536269514715	
+Compatibilidade	NORMSDIST	1	n:0.8413447460685429	
+Compatibilidade	NORMSINV	0,975	n:1.9599639845400536	
+Compatibilidade	PERCENTILE	N2:N11;0,3	n:4.699999999999999	
+Compatibilidade	PERCENTRANK	N2:N11;9	n:0.555	
+Compatibilidade	POISSON	3;2;FALSO	n:0.1804470443154836	
+Compatibilidade	QUARTILE	N2:N11;1	n:4.25	
+Compatibilidade	RANK	9;N2:N11	n:5	
+Compatibilidade	STDEV	N2:N11	n:5.211099265563414	
+Compatibilidade	STDEVP	N2:N11	n:4.94368283772331	
+Compatibilidade	TDIST	2;10;2	n:0.07338803477074052	
+Compatibilidade	TINV	0,05;10	n:2.228138851986274	
+Compatibilidade	VAR	N2:N11	n:27.155555555555555	
+Compatibilidade	VARP	N2:N11	n:24.44	
+Compatibilidade	WEIBULL	1;2;3;VERDADEIRO	n:0.10516068318563021	
+Texto	CHAR	65	t:A	
+Texto	CLEAN	"Ana"&CARACT(7)	t:Ana	
+Texto	CODE	"A"	n:65	
+Texto	CONCAT	"a";"b";"c"	t:abc	
+Texto	CONCATENATE	"Olá, ";"mundo"	t:Olá, mundo	
+Texto	DOLLAR	1234,5;2		
+Texto	ENCODEURL	"a b&c"	t:a%20b%26c	
+Texto	EXACT	"a";"a"	b:1	
+Texto	FIND	"n";"banana"	n:3	
+Texto	FINDB	"n";"banana"	n:3	
+Texto	FIXED	1234,567;2		
+Texto	IMAGE	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="		
+Texto	IMAGE.BASE64	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="		
+Texto	LEFT	"Feather";3	t:Fea	
+Texto	LEFTB	"Feather";3	t:Fea	
+Texto	LEN	"Feather"	n:7	
+Texto	LENB	"Feather"	n:7	
+Texto	LOWER	"ABC"	t:abc	
+Texto	MID	"Feather";2;3	t:eat	
+Texto	MIDB	"Feather";2;3	t:eat	
+Texto	NUMBERVALUE	"1.234,5";",";"."	n:1234.5	
+Texto	PROPER	"olá mundo"	t:Olá Mundo	
+Texto	REGEXTEST	"abc123";"[0-9]+"	b:1	
+Texto	REPLACE	"abcdef";2;3;"XY"	t:aXYef	
+Texto	REPLACEB	"abcdef";2;3;"XY"	t:aXYef	
+Texto	REPT	"ab";3	t:ababab	
+Texto	RIGHT	"Feather";3	t:her	
+Texto	RIGHTB	"Feather";3	t:her	
+Texto	SEARCH	"N";"banana"	n:3	
+Texto	SEARCHB	"N";"banana"	n:3	
+Texto	SUBSTITUTE	"banana";"a";"o"	t:bonono	
+Texto	TEXTAFTER	"a-b-c";"-"	t:b-c	
+Texto	TEXTBEFORE	"a-b-c";"-"	t:a	
+Texto	TEXT	1234,5;"#.##0,00"	t:1.234,50	
+Texto	TRIM	"  a   b  "	t:a b	
+Texto	T	"x"	t:x	
+Texto	UNICHAR	9731	t:☃	
+Texto	UNICODE	"A"	n:65	
+Texto	UPPER	"abc"	t:ABC	
+Texto	VALUE	"12,5"	n:12.5	
+Texto	VALUETOTEXT	123	t:123	
+Texto	ARRAYTOTEXT	N2:N4		
+Texto	JOIN	"-";N2:N4	t:2-4-4	
+Texto	TEXTJOIN	"-";VERDADEIRO;N2:N4	t:2-4-4	
+Texto	TEXTSPLIT	"a,b,c";","		
+Texto	REGEXEXTRACT	"pedido 4521 ok";"[0-9]+"	t:4521	
+Texto	REGEXMATCH	"abc123";"[0-9]+"	b:1	
+Texto	REGEXREPLACE	"abc123";"[0-9]+";"#"	t:abc#	
+Data e hora	DATE	2026;3;15	n:46096	data
+Data e hora	DATEDIF	DATA(2026;1;1);DATA(2026;3;15);"M"	n:2	
+Data e hora	DATEVALUE	"15/03/2026"	n:46096	data
+Data e hora	DAY	DATA(2026;3;15)	n:15	
+Data e hora	DAYS360	DATA(2026;1;1);DATA(2026;3;1)	n:60	
+Data e hora	DAYS	DATA(2026;3;1);DATA(2026;1;1)	n:59	
+Data e hora	HOUR	0,75	n:18	
+Data e hora	ISOWEEKNUM	DATA(2026;3;15)	n:11	
+Data e hora	MINUTE	TEMPO(10;30;45)	n:30	
+Data e hora	MONTH	DATA(2026;3;15)	n:3	
+Data e hora	NETWORKDAYS.INTL	DATA(2026;3;2);DATA(2026;3;13);1	n:10	
+Data e hora	NOW			datahora
+Data e hora	SECOND	TEMPO(10;30;45)	n:45	
+Data e hora	TIME	10;30;0	n:0.4375	hora
+Data e hora	TIMEVALUE	"10:30"	n:0.4375	hora
+Data e hora	TODAY			data
+Data e hora	WEEKDAY	DATA(2026;3;15)	n:1	
+Data e hora	WORKDAY.INTL	DATA(2026;3;2);5;1	n:46090	data
+Data e hora	YEAR	DATA(2026;3;15)	n:2026	
+Data e hora	YEARFRAC	DATA(2026;1;1);DATA(2026;7;1);0	n:0.5	
+Data e hora	EDATE	DATA(2026;1;31);1	n:46081	data
+Data e hora	EOMONTH	DATA(2026;1;15);1	n:46081	data
+Data e hora	NETWORKDAYS	DATA(2026;3;2);DATA(2026;3;13)	n:10	
+Data e hora	WORKDAY	DATA(2026;3;2);5	n:46090	data
+Data e hora	WEEKNUM	DATA(2026;3;15)	n:12	
+Lógica	IF	1>0;"sim";"não"	t:sim	
+Lógica	IFS	0;"a";1;"b"	t:b	
+Lógica	IFERROR	1/0;"erro"	t:erro	
+Lógica	IFNA	NÃO.DISP();"nd"	t:nd	
+Lógica	AND	VERDADEIRO;FALSO	b:0	
+Lógica	OR	VERDADEIRO;FALSO	b:1	
+Lógica	NOT	FALSO	b:1	
+Lógica	XOR	VERDADEIRO;VERDADEIRO	b:0	
+Lógica	TRUE		b:1	
+Lógica	FALSE		b:0	
+Lógica	SWITCH	2;1;"um";2;"dois";"outro"	t:dois	
+Lógica	ISNUMBER	5	b:1	
+Lógica	ISTEXT	"a"	b:1	
+Lógica	ISLOGICAL	VERDADEIRO	b:1	
+Lógica	ISERROR	BA2	b:1	
+Lógica	ISERR	BA2	b:1	
+Lógica	ISNA	BA3	b:1	
+Lógica	ISNONTEXT	5	b:1	
+Lógica	ISBLANK	AZ2	b:1	
+Lógica	TYPE	5	n:1	
+Lógica	ERROR.TYPE	BA2	n:2	
+Lógica	N	7	n:7	
+Lógica	NA		err	
+Lógica	LET	x;5;y;x*2;y+1	n:11	
+Lógica	LAMBDA	@LAMBDA(x;x+1)(5)	n:6	
+Pesquisa e referência	ADDRESS	2;3	t:$C$2	
+Pesquisa e referência	CHOOSE	2;"a";"b";"c"	t:b	
+Pesquisa e referência	COLUMN	AB5	n:28	
+Pesquisa e referência	COLUMNS	N2:O11	n:2	
+Pesquisa e referência	HLOOKUP	3;X1:AB3;3;FALSO	n:8	
+Pesquisa e referência	HYPERLINK	"https://example.com";"Exemplo"	t:Exemplo	
+Pesquisa e referência	INDEX	V2:V6;3	n:8	
+Pesquisa e referência	ISREF	N2	b:1	
+Pesquisa e referência	LOOKUP	3;T2:T6;V2:V6	n:8	
+Pesquisa e referência	MATCH	7;N2:N11;0	n:5	
+Pesquisa e referência	ROW	N5	n:5	
+Pesquisa e referência	ROWS	N2:N11	n:10	
+Pesquisa e referência	VLOOKUP	3;T2:V6;3;FALSO	n:8	
+Pesquisa e referência	XLOOKUP	3;T2:T6;U2:U6	t:Cereja	
+Pesquisa e referência	XMATCH	3;T2:T6	n:3	
+Financeira	PMT	0,08/12;10;10000	n:-1037.0320893591636	
+Financeira	FV	0,06/12;10;-200;-500;1	n:2581.4033740601362	
+Financeira	PV	0,08/12;240;500	n:-59777.14585118777	
+Financeira	NPER	0,12/12;-100;-1000;10000;1	n:59.6738656742946	
+Financeira	IPMT	0,1/12;1;36;8000	n:-66.66666666666667	
+Financeira	PPMT	0,1/12;1;36;8000	n:-191.47083088403394	
+Financeira	ISPMT	0,1/12;1;36;8000000	n:-64814.81481481482	
+Financeira	SLN	30000;7500;10	n:2250	
+Financeira	SYD	30000;7500;10;1	n:4090.909090909091	
+Financeira	DB	1000000;100000;6;1;7	n:186083.33333333334	
+Financeira	DDB	2400;300;10;1	n:480	
+Financeira	VDB	2400;300;10;0;1	n:480	
+Financeira	EFFECT	0,0525;4	n:0.05354266737075819	
+Financeira	NOMINAL	0,053543;4	n:0.052500319868356016	
+Financeira	DOLLARDE	1,02;16	n:1.125	
+Financeira	DOLLARFR	1,125;16	n:1.02	
+Financeira	RRI	96;10000;11000	n:0.0009933073762913303	
+Financeira	PDURATION	0,025;2000;2200	n:3.859866162622655	
+Financeira	NPV	0,1;AS3:AS7	n:67316.68850239985	
+Financeira	RATE	48;-200;8000	n:0.007701472488202072	
+Financeira	CUMIPMT	0,09/12;360;125000;13;24;0	n:-11135.232130750874	
+Financeira	CUMPRINC	0,09/12;360;125000;13;24;0	n:-934.1071234208495	
+Financeira	XNPV	0,09;AS11:AS16;AT11:AT16	n:2529.027124210714	
+Financeira	XIRR	AS11:AS16;AT11:AT16	n:0.42736911184965465	
+Financeira	IRR	AS2:AS7	n:0.0866309480365316	
+Financeira	MIRR	AS2:AS7;0,1;0,12	n:0.09866910733715017	
+Financeira	FVSCHEDULE	1;BE2:BE4	n:1.3308900000000004	
+Financeira	DISC	DATA(2026;1;15);DATA(2026;7;15);97;100	n:0.05999999999999999	
+Financeira	PRICEDISC	DATA(2026;1;15);DATA(2026;7;15);0,06;100	n:97.0	
+Financeira	YIELDDISC	DATA(2026;1;15);DATA(2026;7;15);97;100	n:0.06185567010309278	
+Financeira	INTRATE	DATA(2026;1;15);DATA(2026;7;15);97;100	n:0.06185567010309278	
+Financeira	RECEIVED	DATA(2026;1;15);DATA(2026;7;15);97;0,06	n:100.0	
+Financeira	TBILLPRICE	DATA(2026;1;15);DATA(2026;7;15);0,06	n:96.98333333333333	
+Financeira	TBILLYIELD	DATA(2026;1;15);DATA(2026;7;15);97	n:0.06151392606937404	
+Financeira	TBILLEQ	DATA(2026;1;15);DATA(2026;7;15);0,06	n:0.06272555421893795	
+Financeira	PRICEMAT	DATA(2026;1;15);DATA(2026;7;15);DATA(2025;12;1);0,05;0,04	n:100.47821350762527	
+Financeira	ACCRINTM	DATA(2025;12;1);DATA(2026;1;15);0,05;1000	n:6.111111111111111	
+Financeira	YIELDMAT	DATA(2026;1;15);DATA(2026;7;15);DATA(2025;12;1);0,05;99,5	n:0.05993340732519428	
+Engenharia	BESSELJ	1,9;2	n:0.32992572769238726	
+Engenharia	BESSELI	1,5;1	n:0.9816664285779075	
+Engenharia	BIN2DEC	"1010"	n:10	
+Engenharia	BIN2HEX	"1111"	t:F	
+Engenharia	BIN2OCT	"1111"	t:17	
+Engenharia	BITAND	13;25	n:9	
+Engenharia	BITLSHIFT	4;2	n:16	
+Engenharia	BITOR	13;25	n:29	
+Engenharia	BITRSHIFT	16;2	n:4	
+Engenharia	BITXOR	13;25	n:20	
+Engenharia	COMPLEX	3;4	t:3+4i	
+Engenharia	CONVERT	1;"km";"m"	n:1000	
+Engenharia	DEC2BIN	10;8	t:00001010	
+Engenharia	DEC2HEX	255	t:FF	
+Engenharia	DEC2OCT	64	t:100	
+Engenharia	DELTA	5;4	n:0	
+Engenharia	ERFC	1	n:0.1572992070502851	
+Engenharia	ERFC.PRECISE	1	n:0.1572992070502851	
+Engenharia	ERF	1	n:0.8427007929497149	
+Engenharia	ERF.PRECISE	1	n:0.8427007929497149	
+Engenharia	GESTEP	5;4	n:1	
+Engenharia	HEX2BIN	"FF"	t:11111111	
+Engenharia	HEX2DEC	"FF"	n:255	
+Engenharia	HEX2OCT	"FF"	t:377	
+Engenharia	IMABS	"3+4i"	n:5	
+Engenharia	IMAGINARY	"3+4i"	n:4	
+Engenharia	IMARGUMENT	"3+4i"	n:0.9272952180016122	
+Engenharia	IMCONJUGATE	"3+4i"	t:3-4i	
+Engenharia	IMCOSH	"1+i"		
+Engenharia	IMCOS	"1+i"		
+Engenharia	IMCOT	"1+i"		
+Engenharia	IMCSCH	"1+i"		
+Engenharia	IMCSC	"1+i"		
+Engenharia	IMDIV	"3+4i";"1+2i"		
+Engenharia	IMEXP	"1+i"		
+Engenharia	IMLN	"1"	t:0	
+Engenharia	IMLOG10	"100"	t:2	
+Engenharia	IMLOG2	"8"	t:3	
+Engenharia	IMPOWER	"2";3	t:8	
+Engenharia	IMPRODUCT	"3+4i";"1+2i"	t:-5+10i	
+Engenharia	IMREAL	"3+4i"	n:3	
+Engenharia	IMSECH	"1+i"		
+Engenharia	IMSEC	"1+i"		
+Engenharia	IMSINH	"1+i"		
+Engenharia	IMSIN	"1+i"		
+Engenharia	IMSQRT	"4"	t:2	
+Engenharia	IMSUB	"3+4i";"1+2i"	t:2+2i	
+Engenharia	IMSUM	"3+4i";"1+2i"	t:4+6i	
+Engenharia	IMTAN	"1+i"		
+Engenharia	OCT2BIN	"17"	t:1111	
+Engenharia	OCT2DEC	"17"	n:15	
+Engenharia	OCT2HEX	"17"	t:F	
+Banco de dados	DAVERAGE	AD1:AH7;"Lucro";AJ1:AK2	n:90	
+Banco de dados	DCOUNT	AD1:AH7;"Idade";AJ1:AK2	n:2	
+Banco de dados	DCOUNTA	AD1:AH7;"Idade";AJ1:AK2	n:2	
+Banco de dados	DGET	AD1:AH7;"Lucro";AM1:AM2	n:105	
+Banco de dados	DMAX	AD1:AH7;"Lucro";AJ1:AK2	n:105	
+Banco de dados	DMIN	AD1:AH7;"Lucro";AJ1:AK2	n:75	
+Banco de dados	DPRODUCT	AD1:AH7;"Lucro";AJ1:AK2	n:7875	
+Banco de dados	DSTDEV	AD1:AH7;"Lucro";AJ1:AK2	n:21.213203435596427	
+Banco de dados	DSTDEVP	AD1:AH7;"Lucro";AJ1:AK2	n:15.0	
+Banco de dados	DSUM	AD1:AH7;"Lucro";AJ1:AK2	n:180	
+Banco de dados	DVAR	AD1:AH7;"Lucro";AJ1:AK2	n:450	
+Banco de dados	DVARP	AD1:AH7;"Lucro";AJ1:AK2	n:225	
+Matriz dinâmica	CHOOSECOLS	N2:O6;2		
+Matriz dinâmica	CHOOSEROWS	N2:O6;1;3		
+Matriz dinâmica	DROP	N2:O6;2		
+Matriz dinâmica	EXPAND	BN2:BO3;3;3;0		
+Matriz dinâmica	FILTER	N2:N11;N2:N11>8		
+Matriz dinâmica	FREQUENCY	N2:N11;BC2:BC4		
+Matriz dinâmica	HSTACK	N2:N4;O2:O4		
+Matriz dinâmica	MDETERM	BN2:BO3	n:-2	
+Matriz dinâmica	MINVERSE	BN2:BO3		
+Matriz dinâmica	MMULT	BN2:BO3;BQ2:BR3		
+Matriz dinâmica	RANDARRAY	2;3		
+Matriz dinâmica	SEQUENCE	3;3		
+Matriz dinâmica	SORTBY	N2:N6;O2:O6;-1		
+Matriz dinâmica	SORT	N2:N6;1;FALSO		
+Matriz dinâmica	TAKE	N2:O6;2		
+Matriz dinâmica	TOCOL	BN2:BO3		
+Matriz dinâmica	TOROW	BN2:BO3		
+Matriz dinâmica	TRANSPOSE	N2:O4		
+Matriz dinâmica	UNIQUE	Q2:Q11		
+Matriz dinâmica	VSTACK	N2:N3;O2:O3		
+Matriz dinâmica	WRAPCOLS	N2:N7;3		
+Matriz dinâmica	WRAPROWS	N2:N7;3		
+Matriz dinâmica	MAP	N2:N4;LAMBDA(v;v*2)		
+Matriz dinâmica	REDUCE	0;N2:N4;LAMBDA(a;v;a+v)	n:10	
+Fonte de dados	IMPORTDATA	"https://exemplo.com/dados.csv"		so_texto
+Fonte de dados	IMPORTJSON	"https://exemplo.com/dados.json";"$.itens"		so_texto
+Fonte de dados	FETCHTEXT	"https://exemplo.com/texto.txt"		so_texto

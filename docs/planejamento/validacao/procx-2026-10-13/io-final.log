@@ -1,0 +1,196 @@
+   Compiling feathersheet-core v0.1.0 (/run/media/maragon/Arquivos/GitHub/FeatherOffice/feathersheet/crates/feathersheet-core)
+   Compiling feathersheet-io v0.1.0 (/run/media/maragon/Arquivos/GitHub/FeatherOffice/feathersheet/crates/feathersheet-io)
+warning: unused variable: `linhas`
+   --> examples/io013_extremos.rs:129:9
+    |
+129 |     let linhas = quantidade();
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_linhas`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `feathersheet-io` (example "io013_extremos") generated 1 warning (run `cargo fix --example "io013_extremos" -p feathersheet-io` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 22.68s
+     Running unittests src/lib.rs (crates/feathersheet-io/target/debug/deps/feathersheet_io-a9b07101f4736929)
+
+running 146 tests
+test backup_policy::testes::autosave_nao_desaparece_para_pastas_grandes ... ok
+test backup_policy::testes::limites_e_paridade_com_o_typescript ... ok
+test csv::testes::aspas_protegem_separador_quebra_e_aspas ... ok
+test backup_snapshot::testes::recusa_arquivo_nao_fshz_ou_inexistente ... ok
+test arquivo::testes::falha_do_exportador_em_stream_preserva_destino ... ok
+test csv::testes::empate_fica_com_a_virgula_como_no_typescript ... ok
+test csv::testes::em_lotes_da_o_mesmo_que_inteiro ... ok
+test csv::testes::o_separador_e_o_mais_frequente_da_primeira_linha ... ok
+test arquivo::testes::substitui_e_remove_temporario_em_falha ... ok
+test csv_workbook::testes::csv_aba_vazia_e_aba_inexistente ... ok
+test csv_workbook::testes::csv_invalido_falha_sem_aceitar_bytes_corrompidos ... ok
+test backup_snapshot::testes::copia_ultimo_arquivo_salvo_sem_alterar_original ... ok
+test csv_workbook::testes::csv_com_bom_locale_e_aspas_multilinha_vira_pasta_colunar ... ok
+test da_workbook::testes::medir_gravacao ... ignored
+test csv_workbook::testes::tsv_forca_tab_e_preserva_formulas_sem_trocar_engine ... ok
+test csv_workbook::testes::tsv_cita_tab_sem_corromper_aspas_ou_quebras ... ok
+test csv_workbook::testes::escrita_atomica_csv_e_tsv_preserva_workbook ... ok
+test csv_workbook::testes::csv_escapa_aspas_virgulas_linhas_e_valores_de_formula ... ok
+test da_workbook::testes::formula_sozinha_na_primeira_linha_sobrevive ... ok
+test da_workbook::testes::ocultar_dimensoes_persiste_no_fshz_sem_perder_celulas ... ok
+test da_workbook::testes::ida_e_volta_workbook_fshz ... ok
+test da_workbook::testes::ocultacao_de_aba_sobrevive_roundtrip_fshz_sem_perder_celulas ... ok
+test enxugar::testes::campo_novo_falha_alto ... ok
+test da_workbook::testes::os_nomes_vivos_vao_e_voltam ... ok
+test enxugar::testes::ida_e_volta_pelo_gzip ... ok
+test enxugar::testes::vazia_sem_estilo_morre ... ok
+test fshz_read::testes::avulsa_simples_volta_intacta ... ok
+test enxugar::testes::o_resto_dos_metadados_sobrevive ... ok
+test csv_workbook::testes::formatos_nativos_continuam_com_codecs_originais ... ok
+test fshz_read::testes::estilo_de_avulsa_e_de_literal_colunar_resolve_pela_tabela ... ok
+test fshz_read::testes::gunzip_nativo_rejeita_checksum_invalido_ou_truncamento ... ok
+test fshz_read::testes::arquivo_invalido_da_erro_em_vez_de_panic ... ok
+test fshz_read::testes::coluna_texto_densa_faz_ida_e_volta_com_dicionario ... ok
+test fshz_read::testes::respostas_assincronas_fazem_ida_e_volta ... ok
+test fshz_read::testes::protecao_de_intervalo_faz_ida_e_volta ... ok
+test fshz_write::testes::coluna_esparsa_derrama_para_avulsa ... ok
+test fshz_read::testes::coluna_formula_com_valor_calculado_faz_ida_e_volta ... ok
+test fshz_read::testes::coluna_numerica_densa_faz_ida_e_volta ... ok
+test grafico_compartilhado::testes::agregacao_exata_por_serie_e_renderizacao_independente ... ok
+test fshz_write::testes::sem_estilo_de_coluna_nao_escreve_campo ... ok
+test grafico_compartilhado::testes::avisos_e_amostra_sao_passados_sem_perder_dados ... ok
+test grafico_compartilhado::testes::area_e_degraus_usam_agregacao_original_do_sheet_e_rendem_svg ... ok
+test fshz_write::testes::estilo_de_coluna_linha_e_aba_vai_para_o_arquivo ... ok
+test fshz_write::testes::aba_pequena_so_tem_avulsas ... ok
+test fshz_write::testes::coluna_densa_vira_arrow_e_volta_intacta ... ok
+test enxugar::testes::cheia_com_estilo_no_st_permite_o_colapso ... ok
+test fshz_write::testes::estilo_repetido_nao_duplica_na_tabela ... ok
+test enxugar::testes::faixa_parcial_nao_colapsa ... ok
+test fshz_read::testes::gunzip_nativo_substitui_worker_sem_corromper_bytes ... ok
+test grafico_compartilhado::testes::hierarquia_de_datas_delega_agrupamento_ao_sheet ... ok
+test grafico_compartilhado::testes::nao_converte_tipo_especial_ou_nan_silenciosamente ... ok
+test grafico_compartilhado::testes::dispersao_usa_x_numerico_da_fonte_e_nao_rotulo_da_categoria ... ok
+test grafico_compartilhado::testes::ocultacao_preserva_indice_original_cor_e_ordem ... ok
+test grafico_migrado::testes::svg_sem_refazer_agregacao_no_sheet ... ok
+test graficos_salvos::testes::nao_sobrescreve_json_invalido ... ok
+test grafico_migrado::testes::mapeia_25_tipos_da_configuracao_legada ... ok
+test grafico_compartilhado::testes::preserva_todas_as_contas_do_motor_sheet_sem_reagregar ... ok
+test grafico_compartilhado::testes::rejeita_cor_css_incompativel_sem_esconder_configuracao ... ok
+test graficos_salvos::testes::preserva_campos_e_roundtrip_fshz ... ok
+test json_workbook::testes::erros_de_escrita_sao_propagados ... ok
+test impressao_pdf::testes::oculta_e_aba_inexistente ... ok
+test impressao_pdf::testes::colunas_largas_quebram_para_a_direita ... ok
+test graficos_salvos::testes::redimensionamento_preserva_posicao_e_fshz_apos_reabertura ... ok
+test json_workbook::testes::celula_distante_nao_expande_em_matriz_densa ... ok
+test para_workbook::testes::a_altura_zero_do_filtro_sobrevive ... ok
+test impressao_pdf::testes::planilha_pequena_uma_pagina ... ok
+test para_workbook::testes::a_formula_abre_com_o_valor_do_arquivo_sem_recalcular ... ok
+test json_workbook::testes::exportar_json_preserva_estado_de_aba_oculta ... ok
+test json_workbook::testes::exporta_abas_formulas_acentos_e_metadados_no_contrato_ts ... ok
+test enxugar::testes::cheia_sem_estilo_impede_o_colapso ... ok
+test enxugar::testes::coluna_com_arrow_nao_colapsa ... ok
+test para_workbook::testes::cada_coluna_de_formula_pega_o_seu_padrao ... ok
+test para_workbook::testes::estilo_ida_e_volta ... ok
+test pendentes::testes::a_aba_grava_e_le_na_ordem_de_chegada ... ok
+test recents::tests::test_json_serde ... ok
+test pendentes::testes::ida_e_volta_com_erro_e_tabela ... ok
+test recents::tests::calendario_bissexto_e_timestamp_invalido ... ok
+test recents::tests::test_limpar ... ok
+test recents::tests::data_de_recentes_antigos_em_portugues ... ok
+test recents::tests::test_esquecer ... ok
+test para_workbook::testes::mudar_a_entrada_suja_a_formula_carregada ... ok
+test recents::tests::test_registrar_e_limite ... ok
+test xlsx_read::format::tests::builtin_conhecidos ... ok
+test web::testes::json_caminhos_matrizes_e_tipos_preservam_comportamento_do_ts ... ok
+test xlsx_read::format::tests::codigos_basicos ... ok
+test xlsx_read::format::tests::mmm_yy_e_data_nao_minuto ... ok
+test xlsx_read::formula::tests::funcoes_basicas ... ok
+test xlsx_read::formula::tests::matriz_troca_barra_por_virgula_so_dentro_de_chaves ... ok
+test recents::tests::test_quando ... ok
+test xlsx_read::formula::tests::nome_com_varios_apelidos_normaliza ... ok
+test xlsx_read::formula::tests::texto_entre_aspas_nao_e_traduzido ... ok
+test xlsx_read::formula::tests::erro_literal_passa_intacto ... ok
+test recents::tests::test_registrar_reordena_existente ... ok
+test xlsx_read::formula::tests::safe_formula_nunca_lanca ... ok
+test web::testes::dados_json_e_texto ... ok
+test web::testes::csv_multilinha_usa_parser_nativo_e_preenche_campos_ausentes ... ok
+test xlsx_read::refs::tests::col_name_e_index_vao_e_voltam ... ok
+test xlsx_read::refs::tests::nao_confunde_funcao_com_referencia ... ok
+test xlsx_read::formula::tests::xlfn_prefix_removido ... ok
+test xlsx_read::refs::tests::nao_desloca_referencia_dentro_de_texto ... ok
+test xlsx_read::native::tests::mantem_texto_original_de_codigo_com_zeros_a_esquerda ... ok
+test xlsx_read::native::tests::importa_sem_json_com_formula_estilo_e_strings_compartilhadas ... ok
+test enxugar::testes::coluna_fantasma_vira_col_style ... ok
+test xlsx_read::refs::tests::shift_formula_desloca_e_respeita_cifrao ... ok
+test xlsx_read::sheet::tests::formula_compartilhada_desloca ... ok
+test xlsx_read::sheet::tests::hiperlink_da_planilha_inteira_so_altera_celulas_existentes ... ok
+test xlsx_read::sheet::tests::celula_simples_com_string_compartilhada ... ok
+test xlsx_read::sheet::tests::larguras_e_alturas_do_libreoffice ... ok
+test xlsx_read::sheet::tests::celulas_mescladas ... ok
+test xlsx_read::sheet::tests::limite_de_celulas_formatadas_rejeita_sem_abrir_aba_parcial ... ok
+test xlsx_read::sheet::tests::data_guardada_como_serial_volta_formatada ... ok
+test xlsx_read::styles::tests::from_argb_tira_o_alfa ... ok
+test xlsx_read::sheet::tests::texto_solto_inlinestr ... ok
+test da_workbook::testes::a_coluna_de_formula_sobrevive_a_gravar_e_abrir ... ok
+test xlsx_read::tests::imprime_json_de_arquivo_real ... ignored
+test xlsx_read::styles::tests::le_estilo_completo ... ok
+test xlsx_read::xml::tests::comentario_e_prologo_nao_viram_no ... ok
+test xlsx_read::xml::tests::entidades_e_cdata_voltam_ao_texto_original ... ok
+test xlsx_read::tests::zip_pequeno_com_xml_expandido_demais_retorna_erro_claro ... ok
+test xlsx_read::xml::tests::leitor_incremental_de_linhas_descarta_a_arvore_de_celulas ... ok
+test xlsx_read::xml::tests::namespace_casa_pelo_nome_local ... ok
+test xlsx_read::tests::arquivo_sem_workbook_xml_da_erro_claro ... ok
+test xlsx_read::xml::tests::parser_cancela_fluxo_ao_receber_erro_no_callback ... ok
+test xlsx_write::testes::a_referencia_escrita_direto_e_a_do_cell_name ... ok
+test xlsx_write::testes::cor_css_vira_argb ... ok
+test xlsx_read::tests::abre_planilha_minima_com_um_valor ... ok
+test xlsx_read::xml::tests::atributos_texto_e_aninhamento ... ok
+test xlsx_write::testes::csv_leva_aspas_so_quando_precisa ... ok
+test xlsx_read::xml::tests::leitor_stream_de_itens_preserva_metadados_e_descarta_so_as_linhas ... ok
+test xlsx_write::testes::escape_tira_caractere_de_controle ... ok
+test xlsx_write::testes::codigo_de_formato_segue_as_casas ... ok
+test zip_write::testes::o_que_entra_volta_igual ... ok
+test xlsx_write::testes::formula_que_nao_tokeniza_vai_como_esta ... ok
+test xlsx_write::testes::formula_vai_para_o_ingles_com_a_pontuacao_do_excel ... ok
+test xlsx_read::tests::formula_abre_com_o_valor_guardado_e_recalcula_quando_muda ... ok
+test impressao_pdf::testes::duzentas_linhas_varias_paginas ... ok
+test impressao_pdf::testes::grava_arquivo_para_conferir ... ok
+test xlsx_read::sheet::tests::pequenas_planilhas_com_milhares_de_linhas_vazias_nao_geram_celulas ... ok
+test csv_workbook::testes::arquivo_incremental_equivale_a_importacao_inteira ... ok
+test csv_workbook::testes::substituto_do_worker_importa_mais_de_dez_mil_linhas_com_aspas_multilinha ... ok
+test csv_workbook::testes::csv_multiplos_lotes_mantem_linha_absoluta ... ok
+test para_workbook::testes::os_valores_do_arquivo_chegam_iguais ... ok
+test para_workbook::testes::o_arquivo_de_exemplo_vira_pasta_sem_passar_pelo_javascript ... ok
+test para_workbook::testes::a_formula_empacotada_volta_como_formula ... ok
+test xlsx_write::testes::formula_empacotada_traduz_por_padrao_igual_a_celula_a_celula ... ok
+test xlsx_read::native::tests::importa_mais_de_250_mil_celulas_sem_teto_antigo ... ok
+
+test result: ok. 144 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.19s
+
+     Running tests/formula_com_estilo.rs (crates/feathersheet-io/target/debug/deps/formula_com_estilo-6032cdc222c32c46)
+
+running 1 test
+test formula_com_estilo_volta_do_arquivo ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/paridade_cht017.rs (crates/feathersheet-io/target/debug/deps/paridade_cht017-11b0ae66fb145682)
+
+running 6 tests
+test hierarquia_mes_agrega_na_origem_sem_perder_total ... ok
+test dispersao_mantem_x_e_pares_do_extrator ... ok
+test tipo_nao_suportado_ou_infinito_retorna_erro ... ok
+test ocultacao_respeita_indice_e_cor_de_serie_no_svg ... ok
+test sete_agregacoes_delegadas_ao_feathersheet_sem_recontar ... ok
+test seis_tipos_preservam_titulos_dados_cores_escala_e_svg_pdf ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/procx_compacto.rs (crates/feathersheet-io/target/debug/deps/procx_compacto-f2180e3e22b150ce)
+
+running 1 test
+test procx_compacto_volta_calculado_e_recalcula_apos_edicao ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests feathersheet_io
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

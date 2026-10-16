@@ -1,0 +1,350 @@
+{
+  "idioma": {
+    "codigo": "pt-BR",
+    "nome": "Português (Brasil)",
+    "decimal": ",",
+    "milhar": ".",
+    "separadorDeArgumentos": ";",
+    "moeda": "R$",
+    "codigoDaMoeda": "BRL",
+    "moedaAntes": true,
+    "espacoNaMoeda": true
+  },
+  "ajuda": {
+    "rotulos": {
+      "titulo": "Ajuda do FeatherSheet",
+      "busca": "Buscar na ajuda (função, comando, assunto)…",
+      "uso": "Como usar",
+      "funcoes": "Funções da planilha",
+      "macros": "Macros",
+      "atalhos": "Atalhos",
+      "apelidos": "Também",
+      "semResultado": "Nada encontrado para essa busca.",
+      "configuraveis": "Configuráveis (mude em Configurações)",
+      "fixos": "Fixos",
+      "categorias": "Categorias",
+      "todas": "Todas",
+      "anterior": "Anterior",
+      "proximo": "Próximo",
+      "nestaSecao": "Nesta seção"
+    },
+    "introducoes": {
+      "uso": "O FeatherSheet é uma planilha que roda inteira na sua máquina: sem conta, sem login, nada do seu conteúdo sai dela. Aqui está como usar cada parte, do básico (digitar e escrever fórmulas) ao avançado (tabelas dinâmicas, OpenQuery e macros). Siga na ordem com a seta, ou escolha um assunto no menu ao lado.",
+      "funcoes": "Todas as funções que você pode usar numa fórmula, por categoria, com os argumentos e o que cada uma faz. Argumento entre colchetes é opcional. Toda função aceita o nome em português ou em inglês. Dica: apertar F1 enquanto escreve uma fórmula abre direto na função em que está o cursor.",
+      "macros": "As macros são JavaScript e automatizam o que você faria à mão: preencher, formatar, trocar de aba, criar funções novas para as células. Abra em Ferramentas → Macros. A planilha está no objeto sheet; Ctrl+Enter executa e Ctrl+Z desfaz a macro inteira. Endereços são no formato A1 (\"B2\", \"A1:D10\"); linha e coluna numéricas contam a partir de 1.",
+      "atalhos": "As teclas que fazem o trabalho mais rápido. Os fixos valem sempre; os configuráveis podem ser trocados em Configurações → Atalhos, e aqui aparece a tecla que está valendo agora."
+    },
+    "comoUsar": {
+      "comecar": {
+        "titulo": "Primeiros passos",
+        "corpo": [
+          "Clique numa célula e digite. Enter confirma e desce; Tab confirma e vai para a direita; Esc desiste.",
+          "• F2 ou duplo clique edita a célula sem apagar o que já tem.",
+          "• Ctrl + seta vai até o fim dos dados; com Shift, seleciona até lá.",
+          "• Ctrl+Z desfaz e Ctrl+Y refaz — inclusive macros inteiras.",
+          "Os comandos ficam na faixa de opções, no alto. Ctrl+F1 troca a faixa pelos menus suspensos e uma barra compacta (e volta)."
+        ]
+      },
+      "formulas": {
+        "titulo": "Fórmulas",
+        "corpo": [
+          "Toda fórmula começa com \"=\". Os argumentos são separados por \";\" e a vírgula é decimal: =SOMA(A1:A10; 0,5).",
+          "• A1 é uma célula; A1:B10 é um intervalo; $A$1 não muda ao copiar a fórmula.",
+          "• Outra aba: 'Minha Aba'!A1 (as aspas só são precisas quando o nome tem espaço).",
+          "• As funções aceitam o nome em português ou em inglês (SOMA ou SUM). A lista completa está em \"Funções da planilha\".",
+          "Enquanto você digita, aparecem sugestões e a dica dos argumentos. Clicar ou arrastar na grade insere a referência; o retângulo colorido de cada referência pode ser arrastado (move) ou puxado pelo canto (redimensiona).",
+          "Funções que devolvem várias células (FILTRO, ÚNICO, CLASSIFICAR, SEQUÊNCIA…) derramam o resultado para baixo e para a direita. Se algo estiver no caminho, a célula mostra #SPILL!.",
+          "Fórmula com erro: botão direito na célula → \"Explicar este erro\" mostra o trecho que falhou e como consertar."
+        ]
+      },
+      "preencher": {
+        "titulo": "Preencher, copiar e mover",
+        "corpo": [
+          "• Arraste o quadradinho no canto da seleção (a alça) para continuar uma série: 1, 2, 3…, datas, \"Item 1, Item 2…\" e fórmulas.",
+          "• Duplo clique na alça preenche até o fim dos dados da coluna ao lado.",
+          "• Ctrl+D copia a célula de cima para baixo; Ctrl+R copia a da esquerda para a direita.",
+          "• Arrastar a borda da seleção move as células; as fórmulas que liam o bloco acompanham.",
+          "• Ctrl+Shift+V cola somente os valores."
+        ]
+      },
+      "abas": {
+        "titulo": "Abas",
+        "corpo": [
+          "As abas ficam na barra de baixo. O \"+\" cria uma nova (ou Shift+F11); Ctrl+PageUp e Ctrl+PageDown trocam de aba.",
+          "Botão direito numa aba: renomear, duplicar, mudar a cor, ocultar e reexibir."
+        ]
+      },
+      "formatar": {
+        "titulo": "Formatação",
+        "corpo": [
+          "Fonte, cor, bordas, alinhamento e formato de número (R$, %, casas decimais) ficam na aba Início da faixa. O pincel copia a formatação de uma célula para outras.",
+          "• Formatação condicional (Formatar → Formatação condicional): pinta células por regra — maior que, contém texto, duplicados, fórmula própria, escala de cor e barra de dados.",
+          "• Cores alternadas (Formatar) listra as linhas de uma tabela.",
+          "• Congelar (Ver) fixa as primeiras linhas ou colunas enquanto você rola."
+        ]
+      },
+      "tabelas": {
+        "titulo": "Tabelas, filtros e dinâmicas",
+        "corpo": [
+          "• Ctrl+T converte os dados em tabela: cabeçalho, listras, linha de total e filtro em cada coluna. A tabela cresce sozinha quando você digita logo abaixo.",
+          "• Ctrl+Shift+L liga ou desliga o filtro. Classificar fica no menu Dados.",
+          "• Inserir → Tabela Dinâmica resume os dados: arraste os campos para linhas, colunas e valores (soma, contagem, média…)."
+        ]
+      },
+      "graficos": {
+        "titulo": "Gráficos e imagens",
+        "corpo": [
+          "Selecione os dados e use Inserir → Gráfico. O gráfico flutua sobre a grade: arraste para mover, puxe o canto para redimensionar, e o editor ao lado troca o tipo (17 tipos), as séries e as cores. Ele acompanha os dados quando eles mudam.",
+          "Imagens: Inserir → Imagem, colar (Ctrl+V) ou arrastar o arquivo para a grade."
+        ]
+      },
+      "dados": {
+        "titulo": "Ferramentas de dados",
+        "corpo": [
+          "• Localizar e substituir: Ctrl+H.",
+          "• No menu Dados: Remover duplicados, Remover espaços, Dividir texto em colunas (separador e tipo de cada coluna, com prévia) e Estatísticas da coluna.",
+          "• Validação de dados (faixa, aba Dados): lista suspensa, número entre limites, data, texto — com aviso ou recusa ao digitar.",
+          "• OpenQuery (Dados → OpenQuery…): importa e transforma dados — filtrar, agrupar, mesclar tabelas, fontes da web — e guarda os passos para atualizar depois."
+        ]
+      },
+      "macros": {
+        "titulo": "Macros e botões",
+        "corpo": [
+          "Macros são JavaScript (Ferramentas → Macros). Ctrl+Enter executa, e Ctrl+Z desfaz a macro inteira. \"Executar ao abrir\" roda a macro sempre que a planilha abre — é assim que funções personalizadas continuam valendo.",
+          "Inserir → Botão de macro cria um botão na grade que roda uma macro ao clicar. Arraste para mover; botão direito para editar ou excluir.",
+          "Todas as funções que uma macro pode usar estão na seção \"Macros\" desta Ajuda."
+        ]
+      },
+      "arquivos": {
+        "titulo": "Arquivos",
+        "corpo": [
+          "O formato próprio é o .fshz. Ctrl+S salva e Ctrl+Shift+S salva com outro nome. Abrir também lê .xlsx, .csv e .tsv.",
+          "Arquivo → Exportar grava a pasta em .xlsx ou a aba atual em .csv.",
+          "O salvamento automático grava o arquivo no intervalo escolhido em Configurações.",
+          "Tudo roda na sua máquina: sem conta, sem login, nada do seu conteúdo sai dela."
+        ]
+      },
+      "config": {
+        "titulo": "Configurações",
+        "corpo": [
+          "Em Configurações: tema claro ou escuro, esquema e cor de destaque, letra e tamanho da grade, zoom, salvamento automático, idioma (que também decide o separador das fórmulas) e os atalhos do teclado."
+        ]
+      }
+    },
+    "atalhosFixos": {
+      "ajuda": "Ajuda",
+      "faixa": "Mostrar ou ocultar a faixa de opções",
+      "editar": "Editar a célula",
+      "confirmar": "Confirmar e descer / ir à direita",
+      "fimDosDados": "Ir ao fim dos dados",
+      "selecionarAteOFim": "Selecionar até o fim",
+      "desfazer": "Desfazer / refazer",
+      "copiar": "Copiar / recortar / colar",
+      "negrito": "Negrito / itálico / sublinhado",
+      "imprimir": "Imprimir",
+      "monitor": "Monitor (memória, console, métricas)",
+      "executarMacro": "Executar a macro (no painel de Macros)"
+    }
+  },
+  "atalhos": {
+    "createTable": "Criar Tabela",
+    "toggleFilter": "Criar / Alternar Filtro",
+    "findReplace": "Localizar e Substituir",
+    "memoryProfiler": "Monitor de Memória & Processos",
+    "save": "Salvar documento",
+    "saveAs": "Salvar como…",
+    "toggleFormulas": "Alternar Mostrar Fórmulas",
+    "selecionarColuna": "Selecionar a coluna inteira",
+    "selecionarLinha": "Selecionar a linha inteira",
+    "preencherBaixo": "Preencher para baixo",
+    "preencherDireita": "Preencher para a direita",
+    "dataDeHoje": "Inserir a data de hoje",
+    "horaAgora": "Inserir a hora agora",
+    "autoSoma": "AutoSoma",
+    "ocultarLinha": "Ocultar linhas",
+    "ocultarColuna": "Ocultar colunas",
+    "reexibirLinhas": "Reexibir linhas",
+    "reexibirColunas": "Reexibir colunas",
+    "formatoMoeda": "Formato moeda",
+    "formatoPorcentagem": "Formato porcentagem",
+    "proximaAba": "Próxima aba",
+    "abaAnterior": "Aba anterior",
+    "novaAba": "Nova aba",
+    "colarValores": "Colar somente valores"
+  },
+  "funcoes": {
+    "categorias": {
+      "Matemática": "Matemática",
+      "Estatística": "Estatística",
+      "Matriz dinâmica": "Matriz dinâmica",
+      "Lógica": "Lógica",
+      "Texto": "Texto",
+      "Pesquisa e referência": "Pesquisa e referência",
+      "Data e hora": "Data e hora",
+      "Fonte de dados": "Fonte de dados"
+    }
+  },
+  "macros": {
+    "introducao": "As macros são JavaScript. A planilha está no objeto sheet. Ctrl+Enter executa, e tudo o que a macro fizer é desfeito de uma vez com Ctrl+Z. Endereços são no formato A1 (\"B2\", \"A1:D10\"); linha e coluna numéricas contam a partir de 1.",
+    "secoes": {
+      "celulas": "Células",
+      "intervalos": "Intervalos",
+      "formatacao": "Formatação",
+      "selecao": "Seleção e tamanho",
+      "abas": "Abas",
+      "funcoes": "Funções personalizadas",
+      "saida": "Saída",
+      "excel-valores": "Valores, fórmulas e cópia",
+      "excel-formato": "Fonte, cor e bordas",
+      "excel-estrutura": "Linhas e colunas",
+      "excel-navegacao": "Achar dados e andar entre intervalos",
+      "excel-dados": "Ordenar, validar e destacar",
+      "excel-pasta": "Abas e pasta de trabalho (wb)",
+      "excel-app": "Aplicação (app)",
+      "excel-fn": "Funções de planilha (app.fn)"
+    },
+    "funcoes": {
+      "value": "O valor já calculado da célula.",
+      "formula": "O texto digitado na célula, com \"=\" quando é fórmula.",
+      "set": "Escreve um valor ou uma fórmula na célula. Devolve `sheet`, então dá para encadear: `sheet.set(\"A1\", 1).set(\"A2\", 2)`.",
+      "clear": "Apaga o conteúdo e o formato da célula ou do intervalo (o `Range.Clear` do VBA). Para apagar só um dos dois: `clearContents` e `clearFormats`.",
+      "style": "Formata a célula ou o intervalo com um objeto. Devolve `sheet`, para encadear. As chaves estão em \"Formatação\", abaixo.",
+      "range": "Um intervalo, com as funções abaixo. Elas podem ser encadeadas.",
+      "Range.values": "values() devolve a matriz com os valores calculados; value lê o valor calculado da primeira célula e permite escrever no intervalo.",
+      "Range.formulas": "formulas() devolve a matriz com o texto digitado (fórmulas incluídas); text lê o texto bruto da primeira célula e permite escrever no intervalo.",
+      "Range.set": "Um valor só preenche o intervalo todo; uma matriz é colada a partir do canto.",
+      "Range.forEach": "Percorre as células. Linha e coluna contam a partir de 0, dentro do intervalo.",
+      "Range.map": "Grava em cada célula o que a função devolver (undefined deixa como está).",
+      "Range.style": "Formata o intervalo inteiro.",
+      "Range.clear": "Apaga o conteúdo do intervalo.",
+      "Range.address": "O endereço do intervalo (\"A1:D10\").",
+      "Range.rows": "Quantas linhas e colunas o intervalo tem.",
+      "style-keys": "Texto: negrito, itálico, sublinhado, tachado; cor do texto e do fundo em \"#rrggbb\"; tamanho e fonte.",
+      "style-layout": "align: \"left\" | \"center\" | \"right\"; vAlign: \"top\" | \"middle\" | \"bottom\"; wrap: quebrar texto; rotation: graus de -90 a 90.",
+      "style-number": "format: \"auto\", \"number\", \"integer\", \"currency\" (moeda), \"accounting\" (contábil), \"percent\", \"scientific\", \"date\", \"datetime\", \"time\", \"duration\" ou \"text\"; decimals: casas decimais fixas.",
+      "selection": "O intervalo selecionado na grade.",
+      "select": "Seleciona uma célula ou intervalo e rola até ele. Devolve `sheet`.",
+      "lastRow": "Número (a partir de 1) da última linha e da última coluna com dado.",
+      "address": "O endereço A1 de uma linha e coluna numéricas (a partir de 1).",
+      "sheets": "sheets() lista os nomes de todas as abas, na ordem das guias. sheets(name) e worksheets(name) devolvem a API da aba indicada pelo nome.",
+      "name": "O nome da aba onde a macro começou a rodar.",
+      "goToSheet": "Vai para outra aba, como clicar na guia. Bom para um botão de macro que navega. O resto da macro continua escrevendo na aba onde ela começou.",
+      "showComponent": "Abre um componente (tela em HTML e CSS feita no editor de macros, Alt+F11) numa janelinha. Dentro dele, um elemento com data-macro=\"modulo\" roda aquele módulo ao clicar (os campos com name chegam na variável valores) e data-fechar fecha a janelinha.",
+      "defineFunction": "Cria uma função para usar nas células (=IMPOSTO(D2)). Intervalos chegam como lista. Marque \"Executar ao abrir\" para ela continuar valendo.",
+      "log": "Escreve no quadro de saída do painel.",
+      "status": "Mostra uma mensagem curta no rodapé.",
+      "get": "O valor calculado da célula (se for um intervalo, a de cima à esquerda). É o `Range.Value` do VBA.",
+      "setFormula": "Escreve uma fórmula. Num intervalo, as referências relativas se ajustam célula a célula, como no Excel. Devolve `sheet`, para encadear.",
+      "setFormulaR1C1": "Escreve uma fórmula em notação R1C1 (`R[0]C[-2]` é relativo, `R3C4` é absoluto).",
+      "getText": "O texto exatamente como aparece na tela, com o formato aplicado (`Range.Text`).",
+      "setNumberFormat": "Aplica uma máscara de número do Excel: `\"#,##0.00\"`, `\"0%\"`, `\"dd/mm/yyyy\"`, `\"R$ #,##0.00\"`, `\"@\"`. Também aceita um código personalizado, como `\"dd\"`, `\"mmmm/yyyy\"` ou `\"0 \\\"kWh\\\"\"`. Código que o app não entende dá erro.",
+      "clearContents": "Apaga só valores e fórmulas; o formato fica (`ClearContents`).",
+      "clearFormats": "Apaga só o formato; os valores ficam (`ClearFormats`).",
+      "copy": "Copia e cola. `paste`: `\"all\"` (padrão), `\"values\"`, `\"formulas\"` ou `\"formats\"`. Fórmulas se ajustam ao novo lugar. `to` é o canto de cima à esquerda do destino.",
+      "move": "Move conteúdo e formato para outro lugar. As fórmulas que citavam a origem acompanham (`Range.Cut`).",
+      "find": "O endereço da primeira célula (de cima e mais à esquerda) que tem o texto, ou `null`. `range` restringe a busca; `inFormulas` procura no que foi digitado.",
+      "replace": "Troca texto dentro do intervalo; devolve quantas células mudaram.",
+      "getAddress": "O endereço A1 de um intervalo.",
+      "autoFill": "Preenche em série, como arrastar a alça: 1, 2, 3…, datas, textos numerados, fórmulas. Devolve quantas células preencheu.",
+      "setFontFamily": "Nome da fonte.",
+      "setFontSize": "Tamanho da letra em **pixels** (o padrão da planilha é 13).",
+      "setBold": "Negrito.",
+      "setItalic": "Itálico.",
+      "setUnderline": "Sublinhado: `\"single\"`/`true` liga, `\"none\"`/`false` tira. O duplo vira simples.",
+      "setStrikethrough": "Tachado.",
+      "setFontColor": "Cor do texto: `\"#RRGGBB\"` ou o número do VBA (`app.rgb(r, g, b)`).",
+      "setBackground": "Cor de fundo da célula.",
+      "setAlignHorizontal": "`\"left\"`, `\"center\"`, `\"right\"` ou `\"general\"` (automático: número à direita, texto à esquerda).",
+      "setAlignVertical": "`\"top\"`, `\"middle\"` ou `\"bottom\"`.",
+      "setWrapText": "Quebra o texto em várias linhas dentro da célula.",
+      "setTextRotation": "Rotação do texto, de -90 a 90 graus.",
+      "setHyperlink": "Põe um link na célula; `text` (opcional) é o que ela mostra.",
+      "setBorder": "Bordas, juntando com as que já existem: `top`, `bottom`, `left`, `right`, `insideH`, `insideV`, `all`, `none` e `color`. Só linha contínua fina existe; `style` e `width` diferentes dão erro.",
+      "setOutline": "Contorno externo do intervalo numa chamada só (`BorderAround`).",
+      "setShowGridlines": "Mostra ou esconde as linhas de grade.",
+      "setRowHeight": "Altura da linha (a primeira é 1), em **pixels**.",
+      "setColumnWidth": "Largura da coluna (letra ou número), em **pixels**.",
+      "autoFitColumn": "Ajusta a largura da coluna ao conteúdo. Só na aba que está na tela.",
+      "hideRow": "Oculta a linha (ou reexibe, com `false`).",
+      "hideColumn": "Oculta a coluna (ou reexibe, com `false`).",
+      "insertRow": "Insere linhas antes da linha, empurrando o resto para baixo. Só na aba que está na tela; entra no Ctrl+Z da estrutura.",
+      "insertColumn": "Insere colunas antes da coluna, empurrando o resto para a direita. Só na aba que está na tela.",
+      "deleteRow": "Exclui linhas. Só na aba que está na tela.",
+      "deleteColumn": "Exclui colunas. Só na aba que está na tela.",
+      "deleteCells": "Exclui as células e puxa as de baixo (\"up\") ou as da direita (\"left\") para o lugar, como o Excluir células… do Excel.",
+      "insertCells": "Insere células vazias e empurra as da seleção para baixo (\"down\") ou para a direita (\"right\").",
+      "rowCount": "Quantas linhas o intervalo tem.",
+      "columnCount": "Quantas colunas o intervalo tem.",
+      "cell": "cell(row, col) e cells(row, col) devolvem a célula na linha e coluna (a primeira é 1), como intervalo.",
+      "getLastRow": "Número da última linha com dado na coluna; 0 se a coluna está vazia. É o `Cells(Rows.Count, 1).End(xlUp).Row`.",
+      "getLastColumn": "Número da última coluna com dado na linha; 0 se a linha está vazia.",
+      "getDataRange": "O menor retângulo que contém tudo que foi usado (`UsedRange`), ou `null` se a aba está vazia.",
+      "getRegion": "O bloco contínuo de dados em volta da célula (`CurrentRegion`, Ctrl+Shift+*).",
+      "offset": "Desloca o intervalo em linhas e colunas (negativo sobe/volta).",
+      "resize": "Um intervalo de `rows` × `cols` a partir da célula de cima à esquerda.",
+      "columnOf": "A coluna `n` (a primeira é 1) dentro do intervalo.",
+      "rowOf": "A linha `n` (a primeira é 1) dentro do intervalo.",
+      "merge": "Mescla as células; só o conteúdo da de cima à esquerda fica.",
+      "unmerge": "Desfaz as mesclagens que o intervalo toca.",
+      "isMerged": "A célula faz parte de uma região mesclada?",
+      "specialCells": "Os endereços das células do intervalo de um tipo: `\"blanks\"`, `\"formulas\"`, `\"constants\"` ou `\"errors\"`.",
+      "activeCell": "A célula em foco: o canto de cima à esquerda da seleção.",
+      "intersect": "A interseção de dois intervalos, ou `null` se não se tocam.",
+      "union": "O menor intervalo que cobre os dois.",
+      "sort": "Ordena por uma ou mais colunas (`order`: `\"asc\"` ou `\"desc\"`). `header: true` deixa a primeira linha no lugar.",
+      "removeDuplicates": "Remove as linhas repetidas (pelas colunas dadas, ou por todas); devolve quantas saíram.",
+      "setDataValidation": "Validação de dados: `{ type: \"list\", values }` ou `source: \"A1:A5\"`; `\"number\"` (`operator` between/greaterThan/lessThan/equal, `min`, `max`, `value`); `\"date\"`; `\"text\"`; `\"checkbox\"`. `errorMessage` e `mode: \"warn\"` (o padrão é recusar).",
+      "clearDataValidation": "Remove a validação do intervalo.",
+      "addConditionalFormat": "Formatação condicional: `{ type: \"cellValue\", operator, value, value2, fill, color, bold, italic }` ou `{ type: \"formula\", formula, fill }`. Operadores do painel: greaterThan, between, textContains, duplicate, aboveAverage…",
+      "addColorScale": "Escala de cores do menor ao maior valor.",
+      "addDataBar": "Barras de dados dentro da célula.",
+      "clearConditionalFormats": "Remove as regras de formatação condicional que tocam o intervalo.",
+      "wb.sheet": "A API (`sheet`) de outra aba, por nome ou posição (a primeira é 1). Inserir/excluir linhas e colunas só funcionam na aba que está na tela.",
+      "wb.addSheet": "Cria uma aba nova e devolve a API dela.",
+      "wb.deleteSheet": "Remove a aba (a pasta precisa de pelo menos uma).",
+      "wb.renameSheet": "Renomeia a aba.",
+      "wb.copySheet": "Duplica a aba e devolve a API da cópia.",
+      "wb.moveSheet": "Leva a aba para a posição (a primeira é 1).",
+      "wb.setTabColor": "Cor da guia da aba; `null` tira.",
+      "wb.setSheetVisible": "Mostra ou oculta a aba (a pasta precisa de uma visível).",
+      "wb.activate": "Traz a aba para a frente.",
+      "wb.freezePanes": "Congela linhas e colunas de cima e da esquerda.",
+      "wb.addName": "Dá nome a um intervalo (da aba ativa, ou escrito como `\"Plan1!A1:A10\"`).",
+      "wb.sheetCount": "Quantas abas a pasta tem (propriedade, sem parênteses).",
+      "wb.name": "O nome do documento aberto (propriedade, sem parênteses).",
+      "sheet.exportPdf": "Exporta esta aba em PDF, usando a área de impressão. O caminho é relativo à pasta do arquivo aberto (`\\` vira `/`). Devolve `sheet`.",
+      "sheet.saveAs": "Salva só esta aba num arquivo novo, `.xlsx` ou `.fshz` (pela extensão). O caminho é relativo à pasta do arquivo aberto (`\\` vira `/`). Devolve `sheet`.",
+      "wb.saveSheetsAs": "Salva uma pasta nova só com as abas indicadas (lista de nomes ou números), em `.xlsx` ou `.fshz`. O caminho é relativo à pasta do arquivo aberto (`\\` vira `/`).",
+      "app.batch": "Roda o bloco. A macro já roda numa transação só (um Ctrl+Z desfaz tudo); existe para o código convertido do VBA (`ScreenUpdating`) continuar igual.",
+      "app.calculate": "Recalcula a aba.",
+      "app.status": "Mensagem na barra de baixo.",
+      "app.setEventsEnabled": "Liga ou desliga as macros de evento (ao abrir, ao ativar, ao mudar). Volta a ligar sozinho quando a macro termina.",
+      "app.rgb": "O `RGB(r, g, b)` do VBA: a cor como número (ordem BGR). As funções de cor aceitam o número ou `\"#RRGGBB\"`.",
+      "app.vbaColorToHex": "A cor numérica do VBA (BGR) como `\"#RRGGBB\"`.",
+      "app.isError": "O valor é um erro de planilha (`#N/A`, `#DIV/0!`…)?",
+      "app.error": "Cria um erro de planilha para gravar numa célula.",
+      "app.fn.sum": "Soma dos números; texto e células vazias são ignorados. Aceita lista ou matriz (`range.values()`).",
+      "app.fn.average": "Média dos números; `#DIV/0!` se não houver nenhum.",
+      "app.fn.count": "Quantos números.",
+      "app.fn.countA": "Quantas células não vazias.",
+      "app.fn.max": "O maior número.",
+      "app.fn.min": "O menor número.",
+      "app.fn.median": "A mediana.",
+      "app.fn.countIf": "Conta os valores que atendem ao critério do Excel: `\">5\"`, `\"<>x\"`, texto sem diferenciar maiúsculas, curingas `*` e `?`.",
+      "app.fn.sumIf": "Soma condicional: soma `sumValues` (ou os próprios valores) onde `values` atende ao critério.",
+      "app.fn.averageIf": "Média condicional.",
+      "app.fn.vlookup": "Busca vertical: procura a chave na 1ª coluna e devolve a coluna `col` (a primeira é 1) da mesma linha. `#N/A` se não achar. Por padrão exige igualdade (`exact = false` aceita o maior valor que não passa).",
+      "app.fn.hlookup": "Busca horizontal: como o `vlookup`, procurando na 1ª linha.",
+      "app.fn.match": "A posição (a primeira é 1) do valor na lista: `0` exato, `1` o maior que não passa (ordem crescente), `-1` o menor que não é menor (decrescente). `#N/A` se não achar.",
+      "app.fn.index": "O valor da posição: `index(lista, n)` ou `index(matriz, linha, coluna)` (a primeira é 1)."
+    },
+    "guia": {
+      "titulo": "Guia das macros",
+      "busca": "Buscar função…",
+      "fechar": "Fechar",
+      "inserir": "Clique para pôr no editor",
+      "vazio": "Nenhuma função com esse nome."
+    },
+    "exemplo": "// A planilha está em `sheet`. Ctrl+Enter executa; Ctrl+Z desfaz a macro inteira.\n// Todas as funções, com exemplos: botão \"Guia\".\n\n// 1) Ler e escrever\nsheet.set(\"F1\", \"Relatório\");\nsheet.log(\"A1 vale:\", sheet.value(\"A1\"));\n\n// 2) Trabalhar com um intervalo\nsheet.range(\"A1:D1\").style({ bold: true });\n\n// 3) Preencher com um laço\nfor (let linha = 2; linha <= 6; linha++) {\n  sheet.set(\"F\" + linha, \"=D\" + linha + \"*0,1\");\n}\n\n// 4) Criar uma função para usar nas células: =IMPOSTO(D2)\nsheet.defineFunction(\"IMPOSTO\", (valor) => valor * 0.15);\n\n// 5) Ir para outra aba (bom para um botão de macro)\n// sheet.goToSheet(\"Resumo\");\n"
+  }
+}

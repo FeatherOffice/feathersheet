@@ -1,0 +1,697 @@
+warning: unused variable: `aba`
+    --> src/planilha/workbook.rs:1695:13
+     |
+1695 |         let aba = w.aba(0).unwrap();
+     |             ^^^ help: if this is intentional, prefix it with an underscore: `_aba`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `feathersheet-core` (lib test) generated 1 warning (run `cargo fix --lib -p feathersheet-core --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running unittests src/lib.rs (crates/feathersheet-core/target/debug/deps/feathersheet_core-0a351ca75f80ddbf)
+
+running 691 tests
+test celulas::date_serial::tests::datas_excel_e_epoch_estao_corretas ... ok
+test celulas::date_serial::tests::round_javascript_reproduz_as_metades_do_typescript ... ok
+test celulas::date_serial::tests::serial_negativo_com_meio_milissegundo ... ok
+test celulas::date_serial::tests::test_date_serial_conversion ... ok
+test celulas::estilo_parcial::testes::falso_na_celula_desliga_o_negrito_da_coluna ... ok
+test celulas::estilo_parcial::testes::nulo_no_patch_apaga_o_campo ... ok
+test celulas::estilo_parcial::testes::as_bordas_vao_e_voltam ... ok
+test celulas::locale::testes::as_embutidas_pelo_codigo ... ok
+test celulas::locale::testes::argumentos_numericos_ingleses_nao_viram_decimal ... ok
+test celulas::locale::testes::porta_regionalizacao_ts_unicode_csv_e_formula_original ... ok
+test celulas::number::testes::arredonda_por_algarismo_significativo ... ok
+test celulas::locale::testes::preserva_strings_referencias_e_matrizes_ao_localizar ... ok
+test celulas::number::testes::escreve_fracao_como_o_javascript ... ok
+test celulas::number::testes::escreve_inteiro_como_o_javascript ... ok
+test celulas::number::testes::le_numero_como_o_javascript ... ok
+test celulas::number::testes::ida_e_volta_nao_perde_nada ... ok
+test celulas::number::testes::recusa_o_que_o_javascript_recusa ... ok
+test celulas::number::testes::troca_para_cientifica_nos_mesmos_limites_do_javascript ... ok
+test celulas::pool::testes::apos_limpar_ids_sao_reutilizados_sem_texto_antigo ... ok
+test celulas::pool::testes::clear_esvazia ... ok
+test celulas::pool::testes::cria_e_reaproveita_id ... ok
+test celulas::pool::testes::id_negativo_e_fora_do_pool_devolvem_vazio ... ok
+test celulas::pool::testes::intern_texto_longo_nao_entra_no_pool ... ok
+test celulas::refs::testes::a_planilha_inteira_sai_como_coluna ... ok
+test celulas::refs::testes::area_nao_estoura ... ok
+test celulas::refs::testes::chave_vai_e_volta_no_fim_da_planilha ... ok
+test celulas::pool::testes::internacao_tem_paridade_com_o_tamanho_utf16_do_typescript ... ok
+test celulas::refs::testes::escreve_referencia ... ok
+test celulas::refs::testes::indice_de_coluna ... ok
+test celulas::refs::testes::le_celula ... ok
+test celulas::refs::testes::le_intervalo ... ok
+test celulas::refs::testes::fronteiras_de_referencia_e_intervalo_do_typescript ... FAILED
+test celulas::refs::testes::nome_de_coluna ... ok
+test celulas::refs::testes::quote_sheet_tem_paridade_com_regex_do_typescript ... ok
+test celulas::style::tests::a_moeda_usa_espaco_nao_separavel ... ok
+test celulas::style::tests::arredonda_na_decima_casa ... ok
+test celulas::style::tests::casa_decimal_escolhida_a_mao_ganha_do_padrao_do_formato ... ok
+test celulas::style::tests::estilo_vazio_se_reconhece ... ok
+test celulas::style::tests::bate_com_o_format_value_do_typescript ... ok
+test celulas::style::tests::bate_com_o_intl_do_typescript ... ok
+test celulas::style::tests::o_alinhamento_segue_o_tipo_do_valor ... ok
+test celulas::style::tests::formato_valor_portado_para_texto_logico_vazio_e_erro ... ok
+test celulas::style::tests::o_lixo_do_ponto_flutuante_nao_aparece ... ok
+test celulas::style::tests::o_milhar_entra_de_tres_em_tres_e_nunca_no_comeco ... ok
+test celulas::style::tests::passou_de_dez_casas_vira_zero ... ok
+test celulas::style::tests::sem_estilo_nenhum_e_o_formato_automatico ... ok
+test celulas::style::tests::sem_zero_a_toa_no_fim ... ok
+test celulas::values::testes::coercoes_numericas_fieis_ao_typescript_legado ... ok
+test celulas::values::testes::erro_contamina_a_comparacao ... ok
+test celulas::values::testes::logico_de_valor ... ok
+test celulas::values::testes::matriz_fora_da_borda_e_vazia ... ok
+test celulas::values::testes::moeda_vira_numero ... ok
+test celulas::values::testes::numero_de_texto ... ok
+test celulas::values::testes::ordem_entre_tipos ... ok
+test celulas::values::testes::texto_de_valor ... ok
+test celulas::values::testes::valores_preservam_textos_logicos_e_propagam_erros ... ok
+test celulas::values::testes::vazio_imita_o_outro_lado ... ok
+test consulta::query::fluxo::testes::etapas_globais_rejeitadas_antes_de_ler ... ok
+test consulta::query::fluxo::testes::grande_numero_de_linhas_nao_materializa_tabela ... ok
+test consulta::query::fluxo::testes::paridade_dividir_e_limitar_em_ordem_variavel ... ok
+test consulta::query::limites::testes::editor_recusa_fonte_inexistente_e_chaves_invalidas ... ok
+test consulta::query::fluxo::testes::paridade_filtrar_renomear_limitar_e_criar_indice ... ok
+test consulta::query::testes::acrescentar_alinha_pelo_nome_e_cai_na_posicao ... ok
+test consulta::query::testes::agrupar_resume_cada_grupo_na_ordem_de_chegada ... ok
+test consulta::query::testes::indice_aceita_inicio_e_incremento_fracionarios ... ok
+test consulta::query::testes::limite_aceita_negativo_e_fracao_como_o_query_ts ... ok
+test consulta::query::testes::teste_executar_query_basico ... ok
+test consulta::sheet_query::testes::grava_texto_parecido_com_formula_sem_executar ... ok
+test dinamica::campo_calculado::testes::celula_vira_numero ... ok
+test dinamica::campo_calculado::testes::campos_calculados_encadeados ... ok
+test dinamica::acumulador::testes::acumulador_igual_ao_motor_legado_em_todas_as_operacoes ... ok
+test dinamica::campo_calculado::testes::erros_de_escrita_sao_explicados ... ok
+test consulta::sheet_query::testes::atualizar_apaga_restos_e_rejeita_limite_sem_editar ... ok
+test dinamica::campo_calculado::testes::numeros_malformados_nao_viram_campos_validos ... ok
+test consulta::sheet_query::testes::coluna_inteira_recorta_area_usada_e_ignora_linhas_vazias ... ok
+test dinamica::campo_calculado::testes::soma_precedencia_parenteses_e_sinal ... ok
+test diario::testes::recolhe_na_ordem_e_esvazia ... ok
+test dinamica::campo_calculado::testes::parser_rejeita_literais_infinito_igual_ao_typescript ... ok
+test consulta::sheet_query::testes::leitura_sem_cabecalho_e_limite_real_de_celulas ... ok
+test dinamica::dinamica_layout::testes::colunas_cruzadas_no_compacto ... ok
+test dinamica::campos::testes::nome_vazio_vira_coluna_n_e_a_amostra_decide_o_tipo ... ok
+test dinamica::campos::testes::amostra_para_em_15_linhas ... ok
+test dinamica::campos::testes::previa_de_campos_encadeados ... ok
+test dinamica::dinamica_layout::testes::filtro_sem_dimensao_de_linha_deve_ser_respeitado ... ok
+test dinamica::dinamica_layout::testes::compacto_grupo_com_subtotal_e_itens_embaixo ... ok
+test dinamica::pivot::testes::medir_dinamica ... ignored
+test dinamica::pivot::testes::agrupamento_nao_aceita_mes_invalido ... ok
+test dinamica::dinamica_layout::testes::recolher_o_grupo_mostra_so_o_total_dele ... ok
+test dinamica::dinamica_layout::testes::o_filtro_tira_as_linhas_antes_de_agrupar ... ok
+test dinamica::pivot::testes::operacoes_da_ponte_typescript_mantem_contagem ... ok
+test dinamica::pivot::testes::pivot_agrupamento_por_data_mes ... ok
+test dinamica::pivot::testes::pivot_data_serial_excel_consistente_com_epoch_1899_12_30 ... ok
+test dinamica::pivot::testes::pivot_apenas_por_colunas_mantem_formato_retangular ... ok
+test dinamica::dinamica_layout::testes::tabular_repetindo_ou_nao_os_rotulos ... ok
+test dinamica::pivot::testes::pivot_linhas_e_colunas_cruzadas ... ok
+test dinamica::pivot::testes::pivot_soma_por_linhas ... ok
+test dinamica::pivot::testes::rotulos_total_e_separadores_nao_desalinham_colunas ... ok
+test formula::assistente::testes::caixa_com_aba_e_travas_se_reescreve ... ok
+test formula::assistente::testes::chamada_ativa_e_referencia_aceita ... ok
+test formula::assistente::testes::encontra_as_referencias_para_destacar_na_grade ... ok
+test formula::assistente::testes::f4_preserva_texto_entre_aspas_e_o_resto_da_formula ... ok
+test formula::assistente::testes::f4_alterna_referencia_sob_o_cursor ... ok
+test formula::assistente::testes::identifica_a_chamada_e_o_argumento_sob_o_cursor ... ok
+test formula::assistente::testes::posicoes_de_referencia_preservam_unicode ... ok
+test formula::assistente::testes::referencia_por_clique_so_entra_em_posicao_valida ... ok
+test dinamica::campos::testes::previa_calcula_as_primeiras_linhas_ou_diz_o_erro ... ok
+test formula::assistente::testes::referencias_coloridas_e_descartes ... ok
+test formula::assistente::testes::token_antes_do_cursor ... ok
+test formula::ast::tests::arvore_de_formula_cobre_ref_intervalo_matriz_e_operadores ... ok
+test formula::ast::tests::operadores_suportam_todas_as_formas_do_ast_typescript ... ok
+test formula::evaluator::testes::aritmetica ... ok
+test formula::evaluator::testes::coluna_contra_linha_se_expande ... ok
+test formula::evaluator::testes::conta_item_a_item ... ok
+test formula::evaluator::testes::dentro_de_colecao_texto_nao_vira_numero ... ok
+test formula::evaluator::testes::divisao_por_zero ... ok
+test formula::evaluator::testes::erro_contamina_a_conta ... ok
+test formula::evaluator::testes::erro_literal_depois_de_separador_em_formula_completa ... ok
+test formula::ast::tests::erro_de_parser_guarda_posicao_opcional ... ok
+test formula::evaluator::testes::erro_no_intervalo_e_devolvido ... ok
+test formula::evaluator::testes::funcao_da_planilha_e_chamada_com_os_argumentos ... ok
+test formula::evaluator::testes::funcao_num_lugar_escalar_e_erro ... ok
+test formula::evaluator::testes::funcao_que_nao_existe ... ok
+test formula::evaluator::testes::intervalo_grande_demais_colapsa ... ok
+test formula::evaluator::testes::intervalo_nomeado ... ok
+test formula::evaluator::testes::intervalo_vira_matriz ... ok
+test formula::evaluator::testes::intervalos_com_acentos_e_formulas_com_aspas_escapadas ... ok
+test formula::evaluator::testes::matriz_num_lugar_escalar_vira_o_primeiro ... ok
+test formula::evaluator::testes::menos_aplicado_a_matriz_anda_item_a_item ... ok
+test formula::evaluator::testes::nome_local_ganha_do_intervalo_nomeado ... ok
+test formula::evaluator::testes::percorre_so_o_que_existe_no_intervalo ... ok
+test formula::evaluator::testes::potencia_que_estoura_vira_num ... ok
+test formula::evaluator::testes::referencia_e_celula_vazia ... ok
+test formula::evaluator::testes::retangulo_de_um_argumento ... ok
+test formula::evaluator::testes::test_funcoes_registradas_novas ... ok
+test formula::evaluator::testes::test_let_lambda_map_reduce ... ok
+test celulas::refs::testes::toda_coluna_vai_e_volta ... ok
+test formula::evaluator::testes::texto_e_comparacao ... ok
+test formula::evaluator::testes::uma_celula_so_nao_vira_matriz ... ok
+test formula::evaluator::testes::test_regex_e_posicao ... ok
+test formula::assistente::testes::cursor_alem_do_fim_conta_como_letra_como_no_typescript ... ok
+test consulta::query::limites::testes::rejeita_produto_muitos_para_muitos_antes_da_juncao ... ok
+test formula::assistente::testes::a_sugestao_traz_assinatura_e_descricao ... ok
+test formula::evaluator::testes::valor_que_responde_depois_sem_celula ... ok
+test formula::formula_pattern::tests::celulas_com_a_mesma_formula_relativa_tem_o_mesmo_padrao ... ok
+test dinamica::pivot::testes::filtro_online_descarta_linhas_sem_guardar_seus_indices ... ok
+test dinamica::dinamica_layout::testes::a_configuracao_antiga_sai_igual_a_de_antes ... ok
+test consulta::query::limites::testes::despivotar_nao_cria_linhas_alem_do_orcamento ... ok
+test formula::formula_pattern::testes_pedacos::juntar_os_pedacos_da_o_mesmo_que_expandir ... ok
+test formula::formula_pattern::tests::formula_com_se_e_comparacao_vira_padrao ... ok
+test formula::formula_pattern::tests::mesma_formula_em_colunas_distintas_tem_padroes_diferentes ... ok
+test formula::formula_pattern::tests::nome_de_aba_com_aspa_simples_sobrevive_a_ida_e_volta ... ok
+test formula::formula_pattern::tests::padrao_preserva_exatamente_o_texto_de_formulas_especiais ... ok
+test formula::formula_pattern::tests::padrao_sem_referencia_e_referencia_absoluta_nao_se_deslocam ... ok
+test formula::formula_pattern::tests::expandir_o_padrao_reconstroi_a_formula_de_cada_linha ... ok
+test formula::formula_pattern::tests::quem_nao_e_formula_nao_vira_padrao ... ok
+test dinamica::pivot::testes::pivot_desvio_padrao_e_moda ... ok
+test formula::formula_pattern::tests::referencia_para_outra_aba_preserva_o_nome ... ok
+test formula::formula_pattern::tests::refs_of_pattern_devolve_deslocamento_de_cada_referencia ... ok
+test formula::formula_pattern::tests::texto_entre_aspas_no_meio_da_formula_nao_e_tocado ... ok
+test formula::formula_table::tests::check_reprovando_nao_deixa_entrar_e_padrao_fica_lembrado ... ok
+test formula::formula_table::tests::bounds_vazio_e_preenchido ... ok
+test formula::formula_table::tests::entries_reconstroi_o_texto_de_cada_formula ... ok
+test formula::formula_table::tests::formula_que_le_intervalo_nao_entra ... ok
+test formula::formula_table::tests::duas_celulas_do_mesmo_padrao_compartilham_o_id ... ok
+test formula::formula_table::tests::columns_in_use_lista_os_padroes_por_coluna ... ok
+test formula::formula_table::tests::formula_para_outra_aba_entra_com_dependencias_por_padrao ... ok
+test formula::formula_table::tests::for_each_in_range_so_visita_o_retangulo ... ok
+test formula::formula_text::tests::nao_reescreve_referencia_no_meio_de_identificador_ou_numero ... ok
+test formula::formula_pattern::tests::referencia_absoluta_nao_anda_com_a_linha ... ok
+test formula::formula_table::tests::invalidar_todas_sem_criar_novas_celulas ... ok
+test formula::formula_table::tests::mark_dirty_e_clear_cell ... ok
+test formula::formula_table::tests::salvar_e_carregar_roda_ida_e_volta_com_numero_texto_e_erro ... ok
+test formula::formula_text::tests::referencias_qualificadas_e_strings_escapadas_sao_preservadas ... ok
+test formula::formula_table::tests::shift_columns_e_shift_rows_em_formula_table ... ok
+test formula::formula_table::tests::guardar_calcular_e_ler_de_volta ... ok
+test formula::formula_pattern::tests::intervalo_faz_refs_of_pattern_devolver_none ... ok
+test formula::formula_text::tests::test_adjust_for_structure ... ok
+test formula::formula_text::tests::test_format_ref ... ok
+test formula::formula_text::tests::test_map_references ... ok
+test formula::formula_text::tests::test_quote_sheet ... ok
+test formula::parser::testes::a_vistoria_visita_todo_mundo ... ok
+test formula::parser::testes::argumento_em_branco ... ok
+test formula::parser::testes::chamada_de_funcao ... ok
+test formula::parser::testes::coluna_inteira ... ok
+test formula::parser::testes::comparacao_liga_por_ultimo ... ok
+test formula::parser::testes::condicional_com_erro_literal_entre_argumentos_pt_br ... ok
+test formula::parser::testes::constante_de_potencia_liga_a_direita_no_parser_nativo ... ok
+test formula::modelo_padrao::testes::arvore_deslocada_igual_a_analisada_do_texto ... ok
+test formula::parser::testes::formula_incompleta ... ok
+test formula::parser::testes::intervalo_nomeado ... ok
+test formula::parser::testes::logicos_e_erro_literal ... ok
+test formula::parser::testes::matriz_por_ponto_e_virgula_e_coluna ... ok
+test formula::parser::testes::matriz_torta_reclama ... ok
+test formula::parser::testes::menos_e_porcento ... ok
+test formula::parser::testes::parenteses_mandam ... ok
+test formula::parser::testes::potencia_liga_da_direita ... ok
+test formula::parser::testes::precedencia ... ok
+test formula::parser::testes::referencia_e_intervalo ... ok
+test formula::parser::testes::referencia_entre_abas ... ok
+test formula::parser::testes::sobra_no_fim ... ok
+test formula::ref_drag::testes::a_celula_debaixo_do_ponteiro_diz_qual_foi_pega ... ok
+test formula::ref_drag::testes::a_formula_e_reescrita_so_no_pedaco_arrastado ... ok
+test formula::ref_drag::testes::a_referencia_diz_de_que_aba_e ... ok
+test formula::ref_drag::testes::a_trava_de_uma_celula_so_vale_para_as_duas_pontas ... ok
+test formula::ref_drag::testes::acha_cada_referencia_com_a_area_certa ... ok
+test formula::ref_drag::testes::arrastar_de_outra_aba_mantem_o_prefixo ... ok
+test formula::ref_drag::testes::arrastar_duas_vezes_parte_sempre_do_texto_certo ... ok
+test formula::ref_drag::testes::as_travas_sobrevivem_ao_arrasto ... ok
+test formula::ref_drag::testes::drag_rect_e_o_que_a_grade_fazia ... ok
+test formula::ref_drag::testes::cada_aba_mostra_so_os_retangulos_dela ... ok
+test formula::ref_drag::testes::maiuscula_acentuada_tambem_nao_conta ... ok
+test formula::ref_drag::testes::mover_mantem_o_tamanho_e_nao_sai_da_planilha ... ok
+test formula::ref_drag::testes::mover_nao_leva_a_aba_do_retangulo ... ok
+test formula::ref_drag::testes::nome_de_aba_entre_aspas ... ok
+test formula::ref_drag::testes::quando_duas_se_sobrepoem_vale_a_de_cima ... ok
+test formula::ref_drag::testes::redimensionar_estica_a_partir_da_quina_de_cima ... ok
+test formula::ref_drag::testes::texto_entre_aspas_nao_vira_referencia ... ok
+test formula::ref_drag::testes::uma_celula_vira_intervalo_ao_ser_esticada_e_volta ... ok
+test formula::tokenizer::testes::a_virgula_entre_digitos_e_decimal ... ok
+test formula::tokenizer::testes::a_virgula_fora_de_digitos_separa ... ok
+test formula::tokenizer::testes::aba_com_aspa_no_nome ... ok
+test formula::tokenizer::testes::aba_entre_aspas_simples ... ok
+test formula::tokenizer::testes::aba_sem_aspas_simples ... ok
+test formula::tokenizer::testes::acentos_e_aspas_preservam_posicoes_de_caracteres ... ok
+test formula::tokenizer::testes::acima_de_127_e_sempre_letra ... ok
+test formula::tokenizer::testes::caractere_inesperado ... ok
+test formula::tokenizer::testes::literal_de_erro ... ok
+test formula::tokenizer::testes::matriz_usa_ponto_e_virgula_e_barra ... ok
+test formula::tokenizer::testes::literal_de_erro_respeita_delimitadores_e_separadores ... FAILED
+test formula::tokenizer::testes::nome_de_funcao_com_acento ... ok
+test formula::tokenizer::testes::numero_com_expoente ... ok
+test formula::tokenizer::testes::operadores_de_dois_caracteres ... ok
+test formula::tokenizer::testes::texto_com_aspas_dobradas ... ok
+test formula::tokenizer::testes::texto_sem_fechar_reclama ... ok
+test funcoes::fn_helpers::testes::argumento_em_branco_nao_conta ... ok
+test funcoes::fn_helpers::testes::aridade ... ok
+test funcoes::fn_helpers::testes::coleta_devolve_o_erro_do_intervalo ... ok
+test funcoes::fn_helpers::testes::coleta_numeros_de_varios_argumentos ... ok
+test funcoes::fn_helpers::testes::criterio_com_virgula_decimal ... ok
+test funcoes::fn_helpers::testes::criterio_de_comparacao ... ok
+test funcoes::fn_helpers::testes::criterio_de_igualdade_simples ... ok
+test funcoes::fn_helpers::testes::curinga ... ok
+test funcoes::fn_helpers::testes::curinga_ancora_nas_duas_pontas ... ok
+test funcoes::fn_helpers::testes::curinga_escapado_com_til ... ok
+test funcoes::fn_helpers::testes::curinga_volta_atras ... ok
+test funcoes::fn_info::tests::endereco_web_tambem_e_validado_no_motor_rust ... ok
+test funcoes::fn_helpers::testes::curingas_nao_atravessam_quebras_de_linha_igual_ao_typescript ... ok
+test funcoes::fn_lookup_matrix::tests::determinante_ajusta_sinal_na_troca_de_linhas ... ok
+test funcoes::fn_lookup_matrix::tests::determinante_grande_usa_algoritmo_polinomial ... ok
+test funcoes::fn_lookup_matrix::tests::determinante_singular_retorna_zero ... ok
+test funcoes::fn_date::tests::test_funcoes_de_data ... ok
+test funcoes::fn_info::tests::test_funcoes_logica_e_info ... ok
+test funcoes::fn_subtotal::testes::subtotal_9_e_109_ignoram_linha_oculta ... ok
+test funcoes::fn_subtotal::testes::agregar_ignora_erros_e_muda_com_a_visibilidade ... ok
+test funcoes::function_help::testes::acha_sem_ligar_para_maiuscula ... ok
+test funcoes::fn_math::tests::test_sumifs_e_sumproduct ... ok
+test funcoes::fn_stats::tests::test_estatisticas_condicionais ... ok
+test funcoes::fn_subtotal::testes::subtotal_aninhado_nao_conta_duas_vezes ... ok
+test funcoes::fn_text::testes_valor::valor_como_o_typescript ... FAILED
+test funcoes::functions::testes::a_funcao_recebe_a_arvore_e_nao_o_valor ... ok
+test funcoes::functions::testes::apelido_resolve_para_o_nome_canonico ... ok
+test funcoes::functions::testes::as_duas_grafias_do_acento_estao_na_tabela ... ok
+test funcoes::functions::testes::funcao_de_matriz_e_reconhecida_pelos_dois_nomes ... ok
+test funcoes::functions::testes::funcao_pode_devolver_matriz_para_derramar ... ok
+test funcoes::functions::testes::levantar_matriz_e_devolver_matriz_sao_coisas_diferentes ... ok
+test funcoes::function_help::testes::nao_ha_verbete_repetido ... ok
+test funcoes::functions::testes::o_avaliador_chama_a_funcao_pelo_registro ... ok
+test funcoes::functions::testes::resultado_de_data ... ok
+test funcoes::imagem_base64::testes::e_volta_o_base64_puro ... ok
+test funcoes::imagem_base64::testes::base64_vira_data_url_pelo_tipo ... ok
+test funcoes::imagem_base64::testes::reconhece_apenas_url_de_imagem_canonica_na_celula ... ok
+test funcoes::fn_math::tests::test_math_g19 ... ok
+test funcoes::fn_text::tests::test_text_g20 ... ok
+test funcoes::functions::testes::nao_ha_apelido_repetido ... ok
+test funcoes::function_help::testes::funcao_nao_aparece_em_duas_categorias ... ok
+test funcoes::function_help::testes::monta_a_assinatura ... ok
+test formula::assistente::testes::sugere_funcoes_pelo_prefixo_digitado ... ok
+test dinamica::acumulador::testes::milhao_de_linhas_na_soma_nao_aloca_vetor_de_valores ... ok
+test funcoes::function_help::testes::tabela_completa ... ok
+test consulta::query::limites::testes::permite_juncao_um_para_um_com_cardinalidade_real ... ok
+test funcoes::regex::tests::ancoras_bordas_alternativa ... ok
+test funcoes::regex::tests::erros_de_sintaxe ... ok
+test funcoes::regex::tests::ganancioso_e_preguicoso ... ok
+test funcoes::regex::tests::grupo_de_captura_e_o_que_extrai ... ok
+test funcoes::regex::tests::repeticao_do_vazio_nao_trava ... ok
+test funcoes::regex::tests::literais_classes_e_atalhos ... ok
+test funcoes::regex::tests::retorno_e_lookahead ... ok
+test funcoes::regex::tests::troca_como_o_replace_global ... ok
+test grafico::chart::tests::agrupa_e_soma_por_categoria ... ok
+test grafico::chart::tests::cada_serie_tem_a_sua_conta_e_o_nome_diz_qual ... ok
+test grafico::chart::tests::chip_mostra_o_nome_sem_a_conta ... ok
+test grafico::chart::tests::coluna_do_eixo_x_escolhida ... ok
+test grafico::chart::tests::cor_da_serie ... ok
+test grafico::chart::tests::cada_conta_da_o_seu_numero ... ok
+test grafico::chart::tests::data_em_texto_livre_nao_vira_data ... ok
+test grafico::chart::tests::data_em_texto ... ok
+test grafico::chart::tests::desvio_de_uma_amostra_so_e_zero ... ok
+test grafico::chart::tests::dispersao_separa_o_eixo_x ... ok
+test grafico::chart::tests::empilhamento_pelo_tipo ... ok
+test grafico::chart::tests::forma_e_tamanho_do_marcador_preservam_prioridade_do_typescript ... ok
+test grafico::chart::tests::hierarquia_de_datas ... ok
+test grafico::chart::tests::intervalo_pequeno_nao_e_amostrado ... ok
+test grafico::chart::tests::linha_3d_sem_escolha_pula_a_descricao_e_agrupa_por_ela ... ok
+test grafico::chart::tests::linha_3d_separa_x_e_z ... ok
+test grafico::chart::tests::marcador_especifico_vazio_recua_para_forma_geral ... ok
+test grafico::chart::tests::linha_3d_usa_as_colunas_escolhidas ... ok
+test grafico::chart::tests::media_movel_como_o_typescript ... ok
+test grafico::chart::tests::numero_de_texto_segue_o_parse_float ... ok
+test grafico::chart::tests::moda_mais_repetido_e_no_empate_o_primeiro ... ok
+test grafico::chart::tests::serie_sem_conta_propria_segue_a_de_todas ... ok
+test grafico::chart::tests::series_em_colunas ... ok
+test grafico::chart::tests::series_em_linhas ... ok
+test grafico::chart::tests::tendencia_linear ... ok
+test grafico::lttb::tests::test_lttb_downsample ... ok
+test grafico::chart::tests::series_escondidas_nao_aparecem_no_grafico_agrupado ... ok
+test modelos::testes::calendario_usa_o_epoca_certo ... ok
+test funcoes::regex::tests::acentos_contam_como_um_caractere ... ok
+test operacoes::fill::testes::alca_respeita_limites_da_grade_de_dez_milhoes_de_linhas ... ok
+test operacoes::fill::testes::duplo_clique_procura_a_direita_e_depois_mais_longe ... ok
+test modelos::testes::lista_comeca_pelo_em_branco_e_tem_dez_modelos ... ok
+test operacoes::fill::testes::arrastar_para_cima_extrapola_para_tras ... ok
+test grafico::chart::tests::intervalo_enorme_e_amostrado_e_anunciado_com_o_ultimo_ponto ... ok
+test operacoes::fill::testes::duplo_clique_tem_teto ... ok
+test operacoes::fill::testes::sequencia_numerica_continua_a_progressao ... ok
+test operacoes::fill::testes::preencher_na_planilha_leva_formula_estilo_e_desfaz_num_ctrl_z ... ok
+test operacoes::fill::testes::duplo_clique_desce_ate_o_fim_da_coluna_vizinha ... ok
+test operacoes::fill::testes::serie_e_texto_numerado_escritos_como_no_typescript ... ok
+test operacoes::fill::testes::uma_celula_so_e_copiada_e_texto_com_numero_vira_sequencia ... ok
+test operacoes::fill::testes_limites_do_shift::nao_emite_referencias_fora_dos_limites_de_excel ... FAILED
+test operacoes::filtro::testes::criterio_classico_do_cont_se ... ok
+test operacoes::filtro::testes::lista_de_caixinhas_e_fora_da_lista ... ok
+test modelos::testes::id_inexistente_devolve_none ... ok
+test operacoes::filtro::testes::lista_numerica_logica_e_vazia_mantem_semantica_js ... ok
+test operacoes::filtro::testes::regras_de_texto_numero_e_logico ... ok
+test operacoes::filtro::testes::valores_vazios_e_nao_vazios_no_motor_de_filtro ... ok
+test operacoes::mesclagem::testes::mesclagem_cruzada_expande_e_unmerge_parcial_remove ... ok
+test operacoes::mesclagem::testes::normalizacao_descarta_unitarias_e_sobreposicao_antiga ... ok
+test celulas::pool::testes::dicionario_compartilha_mesma_string_entre_os_indices ... ok
+test operacoes::ops::testes_cabecalho::texto_em_cima_e_numero_embaixo_e_cabecalho ... ok
+test operacoes::ops::testes_duplicados::coluna_inteira_para_na_ultima_linha_usada ... ok
+test operacoes::ops::testes_duplicados::compara_o_valor_mostrado_nao_o_texto_da_formula ... ok
+test dinamica::acumulador::testes::desvio_amostral_em_milhao_de_linhas_usa_memoria_constante ... ok
+test operacoes::ops::testes_duplicados::a_linha_que_sobe_leva_o_estilo ... ok
+test operacoes::ops::testes_duplicados::sem_repetida_nao_mexe_em_nada ... ok
+test operacoes::ops::testes_linhas::aparar_segue_o_espaco_do_javascript ... ok
+test operacoes::ops::testes_divisao_lote::substituir_dados_existentes_volta_no_desfazer ... ok
+test operacoes::ops::testes_duplicados::remove_as_repetidas_e_sobe_as_que_ficam ... ok
+test operacoes::ops::testes_linhas::aparar_espacos_preserva_formula_e_estilo ... ok
+test operacoes::ops::testes_linhas::bordas_externas_marcam_so_o_lado_de_fora ... ok
+test operacoes::ops::testes_linhas::caminho_rapido_com_qualificador_padrao_e_consecutivos_ativos ... ok
+test operacoes::ops::testes_linhas::delimitador_com_qualificador_ativo_e_sem_aspas_usa_resultado_rapido ... ok
+test operacoes::ops::testes_linhas::contar_sem_alocar_equivale_dividir_em_todas_as_variantes ... ok
+test operacoes::ops::testes_linhas::dividir_com_delimitador_de_mais_de_um_caractere ... ok
+test operacoes::ops::testes_linhas::dividir_com_qualificador_de_texto_protege_o_delimitador_de_dentro ... ok
+test operacoes::ops::testes_linhas::dividir_com_qualificador_duplicado_vira_aspas_literal ... ok
+test operacoes::ops::testes_linhas::dividir_com_tipo_data_le_a_ordem_escolhida ... ok
+test operacoes::ops::testes_linhas::classificar_por_varias_chaves ... ok
+test operacoes::ops::testes_linhas::dividir_com_varios_delimitadores_ao_mesmo_tempo ... ok
+test operacoes::ops::testes_linhas::dividir_com_tipo_forca_texto_em_numero_que_pareceria_numero ... ok
+test operacoes::ops::testes_linhas::dividir_sem_consecutivos_como_um_conta_o_campo_vazio ... ok
+test operacoes::ops::testes_linhas::dividir_sem_separador_achado_nao_mexe ... ok
+test operacoes::ops::testes_linhas::dividir_com_tipo_porcentagem_e_pular ... ok
+test operacoes::ops::testes_divisao_lote::lote_grava_igual_ao_caminho_antigo_e_desfaz_e_refaz ... ok
+test operacoes::ops::testes_linhas::ja_em_ordem_nao_mexe ... ok
+test operacoes::ops::testes_linhas::dividir_com_consecutivos_como_um_ignora_o_campo_vazio ... ok
+test operacoes::ops::testes_linhas::separar_com_aspas_e_multiplos_delimitadores_nao_cai_no_caminho_simples ... ok
+test operacoes::ops::testes_linhas::casas_decimais_partem_da_primeira_celula ... ok
+test operacoes::ops::testes_linhas::separar_rapido_mantem_unicode_campos_vazios_e_token_de_varios_caracteres ... ok
+test operacoes::ops::testes_linhas::dividir_usa_o_valor_e_conta_as_linhas_com_texto ... ok
+test operacoes::ops::testes_linhas::repetidas_entram_no_desfazer ... ok
+test operacoes::ops::testes_linhas::ordenar_leva_estilo_e_formula_e_desfaz_de_uma_vez ... ok
+test operacoes::ops::testes_regiao::conta_a_diagonal_e_celula_isolada_e_ela_mesma ... ok
+test operacoes::ops::testes_ordenar_permutando::formula_com_intervalo_e_formula_de_fora_acompanham ... ok
+test operacoes::ops::testes_ordenar_permutando::formula_por_padrao_anda_com_a_linha_e_desfaz_e_refaz ... ok
+test operacoes::ops::testes_rodape::faixas_ocultas_juntam_e_respondem ... ok
+test operacoes::ops::testes_rodape::coluna_inteira_so_varre_o_que_existe ... ok
+test operacoes::ops::testes_regiao::comparando_so_a_d_a_linha_inteira_sobe_junto ... ok
+test operacoes::ops::testes_rodape::linha_escondida_pelo_filtro_nao_conta ... ok
+test operacoes::ops::testes_regiao::para_na_coluna_vazia_e_deixa_a_g_de_fora ... ok
+test operacoes::ops::testes_rodape::soma_numeros_conta_texto_e_ignora_vazio_e_erro ... ok
+test operacoes::ops::testes_ordenar_permutando::referencia_que_sai_da_planilha_vira_ref ... ok
+test operacoes::ops::tests::estatisticas_param_na_ultima_linha_usada ... ok
+test operacoes::ops::tests::autosoma_prefere_o_bloco_de_cima ... ok
+test operacoes::ops::tests::numero_e_procurado_como_aparece ... ok
+test operacoes::ops::tests::test_find_all_basic ... ok
+test operacoes::ops::tests::substituir_desfaz_num_ctrl_z_so_e_recalcula ... ok
+test operacoes::ops::tests::acha_formula_da_coluna_empacotada_pelo_texto_e_pelo_valor ... ok
+test operacoes::perfil::testes::conta_vazias_tipos_distintos_e_repetidos ... ok
+test operacoes::ops::tests::substituir_valor_calculado_sem_texto_correspondente_nao_marca_edicao ... ok
+test operacoes::ops::tests::test_replace_all ... ok
+test operacoes::perfil::testes::histograma_de_inteiros_poucos_tem_uma_faixa_por_valor ... ok
+test operacoes::perfil::testes::para_na_ultima_linha_usada ... ok
+test operacoes::perfil::testes::poucos_numeros_nao_tem_quartil_nem_outlier ... ok
+test operacoes::perfil::testes::quartis_e_outlier_pelo_intervalo_interquartil ... ok
+test operacoes::reflow::testes::ajustar_como_o_ajustar_rect ... ok
+test operacoes::ops::tests::trocar_sem_diferenciar_maiusculas_nao_quebra_letra_que_muda_de_tamanho ... ok
+test operacoes::reflow::testes::reflow_mesclas_ao_inserir_excluir_linhas_e_colunas ... ok
+test operacoes::reflow::testes::regra_anda_e_encolhe ... ok
+test operacoes::reflow::testes::tabela_estica_ao_inserir_logo_abaixo ... ok
+test operacoes::reflow::testes::tamanhos_andam_e_os_excluidos_saem ... ok
+test operacoes::rules::testes::barra_cresce_dos_dois_lados_do_zero ... ok
+test operacoes::rules::testes::a_primeira_regra_manda_as_outras_preenchem ... ok
+test operacoes::perfil::testes::histograma_continuo_soma_todos_os_numeros ... ok
+test operacoes::ops::tests::test_find_all_case_sensitive ... ok
+test operacoes::rules::testes::entre_texto_contem_e_comeca_com ... ok
+test operacoes::rules::testes::escala_interpola_e_se_refaz ... ok
+test operacoes::rules::testes::data_e_decimal_com_virgula_como_no_typescript ... ok
+test operacoes::rules::testes::cores_alternadas_pintam_linha_sim_linha_nao ... ok
+test operacoes::rules::testes::formula_personalizada_escorrega_junto_com_a_celula ... ok
+test operacoes::rules::testes::formula_que_nao_analisa_nao_pinta ... ok
+test operacoes::rules::testes::repetido_e_unico_olham_o_intervalo_inteiro ... ok
+test operacoes::rules::testes::le_o_valor_calculado_da_formula ... ok
+test operacoes::rules::testes::vazia_fica_de_fora_mas_esta_vazia_a_pega ... ok
+test operacoes::tabela::testes::cada_conta_da_linha_de_totais ... ok
+test operacoes::tabela::testes::cresce_para_baixo_e_para_a_direita ... ok
+test operacoes::tabela::testes::nao_cresce_para_cima_nem_na_linha_de_totais_nem_autofiltro ... ok
+test operacoes::tabela::testes::nome_pula_os_usados_sem_olhar_maiuscula ... ok
+test operacoes::tabela::testes::o_total_ignora_a_linha_escondida ... ok
+test operacoes::tabela::testes::erro_conta_e_texto_vazio_nao ... ok
+test operacoes::validation::testes_compatibilidade_typescript::email_e_url_seguem_expressao_do_formulario_typescript ... ok
+test operacoes::validation::testes_compatibilidade_typescript::excluir_primeira_linha_ou_coluna_descarta_regra_totalmente_apagada ... ok
+test operacoes::validation::testes_compatibilidade_typescript::numero_aceita_moeda_decimal_percentual_e_booleano_do_ts ... ok
+test operacoes::validation::testes_datas_formulario::aceita_datas_iso_do_formulario_typescript ... ok
+test planilha::assincrono::testes::esquecer_so_o_prefixo ... ok
+test operacoes::tabela::testes::coluna_sem_numero_nao_inventa_zero ... ok
+test planilha::assincrono::testes::o_teto_descarta_a_mais_antiga_e_o_erro_nao_vai_ao_arquivo ... ok
+test planilha::assincrono::testes::pergunta_calcula_responde_e_atualiza ... ok
+test paralelismo::testes::escolha_fica_entre_um_e_o_total_menos_um ... ok
+test operacoes::rules::testes::maior_que_pinta_so_quem_passa_do_limite ... ok
+test planilha::bloco::testes::bloco_de_versao_sem_celulas_so_tem_cabecalho ... ok
+test planilha::assincrono::testes::restaurar_cache_respeita_limite_sem_reter_historico_inteiro ... ok
+test planilha::column_store::testes::atravessa_blocos ... ok
+test planilha::column_store::testes::coluna_vazia_nao_atravanca_flatten ... ok
+test planilha::bloco::testes::o_bloco_leva_valor_texto_e_formatacao ... ok
+test planilha::assincrono::testes::evicao_nao_retem_solicitantes_de_chaves_antigas ... ok
+test planilha::column_store::testes::limpar_recalcula_max_row ... ok
+test planilha::column_store::testes::limpar_uma_unica_celula ... ok
+test planilha::assincrono::testes::refresh_preserva_dependencia_de_resposta_cacheada ... ok
+test planilha::column_store::testes::remover_primeira_linha_atualiza_minimo ... ok
+test planilha::data_table::testes::armazenamento_esparso_preserva_linha_alta_sem_criar_celulas_intermediarias ... ok
+test planilha::column_store::testes::procurar_presente_pula_blocos_e_respeita_bits_de_borda ... ok
+test planilha::data_table::testes::deslocar_coluna_nao_copia_dado ... ok
+test operacoes::rules::testes::mistura_de_cores ... ok
+test planilha::data_table::testes::deslocar_varias_de_uma_vez ... ok
+test planilha::data_table::testes::escrever_string_vazia_limpa_a_celula ... ok
+test planilha::column_store::testes::guarda_e_le ... ok
+test planilha::data_table::testes::get_raw_de_numero_usa_formatacao_javascript ... ok
+test planilha::data_table::testes::for_each_in_range_visita_so_o_retangulo ... ok
+test planilha::data_table::testes::guarda_numero_texto_e_booleano ... ok
+test planilha::data_table::testes::inserir_empurra_para_a_direita ... ok
+test planilha::data_table::testes::max_row_e_max_col_ignoram_celula_limpa ... ok
+test planilha::frame::tests::a_data_atravessa_como_data ... ok
+test planilha::frame::tests::a_moeda_atravessa_a_ponte_ja_formatada ... ok
+test planilha::data_table::testes::trocar_numero_por_texto_limpa_a_coluna_numerica ... ok
+test planilha::frame::tests::a_formula_chega_calculada_e_marcada ... ok
+test planilha::frame::tests::estilo_repetido_ocupa_um_lugar_so ... ok
+test planilha::column_store::testes::flatten_e_load_flat_ida_e_volta ... ok
+test planilha::frame::tests::o_erro_vem_marcado ... ok
+test planilha::frame::tests::numero_e_texto_se_distinguem_pela_bandeira ... ok
+test planilha::frame::tests::as_colunas_de_u32_ficam_alinhadas ... ok
+test planilha::frame::tests::celula_vazia_nao_entra ... ok
+test planilha::frame::tests::o_estilo_vira_dicionario_sem_repetir ... ok
+test planilha::frame::tests::tela_rolada_para_o_vazio_devolve_quadro_sem_celula ... ok
+test planilha::frame::tests::texto_com_acento_e_medido_em_bytes ... ok
+test planilha::frame::tests::versao_que_ainda_vale_devolve_oito_bytes ... ok
+test planilha::frame::tests::versao_diferente_devolve_o_quadro_inteiro ... ok
+test planilha::impressao::testes::area_util_a4_paisagem_com_margens_padrao ... ok
+test planilha::impressao::testes::tamanho_de_cada_papel ... ok
+test planilha::impressao::testes::valores_padrao ... ok
+test planilha::mover::testes::bloco_sobreposto_ao_destino ... ok
+test planilha::mover::testes::destino_fora_da_planilha ... ok
+test planilha::frame::tests::o_quadro_leva_so_o_retangulo_pedido ... ok
+test planilha::mover::testes::destino_sobrescrito_vira_ref ... ok
+test planilha::mover::testes::intervalo_parcial_nao_se_desmancha ... ok
+test planilha::image::tests::test_image_config ... ok
+test planilha::mover::testes::nada_muda_nada_se_reescreve ... ok
+test planilha::mover::testes::referencia_ao_bloco_acompanha ... ok
+test planilha::mover::testes::referencia_de_fora_fica ... ok
+test planilha::impressao::testes::area_util_a4_retrato_com_margens_padrao ... ok
+test planilha::mover::testes::so_a_aba_do_movimento ... ok
+test planilha::sheet::edicao::testes::celula_so_de_estilo_existe_sem_conteudo ... ok
+test planilha::sheet::edicao::testes::a_data_digitada_fica_como_foi_digitada ... ok
+test planilha::sheet::edicao::testes::a_data_colada_em_lote_tambem_fica_como_foi_digitada ... ok
+test planilha::sheet::edicao::testes::colar_rapido_ainda_recalcula_quem_le ... ok
+test planilha::sheet::edicao::testes::colar_sem_desfazer_perde_o_zero_como_no_typescript ... ok
+test planilha::sheet::edicao::testes::coluna_inteira_nao_vira_aba_inteira_quando_os_dados_moram_nela ... ok
+test planilha::sheet::edicao::testes::conversao_parse_unico_preserva_formatos_implicitos_e_textos_crus ... ok
+test planilha::sheet::edicao::testes::cancelar_spill_para_disco_restabelece_dados_sem_historico ... FAILED
+test planilha::sheet::edicao::testes::ctrl_a_na_area_usada_continua_sendo_a_aba_inteira ... ok
+test planilha::sheet::edicao::testes::digitar_porcentagem_pede_o_formato ... ok
+test planilha::sheet::edicao::testes::ctrl_seta_salta_ate_a_borda_dos_dados ... ok
+test planilha::sheet::edicao::testes::desfazer_e_refazer_voltam_o_texto_e_o_estilo ... ok
+test planilha::sheet::edicao::testes::escrita_divisao_invalida_formula_dependente ... ok
+test planilha::sheet::edicao::testes::estilo_de_coluna_inteira_nao_mexe_em_celula ... ok
+test planilha::sheet::edicao::testes::formula_que_le_outra_aba_fica_marcada ... ok
+test planilha::sheet::edicao::testes::historico_de_estilo_tabela_nao_copia_as_celulas ... ok
+test planilha::sheet::edicao::testes::escrita_divisao_em_lote_preserva_formato_raw_e_undo_unico ... ok
+test planilha::sheet::edicao::testes::lote_compacto_cancelado_restaura_texto_e_estilo ... ok
+test planilha::sheet::edicao::testes::mesclagem_metadado_tem_um_desfazer_e_um_refazer ... ok
+test planilha::sheet::edicao::testes::metadados_de_tabela_agrupam_multiplas_mudancas_em_um_undo ... ok
+test planilha::sheet::edicao::testes::o_texto_digitado_que_nao_volta_do_valor_fica_guardado ... ok
+test planilha::sheet::edicao::testes::ocultar_coluna_preserva_largura_personalizada_no_undo ... ok
+test planilha::sheet::edicao::testes::reexibir_no_limite_final_e_intervalo_enorme_sao_seguros ... ok
+test planilha::sheet::edicao::testes::ocultar_e_reexibir_linhas_preserva_dados_e_desfaz_em_um_passo ... ok
+test planilha::sheet::edicao::testes::reverter_a_transacao_volta_o_que_ja_foi_escrito ... ok
+test planilha::sheet::edicao::testes::dinamica_desfaz_celulas_e_metadados_na_mesma_transacao ... ok
+test planilha::sheet::edicao::testes::regiao_da_tabela_como_no_typescript ... ok
+test planilha::sheet::edicao::testes::spill_para_disco_preserva_undo_redo_e_remove_arquivo ... FAILED
+test planilha::sheet::edicao::testes::uma_transacao_desfaz_de_uma_vez ... ok
+test planilha::sheet::edicao::testes::validacoes_json_entram_no_mesmo_undo_e_rollback_das_celulas ... ok
+test planilha::sheet::navegacao_macros::testes::celula_somente_de_estilo_nao_conta_na_navegacao ... ok
+test planilha::sheet::edicao::testes::texto_digitado_sobrevive_a_set_cell_e_a_desfazer_refazer ... ok
+test planilha::sheet::navegacao_macros::testes::coluna_e_linha_temas_esparsos_e_formulas ... ok
+test planilha::sheet::navegacao_macros::testes::dados_no_limite_de_milhoes_nao_exigem_varrer_toda_a_coluna ... ok
+test planilha::sheet::testes::apagar_precedente_suja_o_dependente ... ok
+test planilha::sheet::testes::cadeia_de_dependentes_recalcula_em_cascata ... ok
+test planilha::sheet::testes::cascata_de_sujeira_visita_cada_formula_uma_vez ... ok
+test grafico::chart::tests::series_em_linhas_nao_vira_um_milhao_de_series ... ok
+test planilha::sheet::testes::estilo_de_literal_sobrevive_e_some_com_a_celula ... ok
+test planilha::sheet::testes::formula_continua_em_cells_literal_nao ... ok
+test planilha::sheet::testes::formula_simples_calcula_de_verdade ... ok
+test planilha::sheet::testes::formula_invalida_nao_quebra_a_cascata_de_dependentes ... ok
+test planilha::sheet::testes::formula_simples_vai_para_formulas_table_e_nao_cells ... ok
+test planilha::sheet::testes::insere_e_remove_colunas_em_rust ... ok
+test planilha::sheet::testes::insere_e_remove_linhas_em_rust ... ok
+test planilha::sheet::testes::insere_linha_desloca_literal_de_todos_os_tipos ... ok
+test planilha::sheet::testes::inserir_linha_desloca_formula_e_mantem_recalculo_ligado ... ok
+test planilha::sheet::testes::invalidacao_total_reusa_motor_preguicoso_e_nao_apaga_conteudo ... ok
+test operacoes::ops::testes_ordenar_permutando::ordenar_e_um_passo_so_no_desfazer ... ok
+test planilha::sheet::testes::len_e_is_empty_contam_literal_e_formula ... ok
+test planilha::sheet::testes::literal_guarda_numero_texto_e_booleano_de_verdade ... ok
+test planilha::sheet::testes::leitura_emprestada_de_texto_nao_aloca_e_preserva_raw_original ... FAILED
+test planilha::sheet::testes::mudar_precedente_recalcula_o_dependente ... ok
+test planilha::sheet::testes::referencia_circular_direta_vira_erro_em_vez_de_estourar_a_pilha ... ok
+test planilha::sheet::testes::resumo_selecao_conta_numeros_textos_formula_e_ignora_erros_e_linhas_ocultas ... ok
+test planilha::sheet::testes::resumo_une_lotes_sem_recontar_celulas ... ok
+test planilha::sheet::testes::soma_de_intervalo_enxerga_literal_e_formula_juntos ... ok
+test planilha::sheet::testes::trocar_de_formula_para_literal_limpa_o_lado_antigo ... ok
+test planilha::sheet_deps::tests::detecta_rand_e_variantes ... ok
+test planilha::sheet_deps::tests::intervalo_entre_blocos_funciona_e_unlink_desindexa ... ok
+test planilha::sheet_deps::tests::invalidate_dependents_faz_a_cascata_e_corta_ciclo ... ok
+test planilha::sheet_deps::tests::link_com_referencia_externa_marca_external_e_nao_guarda_precedente ... ok
+test planilha::sheet_deps::tests::link_registra_dependencia_direta_e_stepdependents_acha ... ok
+test planilha::sheet_deps::tests::nao_confunde_prefixo_com_a_funcao ... ok
+test planilha::sheet_deps::tests::nao_volatil_para_texto_qualquer ... ok
+test planilha::sheet_deps::tests::precisa_do_parenteses_logo_depois_ignorando_espaco ... ok
+test planilha::sheet_deps::tests::range_deps_indexa_por_bloco_e_step_dependents_confere_o_retangulo ... ok
+test planilha::sheet_deps::tests::shift_columns_desloca_chaves_e_rects ... ok
+test planilha::sheet_deps::tests::shift_rows_desloca_chaves_e_rects ... ok
+test planilha::sheet_deps::tests::unlink_desfaz_o_que_link_registrou ... ok
+test planilha::sheet_deps::tests::volatil_nao_casa_prefixos_e_aceita_acentos ... ok
+test planilha::sheet_deps::tests::volatil_no_meio_da_formula_tambem_conta ... ok
+test planilha::sheet_spill::tests::clear_spill_libera_a_area ... ok
+test planilha::sheet_spill::tests::conta_com_intervalo_largo_espalha ... ok
+test planilha::sheet_spill::tests::conteudo_no_caminho_vira_spill ... ok
+test planilha::sheet_spill::tests::derrama_e_le_de_volta ... ok
+test planilha::sheet_spill::tests::mark_spill_area_marca_a_ancora_e_o_resto ... ok
+test planilha::sheet_spill::tests::matriz_grande_demais_e_erro_num ... ok
+test grafico::chart::tests::agrupar_soma_todas_as_linhas_nao_a_amostra ... ok
+test planilha::sheet_spill::tests::nao_sobrepoe_duas_matrizes_derrubadas ... FAILED
+test planilha::sheet_spill::tests::matriz_vazia_e_erro_na ... ok
+test planilha::sheet_spill::tests::sequencia_e_matriz_literal_sao_dinamicas ... ok
+test planilha::sheet_spill::tests::se_levanta_matriz_só_com_intervalo_largo ... ok
+test planilha::sheet_spill::tests::spill_needs_review_pega_mudanca_dentro_da_area_e_erro_spill ... ok
+test planilha::textos_crus::testes::clear_zera_celulas_e_dicionario ... ok
+test planilha::textos_crus::testes::get_insert_remove_e_sobrescrever ... ok
+test planilha::textos_crus::testes::iter_e_values_devolvem_tudo ... ok
+test planilha::vinculo::testes::a_formula_le_a_outra_pasta_quando_ela_chega ... ok
+test planilha::vinculo::testes::escreve_a_referencia_entre_aspas ... ok
+test planilha::vinculo::testes::separa_arquivo_e_aba ... ok
+test planilha::textos_crus::testes::mil_celulas_com_o_mesmo_texto_guardam_uma_forma ... ok
+test planilha::workbook::tests::a_aba_e_achada_pelo_nome_sem_ligar_para_a_caixa ... ok
+test planilha::vinculo::testes::valores_avulsos_da_outra_janela ... ok
+test planilha::workbook::tests::aba_que_nao_existe_devolve_nada_em_vez_de_quebrar ... ok
+test planilha::workbook::tests::a_pasta_nasce_com_uma_aba ... ok
+test planilha::workbook::tests::duplicar_aba_copia_tudo_e_nomeia_a_copia ... ok
+test planilha::workbook::tests::duplicar_aba_da_nome_novo_as_tabelas_da_copia ... ok
+test planilha::workbook::tests::duplicar_aba_desfaz_e_refaz ... ok
+test planilha::workbook::tests::duplicar_aba_nao_desfaz_depois_de_outra_edicao ... ok
+test planilha::workbook::tests::duplicar_aba_nao_muda_formulas_de_outras_abas ... ok
+test planilha::workbook::tests::escrever_sobe_a_versao_da_aba ... ok
+test planilha::workbook::tests::excluir_coluna_conserta_o_texto_das_formulas ... ok
+test planilha::workbook::tests::excluir_coluna_sobe_a_versao_e_move_o_conteudo ... ok
+test planilha::workbook::tests::formula_le_outra_aba_e_acompanha_a_mudanca_de_la ... ok
+test planilha::workbook::tests::inserir_linha_move_o_texto_digitado_e_o_estilo_de_linha ... ok
+test planilha::workbook::tests::intervalo_nomeado_resolve_na_pasta ... ok
+test planilha::workbook::tests::mexer_numa_aba_nao_invalida_o_quadro_da_outra ... ok
+test modelos::testes::datas_digitadas_viram_numero ... ok
+test planilha::workbook::tests::mover_conserta_a_formula_colunar ... ok
+test planilha::workbook::tests::mover_leva_conteudo_e_as_referencias_acompanham ... ok
+test planilha::workbook::tests::mover_se_desfaz_num_ctrl_z ... ok
+test planilha::workbook::tests::mover_leva_o_estilo_e_a_formula_de_fora_continua_lendo_o_mesmo ... ok
+test planilha::workbook::tests::o_comando_devolve_onde_mexeu ... ok
+test planilha::workbook::tests::mover_sobreposto_uma_linha_para_baixo ... ok
+test planilha::workbook::tests::o_quadro_acompanha_a_versao ... ok
+test planilha::workbook::tests::o_id_sobrevive_a_apagar_e_mover ... ok
+test planilha::workbook::tests::ocultar_aba_preserva_dados_referencias_e_ultima_visivel ... ok
+test planilha::workbook::tests::reescrever_nao_pega_pedaco_de_outro_nome ... ok
+test planilha::workbook::tests::o_valor_digitado_em_pt_br_vira_numero ... ok
+test planilha::workbook::tests::renomear_aba_preserva_intervalos_nomeados_e_formula_de_outra_aba ... ok
+test planilha::workbook::tests::referencia_estruturada_com_tabelas_lado_a_lado ... ok
+test planilha::workbook::tests::renomear_reescreve_as_formulas_que_citam_a_aba ... ok
+test modelos::testes::indicadores_calculam_o_valor_esperado ... ok
+test modelos::testes::regras_e_mesclas_dos_modelos_sao_validas ... ok
+test modelos::testes::cada_modelo_cria_tem_aba_e_calcula_sem_erro ... ok
+test planilha::sheet::testes::com_formula_ainda_nao_acumula_literais_no_cache_sujo ... ok
+test operacoes::ops::testes_busca_rapida::acha_o_mesmo_que_a_conta_celula_a_celula ... ok
+test planilha::sheet::testes::um_lote_de_literais_sem_formulas_nao_acumula_cache_sujo ... ok
+test planilha::workbook::tests::copiar_intervalo_acima_de_cem_mil_preserva_final_e_desfazer ... ok
+test planilha::sheet::edicao::testes::dinamica_grande_compactada_continua_com_undo_atomico ... ok
+test planilha::sheet::edicao::testes::blocos_compactos_de_divisao_nao_retêm_milhares_de_snaps_individuais ... ok
+test operacoes::filtro::testes::filtro_um_milhao_de_linhas_sem_materializar_planilha ... ok
+test planilha::sheet::testes::resumo_da_coluna_inteira_recorta_ate_dados_usados ... ok
+test funcoes::regex::tests::expressao_patologica_para_no_teto ... ok
+test planilha::sheet::edicao::testes::texto_nao_some_depois_de_cem_mil_diferentes ... ok
+test celulas::number::testes::atalho_da_notacao_comum_bate_com_a_regra ... ok
+
+failures:
+
+---- celulas::refs::testes::fronteiras_de_referencia_e_intervalo_do_typescript stdout ----
+
+thread 'celulas::refs::testes::fronteiras_de_referencia_e_intervalo_do_typescript' (48) panicked at src/celulas/refs.rs:304:9:
+assertion `left == right` failed
+  left: None
+ right: Some((9999999, 16383))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- formula::tokenizer::testes::literal_de_erro_respeita_delimitadores_e_separadores stdout ----
+
+thread 'formula::tokenizer::testes::literal_de_erro_respeita_delimitadores_e_separadores' (250) panicked at src/formula/tokenizer.rs:544:13:
+assertion `left == right` failed
+  left: ",1"
+ right: ","
+
+---- funcoes::fn_text::testes_valor::valor_como_o_typescript stdout ----
+
+thread 'funcoes::fn_text::testes_valor::valor_como_o_typescript' (281) panicked at src/funcoes/fn_text.rs:386:9:
+assertion `left == right` failed
+  left: Number(1234.0)
+ right: Number(1.234)
+
+---- operacoes::fill::testes_limites_do_shift::nao_emite_referencias_fora_dos_limites_de_excel stdout ----
+
+thread 'operacoes::fill::testes_limites_do_shift::nao_emite_referencias_fora_dos_limites_de_excel' (428) panicked at src/operacoes/fill.rs:63:9:
+assertion `left == right` failed
+  left: "=A10000000"
+ right: "=#REF!"
+
+---- planilha::sheet::edicao::testes::cancelar_spill_para_disco_restabelece_dados_sem_historico stdout ----
+
+thread 'planilha::sheet::edicao::testes::cancelar_spill_para_disco_restabelece_dados_sem_historico' (665) panicked at src/planilha/sheet/edicao.rs:2071:58:
+called `Option::unwrap()` on a `None` value
+
+---- planilha::sheet::edicao::testes::spill_para_disco_preserva_undo_redo_e_remove_arquivo stdout ----
+
+thread 'planilha::sheet::edicao::testes::spill_para_disco_preserva_undo_redo_e_remove_arquivo' (703) panicked at src/planilha/sheet/edicao.rs:2043:9:
+assertion failed: matches!(pendente.first(), Some(Passo::CompactoNoDisco(_)))
+
+---- planilha::sheet::testes::leitura_emprestada_de_texto_nao_aloca_e_preserva_raw_original stdout ----
+
+thread 'planilha::sheet::testes::leitura_emprestada_de_texto_nao_aloca_e_preserva_raw_original' (761) panicked at src/planilha/sheet.rs:1771:9:
+assertion `left == right` failed
+  left: None
+ right: Some("0012")
+
+---- planilha::sheet_spill::tests::nao_sobrepoe_duas_matrizes_derrubadas stdout ----
+
+thread 'planilha::sheet_spill::tests::nao_sobrepoe_duas_matrizes_derrubadas' (841) panicked at src/planilha/sheet_spill.rs:375:9:
+assertion failed: matches!(conflito, Value::Error(e) if e.code == ErrorCode::Spill)
+
+
+failures:
+    celulas::refs::testes::fronteiras_de_referencia_e_intervalo_do_typescript
+    formula::tokenizer::testes::literal_de_erro_respeita_delimitadores_e_separadores
+    funcoes::fn_text::testes_valor::valor_como_o_typescript
+    operacoes::fill::testes_limites_do_shift::nao_emite_referencias_fora_dos_limites_de_excel
+    planilha::sheet::edicao::testes::cancelar_spill_para_disco_restabelece_dados_sem_historico
+    planilha::sheet::edicao::testes::spill_para_disco_preserva_undo_redo_e_remove_arquivo
+    planilha::sheet::testes::leitura_emprestada_de_texto_nao_aloca_e_preserva_raw_original
+    planilha::sheet_spill::tests::nao_sobrepoe_duas_matrizes_derrubadas
+
+test result: FAILED. 682 passed; 8 failed; 1 ignored; 0 measured; 0 filtered out; finished in 9.07s
+
+error: test failed, to rerun pass `--lib`

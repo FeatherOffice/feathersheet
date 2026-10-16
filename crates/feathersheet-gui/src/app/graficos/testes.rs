@@ -1,0 +1,743 @@
+//! Testes do editor de gráficos, preservados do módulo original.
+use super::*;
+use super::editor::svg_do_grafico_salvo;
+
+    #[test]
+    fn colorpicker_compartilhado_atualiza_series_e_fundo_sem_modificar_celulas() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar(
+            "Grupo\tReceita\tCusto\nA\t12\t3\nB\t45\t11".into(),
+        ));
+        app.graficos = Estado {
+            intervalo: "A1:C3".into(),
+            titulo: "Cores".into(),
+            tipo: TipoUi::Colunas,
+            cabecalho: true,
+            categorias: true,
+            colunas: true,
+            aba_id: app.workbook.aba(0).map(|a| a.id),
+            ..Default::default()
+        };
+        app.atualizar_grafico();
+        assert!(app.graficos.svg.is_some());
+
+        let anterior = app.workbook.aba(0).unwrap().sheet.get_raw(1, 1).to_owned();
+        let _ = app.evento_grafico(Evento::AbrirSeletorCor(AlvoCorGrafico::Principal));
+        assert_eq!(app.graficos.cor_ativa, Some(AlvoCorGrafico::Principal));
+        {
+            // A árvore Iced mantém empréstimos da App até ser descartada.
+            let _painel: Element<'_, Msg> = app.view_graficos();
+        }
+        let _ = app.evento_grafico(Evento::SeletorCor(
+            EventoCor::Escolhida("#ff1122".into()),
+        ));
+        assert_eq!(app.graficos.aparencia.cor, "#ff1122");
+        assert!(app.graficos.svg.as_ref().unwrap().contains("#ff1122"));
+
+        // Clicar em outro alvo alterna o mesmo painel e carrega sua cor.
+        let _ = app.evento_grafico(Evento::AbrirSeletorCor(AlvoCorGrafico::Fundo));
+        assert_eq!(app.graficos.cor_hex, "#ffffff");
+        let _ = app.evento_grafico(Evento::SeletorCor(
+            EventoCor::Escolhida("#10203080".into()),
+        ));
+        assert_eq!(app.graficos.aparencia.fundo, "#10203080");
+        assert!(app.graficos.svg.as_ref().unwrap().contains("fill-opacity=\"0.502\""));
+
+        let _ = app.evento_grafico(Evento::AbrirSeletorCor(AlvoCorGrafico::Serie(1)));
+        let _ = app.evento_grafico(Evento::SeletorCor(
+            EventoCor::Escolhida("#3366aa80".into()),
+        ));
+        assert_eq!(app.graficos.aparencia.cores.get(&1).unwrap(), "#3366aa80");
+        assert!(app.graficos.svg.as_ref().unwrap().contains("#3366aa"));
+        assert_eq!(app.workbook.aba(0).unwrap().sheet.get_raw(1, 1), anterior);
+
+        // Serialização real passa pelo contrato preexistente do arquivo FSHZ.
+        let previa = app.graficos.svg.clone().unwrap();
+        let _ = app.evento_grafico(Evento::Inserir);
+        let aba = app.workbook.aba(0).unwrap();
+        let gravados = feathersheet_io::graficos_salvos::listar(&aba.sheet).unwrap();
+        assert_eq!(gravados[0]["_featherNative"]["fundo"], "#10203080");
+        assert_eq!(gravados[0]["_featherNative"]["cores"]["1"], "#3366aa80");
+        assert_eq!(svg_do_grafico_salvo(&aba.sheet, &gravados[0]).unwrap(), previa);
+    }
+
+    #[test]
+    fn colorpicker_hex_hsv_e_sem_cor_preservam_os_comandos_do_editor() {
+        let mut app = App::default();
+        let _ = app.evento_grafico(Evento::AbrirSeletorCor(AlvoCorGrafico::Principal));
+        let _ = app.evento_grafico(Evento::SeletorCor(
+            EventoCor::TextoHex("#00ff80".into()),
+        ));
+        assert_eq!(app.graficos.aparencia.cor, "#00ff80");
+        let _ = app.evento_grafico(Evento::SeletorCor(EventoCor::Alfa(0.5)));
+        assert!(app.graficos.aparencia.cor.ends_with("80"));
+
+        let _ = app.evento_grafico(Evento::SeletorCor(
+            EventoCor::TextoHex("errado".into()),
+        ));
+        // Hex incorreto fica editável, sem invalidar a cor persistida.
+        assert_eq!(app.graficos.cor_hex, "errado");
+        assert_eq!(app.graficos.aparencia.cor.len(), 9);
+
+        let _ = app.evento_grafico(Evento::SeletorCor(
+            EventoCor::Escolhida(String::new()),
+        ));
+        assert_eq!(app.graficos.aparencia.cor, "#4285f4");
+        let _ = app.evento_grafico(Evento::AbrirSeletorCor(AlvoCorGrafico::Serie(2)));
+        let _ = app.evento_grafico(Evento::SeletorCor(
+            EventoCor::Escolhida("#112233".into()),
+        ));
+        assert_eq!(app.graficos.aparencia.cores.get(&2).unwrap(), "#112233");
+        let _ = app.evento_grafico(Evento::SeletorCor(
+            EventoCor::Escolhida(String::new()),
+        ));
+        assert!(!app.graficos.aparencia.cores.contains_key(&2));
+
+        let _ = app.evento_grafico(Evento::SeletorCor(EventoCor::Fechar));
+        assert!(app.graficos.cor_ativa.is_none());
+        let _ = app.evento_grafico(Evento::AbrirSeletorCor(AlvoCorGrafico::Fundo));
+        let _ = app.evento_grafico(Evento::AbrirSeletorCor(AlvoCorGrafico::Fundo));
+        assert!(app.graficos.cor_ativa.is_none());
+    }
+
+    #[test]
+    fn grafico_aceita_rgb_e_rgba_sem_mudar_cores_opacas() {
+        assert_eq!(cor_rgb("#4285f4"), Some(feather_draw::Cor::rgb(66, 133, 244)));
+        assert_eq!(cor_rgb("#4285f480"),
+            Some(feather_draw::Cor::rgba(66, 133, 244, 128)));
+        assert_eq!(cor_rgb("#gggggg"), None);
+        assert_eq!(cor_rgb("invalido"), None);
+        assert_eq!(cor_rgb("#1234"), None);
+    }
+
+    #[test]
+    fn app009_grafico_salvo_reproduz_previa_com_cores_e_nomes() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar(
+            "Grupo\tReceita\tCusto\nA\t12\t3\nB\t45\t11".into(),
+        ));
+        app.graficos = Estado {
+            intervalo: "A1:C3".into(),
+            titulo: "Receita & Custo".into(),
+            tipo: TipoUi::Colunas,
+            cabecalho: true, categorias: true, colunas: true,
+            aba_id: app.workbook.aba(0).map(|s| s.id),
+            ..Default::default()
+        };
+        let _ = app.evento_grafico(Evento::Estilo(
+            CampoEstilo::Cor, "#bd2455".into()
+        ));
+        let _ = app.evento_grafico(Evento::CorSerie(1, "#08a5b2".into()));
+        let _ = app.evento_grafico(Evento::NomeSerie(0, "Valor realizado".into()));
+        let _ = app.evento_grafico(Evento::NomeSerie(1, "Orçamento".into()));
+        let _ = app.evento_grafico(Evento::Estilo(
+            CampoEstilo::Subtitulo, "Ano 2026".into()
+        ));
+        let previa = app.graficos.svg.clone().unwrap();
+        assert!(previa.contains("#bd2455"));
+        assert!(previa.contains("#08a5b2"));
+        assert!(previa.contains("Valor realizado"));
+        assert!(previa.contains("Orçamento"));
+        assert!(previa.contains("Receita &amp; Custo"));
+
+        let celula_antes = app.workbook.aba(0).unwrap().sheet.get_raw(1, 1).to_owned();
+        let _ = app.evento_grafico(Evento::Inserir);
+        let aba = app.workbook.aba(0).unwrap();
+        let graficos = feathersheet_io::graficos_salvos::listar(&aba.sheet).unwrap();
+        assert_eq!(graficos.len(), 1);
+        assert!(graficos[0]["_featherNative"].is_object());
+        assert_eq!(svg_do_grafico_salvo(&aba.sheet, &graficos[0]).unwrap(), previa);
+        assert_eq!(aba.sheet.get_raw(1, 1), celula_antes);
+    }
+
+    #[test]
+    fn app009_pizza_salva_respeita_serie_selecionada_e_cor_customizada() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar(
+            "Categoria\tReal\tMeta\nA\t10\t30\nB\t20\t40".into(),
+        ));
+        app.graficos = Estado {
+            intervalo: "A1:C3".into(),
+            titulo: "Distribuição".into(),
+            tipo: TipoUi::Pizza, cabecalho: true, categorias: true,
+            colunas: true, aba_id: app.workbook.aba(0).map(|s| s.id),
+            ..Default::default()
+        };
+        app.atualizar_grafico();
+        let segunda = app.graficos.series[1].clone();
+        let _ = app.evento_grafico(Evento::Serie(segunda));
+        let _ = app.evento_grafico(Evento::Estilo(
+            CampoEstilo::Cor, "#34ab78".into()
+        ));
+        let previa = app.graficos.svg.clone().unwrap();
+        let _ = app.evento_grafico(Evento::Inserir);
+        let aba = app.workbook.aba(0).unwrap();
+        let salvos = feathersheet_io::graficos_salvos::listar(&aba.sheet).unwrap();
+        assert_eq!(salvos.len(), 1);
+        assert_eq!(salvos[0]["type"], "pie");
+        assert_eq!(svg_do_grafico_salvo(&aba.sheet, &salvos[0]).unwrap(), previa);
+    }
+
+    #[test]
+    fn app009_grafico_antigo_sem_feathernative_preserva_cores_de_originais() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar(
+            "Categoria\tVendas\nA\t10\nB\t20".into(),
+        ));
+        let mut config = ChartConfig {
+            tipo: ChartType::Column,
+            title: "Antigo".into(),
+            range: ChartRange { r0: 0, c0: 0, r1: 2, c1: 1 },
+            series_in_columns: true, has_headers: true,
+            has_category_labels: true, ..Default::default()
+        };
+        config.style.series_colors.insert(0, "#0066cc".into());
+        let antigo = serde_json::to_value(config).unwrap();
+        assert!(antigo.get("_featherNative").is_none());
+        let aba = app.workbook.aba(0).unwrap();
+        let antes = aba.sheet.get_raw(1, 1).to_owned();
+        let svg = svg_do_grafico_salvo(&aba.sheet, &antigo).unwrap();
+        assert!(svg.contains("#0066cc"), "mantém a paleta salva no estilo legado");
+        assert_eq!(aba.sheet.get_raw(1, 1), antes);
+    }
+
+    #[test]
+    fn app009_entrada_hostil_rejeita_intervalo_sem_alocar_grafico() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar("A\tValor\nB\t4".into()));
+        let aba = app.workbook.aba(0).unwrap();
+        let mut c = ChartConfig {
+            tipo: ChartType::Column, title: "Grande".into(),
+            range: ChartRange { r0: 0, c0: 0, r1: 1_048_575, c1: 16_383 },
+            ..Default::default()
+        };
+        let too_big = serde_json::to_value(&c).unwrap();
+        assert!(svg_do_grafico_salvo(&aba.sheet, &too_big).is_none());
+        c.range = ChartRange { r0: 2, c0: 2, r1: 0, c1: 1 };
+        assert!(svg_do_grafico_salvo(
+            &aba.sheet, &serde_json::to_value(c).unwrap()
+        ).is_none());
+    }
+
+    #[test]
+    fn dropdown_respeita_selecao_e_grafico_move_na_grade() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar(
+            "Grupo\tValor\tMeta\nA\t10\t30\nB\t20\t40".into(),
+        ));
+        a.linha = 0;
+        a.coluna = 0;
+        a.fim_selecao = (2, 1);
+        let _ = a.evento_grafico(Evento::Abrir);
+        assert_eq!(a.graficos.intervalo, "A1:B3");
+        assert!(!a.graficos.aberto);
+        let _ = a.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        assert!(a.graficos.aberto);
+        let id = a.graficos.id.clone().unwrap();
+        let _ = a.evento_grafico(Evento::Cursor(iced::Point::new(100., 100.)));
+        let _ = a.evento_grafico(Evento::Arrastar(id.clone()));
+        let _ = a.evento_grafico(Evento::Cursor(iced::Point::new(130., 120.)));
+        let _ = a.evento_grafico(Evento::Soltar);
+        let lista =
+            feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap();
+        assert_eq!(lista[0]["position"]["x"], 110.);
+        assert_eq!(lista[0]["position"]["y"], 100.);
+        let _ = a.evento_grafico(Evento::Fechar);
+        assert!(!a.graficos.aberto);
+        let _ = a.evento_grafico(Evento::Remover(id));
+        assert!(
+            feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet)
+                .unwrap()
+                .is_empty()
+        );
+    }
+    #[test]
+    fn grafico_duas_linhas_sao_dados_nao_cabecalho() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar("a\t1\nb\t2".into()));
+        app.linha = 0;
+        app.coluna = 0;
+        app.fim_selecao = (0, 0);
+        let _ = app.evento_grafico(Evento::Abrir);
+        assert_eq!(app.graficos.intervalo, "A1:B2");
+        assert!(!app.graficos.cabecalho, "primeira linha a=1 não é título");
+        let _ = app.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        assert!(app.graficos.svg.is_some());
+        let aba = app.workbook.aba(0).unwrap();
+        let charts = feathersheet_io::graficos_salvos::listar(&aba.sheet).unwrap();
+        assert_eq!(charts.len(), 1);
+        assert_eq!(charts[0]["hasHeaders"], false);
+        assert_eq!(charts[0]["position"]["width"], 480.);
+        assert_eq!(charts[0]["position"]["height"], 300.);
+        assert!(app.graficos.mensagem.contains("2 categorias"));
+    }
+
+    #[test]
+    fn alca_redimensiona_preserva_posicao_e_reabre_dimensoes_editadas() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar("Categoria\tValor\na\t1\nb\t2".into()));
+        app.linha = 0;
+        app.coluna = 0;
+        app.fim_selecao = (0, 0);
+        let _ = app.evento_grafico(Evento::Abrir);
+        let _ = app.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        let id = app.graficos.id.clone().unwrap();
+
+        let _ = app.evento_grafico(Evento::Cursor(iced::Point::new(100., 100.)));
+        let _ = app.evento_grafico(Evento::Redimensionar(id.clone(), Alca::Sudeste));
+        let _ = app.evento_grafico(Evento::Cursor(iced::Point::new(140., 124.)));
+        let _ = app.evento_grafico(Evento::Soltar);
+        let salvos = feathersheet_io::graficos_salvos::listar(
+            &app.workbook.aba(0).unwrap().sheet,
+        ).unwrap();
+        assert_eq!(salvos[0]["position"]["x"], 80.);
+        assert_eq!(salvos[0]["position"]["y"], 80.);
+        assert_eq!(salvos[0]["position"]["width"], 520.);
+        assert_eq!(salvos[0]["position"]["height"], 324.);
+
+        let _ = app.evento_grafico(Evento::Editar(id.clone()));
+        assert_eq!(app.graficos.aparencia.largura, "520");
+        assert_eq!(app.graficos.aparencia.altura, "324");
+        let _ = app.evento_grafico(Evento::Inserir);
+        let salvos = feathersheet_io::graficos_salvos::listar(
+            &app.workbook.aba(0).unwrap().sheet,
+        ).unwrap();
+        assert_eq!(salvos.len(), 1);
+        assert_eq!(salvos[0]["position"]["width"], 520.);
+        assert_eq!(salvos[0]["position"]["height"], 324.);
+    }
+
+    #[test]
+    fn scroll_e_zoom_nao_modificam_posicao_salva_na_folha() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar("Categoria\tValor\na\t1\nb\t2".into()));
+        app.linha = 0;
+        app.coluna = 0;
+        app.fim_selecao = (0, 0);
+        let _ = app.evento_grafico(Evento::Abrir);
+        let _ = app.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        let antes = feathersheet_io::graficos_salvos::listar(
+            &app.workbook.aba(0).unwrap().sheet
+        ).unwrap()[0]["position"].clone();
+        app.linha_inicio = 10;
+        app.coluna_inicio = 4;
+        app.config.zoom = 150;
+        let deslocamento = posicionamento::scroll_em_pixels(
+            &app.workbook.aba(0).unwrap().sheet,
+            app.linha_inicio, app.coluna_inicio,
+        );
+        assert_eq!(deslocamento, (488., 280.));
+        let quadro = Quadro::da_posicao(&antes).unwrap();
+        assert_eq!(posicionamento::origem_tela(quadro, deslocamento, 1.5), (-612., -300.));
+        let depois = feathersheet_io::graficos_salvos::listar(
+            &app.workbook.aba(0).unwrap().sheet
+        ).unwrap()[0]["position"].clone();
+        assert_eq!(depois, antes, "rolagem/zoom afetam tela, nunca .fshz");
+    }
+
+    #[test]
+    fn alca_noroeste_move_borda_sem_arrastar_todo_o_grafico() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar("Categoria\tValor\na\t1\nb\t2".into()));
+        app.linha = 0;
+        app.coluna = 0;
+        app.fim_selecao = (0, 0);
+        let _ = app.evento_grafico(Evento::Abrir);
+        let _ = app.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        let id = app.graficos.id.clone().unwrap();
+        let _ = app.evento_grafico(Evento::Cursor(iced::Point::new(100., 100.)));
+        let _ = app.evento_grafico(Evento::Redimensionar(id, Alca::Noroeste));
+        assert!(app.graficos.arraste.is_none());
+        let _ = app.evento_grafico(Evento::Cursor(iced::Point::new(120., 110.)));
+        let pos = feathersheet_io::graficos_salvos::listar(
+            &app.workbook.aba(0).unwrap().sheet
+        ).unwrap()[0]["position"].clone();
+        assert_eq!((pos["x"].as_f64(), pos["y"].as_f64()), (Some(100.), Some(90.)));
+        assert_eq!((pos["width"].as_f64(), pos["height"].as_f64()),
+                   (Some(460.), Some(290.)));
+    }
+
+    #[test]
+    fn pizza_com_varias_series_e_estilos_geram_svg() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar(
+            "Grupo\tValor\tMeta\nA\t10\t30\nB\t20\t40".into(),
+        ));
+        a.linha = 0;
+        a.coluna = 0;
+        a.fim_selecao = (0, 0);
+        let _ = a.evento_grafico(Evento::Abrir);
+        let _ = a.evento_grafico(Evento::Tipo(TipoUi::Pizza));
+        assert!(a.graficos.svg.is_some());
+        let segunda = a.graficos.series[1].clone();
+        let _ = a.evento_grafico(Evento::Serie(segunda));
+        let _ = a.evento_grafico(Evento::Estilo(
+            CampoEstilo::EixoX,
+            "Categoria & <Nome>".into(),
+        ));
+        let _ = a.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        assert!(a
+            .graficos
+            .svg
+            .as_ref()
+            .unwrap()
+            .contains("Categoria &amp; &lt;Nome&gt;"));
+        let _ = a.evento_grafico(Evento::Estilo(CampoEstilo::Cor, "invalida".into()));
+        assert!(a.graficos.svg.is_none());
+    }
+    #[test]
+    fn detecta_tabela_na_celula_e_persiste_edicao() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar("Categoria\tValor\nA\t10\nB\t20".into()));
+        a.linha = 0;
+        a.coluna = 0;
+        a.fim_selecao = (0, 0);
+        let _ = a.evento_grafico(Evento::Abrir);
+        assert_eq!(a.graficos.intervalo, "A1:B3");
+        assert!(a.graficos.seletor_aberto);
+        let _ = a.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        assert!(!a.graficos.seletor_aberto);
+        let _ = a.evento_grafico(Evento::Titulo("Vendas".into()));
+        let _ = a.evento_grafico(Evento::Inserir);
+        let lista =
+            feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap();
+        assert_eq!(lista.len(), 1);
+        let id = lista[0]["id"].as_str().unwrap().to_string();
+        let _ = a.evento_grafico(Evento::Editar(id));
+        assert_eq!(a.graficos.titulo, "Vendas");
+        let _ = a.evento_grafico(Evento::Estilo(CampoEstilo::Subtitulo, "Mensal".into()));
+        let _ = a.evento_grafico(Evento::Visibilidade(CampoVisivel::Valores, true));
+        let _ = a.evento_grafico(Evento::Inserir);
+        let lista =
+            feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap();
+        assert_eq!(lista.len(), 1);
+        assert_eq!(lista[0]["_featherNative"]["subtitulo"], "Mensal");
+    }
+    #[test]
+    fn grafico_da_selecao_atualiza_sem_alterar_agregacao() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar("Categoria\tValor\nA\t10\nA\t20".into()));
+        a.graficos = Estado {
+            intervalo: "A1:B3".into(),
+            titulo: "Teste & dados".into(),
+            cabecalho: true,
+            categorias: true,
+            colunas: true,
+            agrupar: true,
+            aba_id: a.workbook.aba(0).map(|s| s.id),
+            ..Default::default()
+        };
+        a.atualizar_grafico();
+        assert!(a
+            .graficos
+            .svg
+            .as_ref()
+            .unwrap()
+            .contains("Teste &amp; dados"));
+        assert!(a.graficos.mensagem.contains("1 categorias"));
+        a.graficos.tipo = TipoUi::Pizza;
+        a.atualizar_grafico();
+        assert!(a.graficos.svg.is_some());
+        a.graficos.intervalo = "A1:XFD1048576".into();
+        a.atualizar_grafico();
+        assert!(a.graficos.svg.is_none());
+        assert!(a.graficos.mensagem.contains("200.000"));
+    }
+    #[test]
+    fn galeria_do_botao_grafico_nao_segue_o_mouse_apos_abrir() {
+        let mut app = App::default();
+        let _ = app.evento_grafico(Evento::Cursor(iced::Point::new(298.0, 142.0)));
+        let _ = app.evento_grafico(Evento::Abrir);
+        assert!(app.graficos.seletor_aberto);
+        assert_eq!(app.graficos.ancora_seletor_x, 298.0);
+        let base: iced::Element<'_, Msg> = iced::widget::text("Grade").into();
+        drop(app.sobrepor_galeria_graficos(base));
+
+        let _ = app.evento_grafico(Evento::Cursor(iced::Point::new(480.0, 390.0)));
+        assert_eq!(app.graficos.ancora_seletor_x, 298.0);
+        let pos = crate::geometria_overlay::galeria_graficos(
+            app.graficos.ancora_seletor_x,
+            app.tamanho_principal.width,
+            app.tamanho_principal.height,
+            226.0, seletor_tipo::LARGURA_POPOVER, seletor_tipo::ALTURA_POPOVER,
+        ).unwrap();
+        assert_eq!(pos.x, 266.0);
+        assert!(pos.contido(1280.0, 800.0));
+        let _ = app.evento_grafico(Evento::FecharSeletor);
+        assert!(!app.graficos.seletor_aberto);
+    }
+
+    #[test]
+    fn galeria_abre_fecha_e_seleciona_tipo_disponivel() {
+        let mut a = App::default();
+        assert!(!a.graficos.seletor_aberto);
+        let _ = a.evento_grafico(Evento::AlternarSeletor);
+        assert!(a.graficos.seletor_aberto);
+        let _ = a.evento_grafico(Evento::Tipo(TipoUi::Linhas));
+        assert_eq!(a.graficos.tipo, TipoUi::Linhas);
+        assert!(!a.graficos.seletor_aberto);
+        let _ = a.evento_grafico(Evento::AlternarSeletor);
+        let _ = a.evento_grafico(Evento::AlternarSeletor);
+        assert!(!a.graficos.seletor_aberto);
+    }
+
+    #[test]
+    fn area_e_degraus_estao_disponiveis_na_interface_nativa() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar("Categoria\tVendas\tMeta\nA\t10\t1\nB\t20\t2".into()));
+        a.graficos = Estado {
+            intervalo: "A1:C3".into(),
+            titulo: "Área e degraus".into(),
+            cabecalho: true,
+            categorias: true,
+            colunas: true,
+            aba_id: a.workbook.aba(0).map(|s| s.id),
+            ..Default::default()
+        };
+        for (ui, engine) in [
+            (TipoUi::Area, ChartType::Area),
+            (TipoUi::Degraus, ChartType::StepLine),
+        ] {
+            assert_eq!(ui.motor(), engine);
+            let _ = a.evento_grafico(Evento::Tipo(ui));
+            assert!(a.graficos.svg.as_ref().unwrap().contains("<path"));
+            assert!(a.graficos.mensagem.contains("2 categorias"));
+        }
+    }
+
+    #[test]
+    fn rejeita_intervalo_invalido_e_aba_removida() {
+        let mut a = App::default();
+        a.graficos.intervalo = "???".into();
+        a.atualizar_grafico();
+        assert!(a.graficos.svg.is_none());
+        a.graficos.intervalo = "A1:B2".into();
+        a.graficos.aba_id = Some(999);
+        a.atualizar_grafico();
+        assert!(a.graficos.mensagem.contains("removida"));
+    }
+
+    /// Gráfico importado do `.xlsx` (com `_excel`): é gráfico do motor, desenhado
+    /// na camada de objetos na ordem do desenho, e responde como os do app:
+    /// clique seleciona, duplo clique edita, botão direito abre o menu,
+    /// Delete exclui, clicar numa célula tira a seleção.
+    #[test]
+    fn grafico_importado_seleciona_edita_menu_e_delete() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar("Mês\tTotal\nmar\t1\nabr\t2".into()));
+        let g = serde_json::json!([{
+            "id": "chart_x", "type": "column", "title": "Gráfico",
+            "range": {"r0": 0, "c0": 0, "r1": 2, "c1": 1},
+            "seriesInColumns": true, "hasHeaders": true, "hasCategoryLabels": true,
+            "position": {"x": 300.0, "y": 100.0, "width": 400.0, "height": 200.0},
+            "_featherNative": {"cor": "#ff0000", "fundo": "#00000000", "fonte": "9", "titulo": false,
+                "legenda": false, "eixos": true, "valores": true, "formato": "moeda:2"},
+            "_excel": {"fundoDegrade": [[0.0, "#14223b"], [1.0, "#4472c400"]], "fundoAngulo": 270.0,
+                "contorno": "#d9d9d9", "corTexto": "#f2f2f2", "eixoValores": true, "z": 4}
+        }]);
+        a.workbook.aba_mut(0).unwrap().sheet.g = Some(g.to_string());
+
+        let camada = a.graficos_da_camada();
+        assert_eq!(camada.len(), 1);
+        assert_eq!(camada[0].0, 4, "o z do desenho do Excel");
+        assert!(camada[0].2.contains("fundo-excel") && camada[0].2.contains("R$ 2,00"), "SVG vestido");
+
+        // Clique: seleciona; segundo clique logo depois: abre o editor.
+        let _ = a.evento_grafico(Evento::Arrastar("chart_x".into()));
+        let _ = a.evento_grafico(Evento::Soltar);
+        assert_eq!(a.graficos.selecionado.as_deref(), Some("chart_x"));
+        assert!(!a.graficos.aberto);
+        let _ = a.evento_grafico(Evento::Arrastar("chart_x".into()));
+        assert!(a.graficos.aberto, "duplo clique abre o editor");
+        let _ = a.evento_grafico(Evento::Fechar);
+
+        // Botão direito: menu com Editar e Excluir.
+        let _ = a.evento_grafico(Evento::Contexto("chart_x".into()));
+        assert_eq!(a.graficos_contexto().map(|c| c.0), Some("chart_x".to_string()));
+        {
+            let _tela: Element<'_, Msg> = a.sobrepor_menu_formas(text("grade").into());
+            let _graficos: Element<'_, Msg> = a.com_graficos_salvos(text("grade").into());
+            let _objetos: Element<'_, Msg> = a.grade_com_objetos(text("grade").into());
+        }
+        let _ = a.evento_grafico(Evento::FecharContexto);
+        assert!(a.graficos_contexto().is_none());
+
+        // Clicar numa célula tira a seleção; Delete então não apaga o gráfico.
+        a.trocar_selecao_por_clique(5, 5);
+        assert!(a.graficos.selecionado.is_none());
+        assert!(!a.apagar_grafico_selecionado());
+
+        // Selecionado: Delete exclui.
+        let _ = a.evento_grafico(Evento::Arrastar("chart_x".into()));
+        let _ = a.evento_grafico(Evento::Soltar);
+        a.graficos.ultimo_clique = None;
+        assert!(a.teclado_objetos(&iced::keyboard::Key::Named(iced::keyboard::key::Named::Delete), iced::keyboard::Modifiers::empty()));
+        assert!(feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap().is_empty());
+    }
+
+
+    /// Bug de 15/10: botão direito → "Editar gráfico…" num gráfico do `.xlsx`
+    /// com os dados em outra aba (`sourceSheet`) fazia o gráfico sumir (a
+    /// prévia lia a aba do desenho). Agora o aberto se desenha igual ao
+    /// fechado, a edição grava ao vivo e cada uma é um Ctrl+Z.
+    #[test]
+    fn editar_grafico_com_dados_em_outra_aba_continua_desenhado_e_ao_vivo() {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar("Mês\tTotal\nmar\t1\nabr\t\nmai\t3".into()));
+        a.workbook.criar_aba("Painel");
+        let painel = a.workbook.len() - 1;
+        let fonte = a.workbook.nomes()[0].clone();
+        let g = serde_json::json!([{
+            "id": "chart_x", "type": "column", "title": "Total",
+            "range": {"r0": 0, "c0": 0, "r1": 3, "c1": 1}, "sourceSheet": fonte,
+            "seriesInColumns": true, "hasHeaders": true, "hasCategoryLabels": true,
+            "position": {"x": 20.0, "y": 20.0, "width": 600.0, "height": 180.0},
+            "_featherNative": {"cor": "#ff0000", "fundo": "#00000000", "valores": true},
+            "_excel": {"fundo": "#14223b", "corTexto": "#f2f2f2", "z": 4}
+        }]);
+        a.workbook.aba_mut(painel).unwrap().sheet.g = Some(g.to_string());
+        a.folha = painel;
+        let antes = a.graficos_da_camada();
+        assert!(antes[0].2.contains("#14223b"), "fechado: vestido do Excel");
+
+        let _ = a.evento_grafico(Evento::Contexto("chart_x".into()));
+        let _ = a.evento_grafico(Evento::Editar("chart_x".into()));
+        assert!(a.graficos.aberto);
+        let aberto = a.graficos_da_camada();
+        assert_eq!(aberto.len(), 1);
+        assert_eq!(aberto[0].2, antes[0].2, "aberto: o mesmo desenho, não a prévia indisponível");
+        assert!(a.graficos.svg.as_deref().is_some_and(|s| s.contains("#14223b")), "prévia do editor = desenho");
+
+        // Edição ao vivo: o título muda na planilha sem "Salvar"; letras
+        // seguidas viram um passo; Ctrl+Z volta e o painel acompanha.
+        let _ = a.evento_grafico(Evento::Titulo("Tota".into()));
+        let _ = a.evento_grafico(Evento::Titulo("Totais".into()));
+        let lista = feathersheet_io::graficos_salvos::listar(&a.workbook.aba(painel).unwrap().sheet).unwrap();
+        assert_eq!(lista[0]["title"], "Totais");
+        assert!(lista[0]["_excel"].is_object() && lista[0]["sourceSheet"] == fonte, "preserva o do Excel");
+        assert!(a.graficos_da_camada()[0].2.contains("Totais"));
+        let _ = a.update(Msg::Desfazer);
+        let lista = feathersheet_io::graficos_salvos::listar(&a.workbook.aba(painel).unwrap().sheet).unwrap();
+        assert_eq!(lista[0]["title"], "Total");
+        assert_eq!(a.graficos.titulo, "Total", "o painel recarrega depois do Ctrl+Z");
+
+        let _ = a.evento_grafico(Evento::Fechar);
+        assert_eq!(a.graficos_da_camada()[0].2, antes[0].2, "fechado de novo: igual");
+    }
+
+    /// Painel Formatar gráfico: acordeão com um grupo aberto por vez, cada
+    /// edição grava ao vivo no gráfico (estilo no JSON do `.fshz`) e é um
+    /// Ctrl+Z; o desenho mostra tema, ponto pintado e margens.
+    #[test]
+    fn painel_formatar_grafico_acordeao_ao_vivo_e_desfazer() {
+        use super::painel::{AlvoCor, Grupo, Mudanca};
+        let mut a = App::default();
+        let _ = a.preparar_captura_grafico("pontos");
+        let id = a.graficos.id.clone().expect("gráfico inserido");
+        let salvo = |a: &App| feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap()
+            .into_iter().find(|v| v["id"].as_str() == Some(id.as_str())).unwrap();
+        let v = salvo(&a);
+        let estilo = &v["_featherNative"]["estilo"];
+        assert_eq!(estilo["tema"], "oceano");
+        assert_eq!(estilo["margens_grafico"]["esquerda"], 22.0);
+        assert_eq!(estilo["series"]["0"]["pontos"]["3"]["cor"], "#d81b60");
+        assert_eq!(v["style"]["subtitle"], "1º semestre de 2026", "campos antigos acompanham (gravador .xlsx)");
+        let svg = &a.graficos_da_camada()[0].2;
+        assert!(svg.contains("#f2f8fb") && svg.contains("#d81b60") && svg.contains("R$ mil"), "tema, ponto e título do eixo no desenho");
+
+        // Acordeão: abrir um grupo fecha o anterior; Em breve não abre.
+        assert_eq!(a.graficos.painel.grupo, Some(Grupo::Pontos));
+        let _ = a.evento_grafico(Evento::Grupo(Grupo::Eixos));
+        assert_eq!(a.graficos.painel.grupo, Some(Grupo::Eixos));
+        let _ = a.evento_grafico(Evento::Grupo(Grupo::Eixos));
+        assert_eq!(a.graficos.painel.grupo, None);
+
+        // Digitar num campo junta num passo; Ctrl+Z volta o campo inteiro.
+        let _ = a.evento_grafico(Evento::Formatar(Mudanca::Margem(super::painel::AreaSel::Grafico, super::painel::Lado::Inferior, "4".into())));
+        let _ = a.evento_grafico(Evento::Formatar(Mudanca::Margem(super::painel::AreaSel::Grafico, super::painel::Lado::Inferior, "40".into())));
+        assert_eq!(salvo(&a)["_featherNative"]["estilo"]["margens_grafico"]["inferior"], 40.0);
+        let _ = a.update(Msg::Desfazer);
+        assert!(salvo(&a)["_featherNative"]["estilo"]["margens_grafico"]["inferior"].is_null());
+        assert!(a.graficos.aberto, "painel continua aberto depois do Ctrl+Z");
+        let _ = a.update(Msg::Desfazer);
+        assert!(salvo(&a)["_featherNative"]["estilo"]["series"]["0"]["pontos"]["3"].is_null(), "o ponto pintado era o passo anterior");
+
+        // Cada grupo monta nos dois temas, com a paleta aberta.
+        a.graficos.painel.cor_menu = Some(AlvoCor::Serie(0));
+        for escuro in [false, true] {
+            feather_ui::tema::definir_tema(escuro, 0);
+            for g in Grupo::TODOS {
+                a.graficos.painel.grupo = Some(g);
+                let _: Element<'_, Msg> = a.view_graficos();
+            }
+        }
+        feather_ui::tema::definir_tema(false, 0);
+    }
+
+/// O exemplo do usuário (15/10) no boletim de teste: A7:G22 em colunas
+/// empilhadas só com Prova 1, Prova 2 e Trabalho (nome da legenda trocado);
+/// copiar e colar; a cópia vira pizza da quantidade de alunos por Situação.
+#[test]
+fn boletim_configurar_series_copiar_e_pizza_por_situacao() {
+    let mut app = App::default();
+    app.workbook = feathersheet_core::modelos::criar("notas-escolares").expect("modelo");
+    app.folha = 0;
+    app.graficos = Estado {
+        intervalo: "A7:G22".into(),
+        titulo: "Notas".into(),
+        tipo: TipoUi::ColunasEmpilhadas,
+        cabecalho: true,
+        categorias: true,
+        colunas: true,
+        aba_id: app.workbook.aba(0).map(|a| a.id),
+        ..Default::default()
+    };
+    app.atualizar_grafico();
+    let _ = app.inserir_grafico();
+    let nomes: Vec<String> = app.series_da_origem().into_iter().map(|s| s.1).collect();
+    assert_eq!(nomes, ["Matrícula", "Prova 1", "Prova 2", "Trabalho", "Média", "Situação"]);
+    for n in [0, 4, 5] {
+        let _ = app.evento_grafico(Evento::SerieVisivel(n, false));
+    }
+    let _ = app.evento_grafico(Evento::SerieNome(1, "1ª prova".into()));
+    {
+        let _painel: Element<'_, Msg> = app.view_graficos();
+    }
+    assert!(app.graficos.svg.is_some());
+    assert_eq!(app.graficos.series, ["1 — 1ª prova", "2 — Prova 2", "3 — Trabalho"]);
+
+    // Copiar e colar com o gráfico selecionado (painel fechado).
+    let original = app.graficos.id.clone().expect("gravado");
+    app.graficos.aberto = false;
+    app.graficos.selecionado = Some(original.clone());
+    assert!(app.atalho_grafico("c"));
+    assert!(app.atalho_grafico("v"));
+    let lista = feathersheet_io::graficos_salvos::listar(&app.workbook.aba(0).unwrap().sheet).unwrap();
+    assert_eq!(lista.len(), 2);
+    let copia = app.graficos.selecionado.clone().unwrap();
+    assert_ne!(copia, original);
+
+    // A cópia: pizza, categorias = Situação, conta = Contar sobre Prova 1.
+    let _ = app.editar_grafico_salvo(&copia);
+    let _ = app.evento_grafico(Evento::Tipo(TipoUi::Pizza));
+    let _ = app.evento_grafico(Evento::CategoriaColuna(Some(6)));
+    let p1 = app.series_da_origem().into_iter().find(|s| s.1 == "Prova 1").unwrap().0;
+    let _ = app.evento_grafico(Evento::SerieVisivel(p1, true));
+    let _ = app.evento_grafico(Evento::SerieConta(p1, Some(AggregateFn::Count)));
+    let mut cats = app.graficos.painel.categorias.clone();
+    cats.sort();
+    assert_eq!(cats, ["Aprovado", "Reprovado"]);
+
+    // O gravado conta os 15 alunos (aprovados + reprovados).
+    let lista = feathersheet_io::graficos_salvos::listar(&app.workbook.aba(0).unwrap().sheet).unwrap();
+    let v = lista.iter().find(|v| v["id"].as_str() == Some(copia.as_str())).unwrap();
+    let mut config: ChartConfig = serde_json::from_value(v.clone()).unwrap();
+    config.tipo = ChartType::Column;
+    let c = feathersheet_io::grafico_compartilhado::extrair_grafico(&app.workbook.aba(0).unwrap().sheet, &config).unwrap();
+    assert_eq!(c.grafico.series.len(), 1);
+    let total: f64 = c.grafico.series[0].valores.iter().sum();
+    assert_eq!(total, 15.0, "{:?} {:?}", c.grafico.categorias, c.grafico.series[0].valores);
+    // O original continua com as três séries.
+    let o = lista.iter().find(|v| v["id"].as_str() == Some(original.as_str())).unwrap();
+    assert_eq!(o["style"]["hiddenSeries"], serde_json::json!([0, 4, 5]));
+}

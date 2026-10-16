@@ -1,0 +1,20 @@
+[package]
+name = "feathersheet-core"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.77.2"
+description = "O motor do FeatherSheet: referências, valores, fórmulas e recálculo."
+
+# Sem dependência, de propósito. Este crate roda no app, no teste e (se um dia
+# precisar) em WebAssembly, e nada do que ele faz pede biblioteca de fora.
+# O Arrow e o resto entram no `feathersheet-io`, que é outro crate.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+# Só para os testes montarem regra e gráfico no formato do arquivo (JSON). Não
+# entra no motor: o `feathersheet-core` continua sem ler JSON.
+serde_json = "1"
+
+[lib]
+name = "feathersheet_core"

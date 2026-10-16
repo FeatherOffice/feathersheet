@@ -1,0 +1,3994 @@
+{
+  "gerado_em": "2026-09-21",
+  "fuso_minutos": -180,
+  "planilha": {
+    "A1": "10",
+    "A2": "20",
+    "A3": "30",
+    "A4": "40",
+    "A5": "50",
+    "B1": "texto",
+    "B2": "01/03/2026",
+    "B3": "VERDADEIRO",
+    "B4": "FALSO",
+    "B5": "R$ 1.250,50",
+    "C1": "a",
+    "C2": "b",
+    "C3": "a",
+    "C4": "10",
+    "C5": "20",
+    "D1": "5",
+    "D2": "15",
+    "D3": "25",
+    "D4": "35",
+    "D5": "45",
+    "E1": "=E2",
+    "E2": "=E1"
+  },
+  "casos": [
+    {
+      "formula": "1+2*3",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 7
+      }
+    },
+    {
+      "formula": "(1+2)*3",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 9
+      }
+    },
+    {
+      "formula": "2^3^2",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 512
+      }
+    },
+    {
+      "formula": "-3^2",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 9
+      }
+    },
+    {
+      "formula": "-(3^2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": -9
+      }
+    },
+    {
+      "formula": "10%",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.1
+      }
+    },
+    {
+      "formula": "50%*200",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 100
+      }
+    },
+    {
+      "formula": "10+20",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "30-10",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "5*6",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "20/4",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "2^3",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 8
+      }
+    },
+    {
+      "formula": "\"abc\"&\"def\"",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "abcdef"
+      }
+    },
+    {
+      "formula": "1=1",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "1<>2",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "5<10",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "10<=10",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "15>5",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "20>=20",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "1+2+3+4+5",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 15
+      }
+    },
+    {
+      "formula": "100-20-10",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 70
+      }
+    },
+    {
+      "formula": "2*3*4",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 24
+      }
+    },
+    {
+      "formula": "100/10/2",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "-A1",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": -10
+      }
+    },
+    {
+      "formula": "+A1",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "\"10\"+20",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "\"5,5\"+2",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 7.5
+      }
+    },
+    {
+      "formula": "\"R$ 1.250,50\"+0,50",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1251
+      }
+    },
+    {
+      "formula": "A10=0",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "A10=\"\"",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "A10=FALSO",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "VERDADEIRO+1",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "FALSO+1",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "TRUE+5",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 6
+      }
+    },
+    {
+      "formula": "FALSE+5",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "0,5+1,5",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "SUM(1,5; 2,5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "SOMA(1,5; 2,5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "{1;2;3}",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 2
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 3
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "{1\\2}",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            },
+            {
+              "tipo": "numero",
+              "n": 2
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "{1\\2;3\\4}",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            },
+            {
+              "tipo": "numero",
+              "n": 2
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 3
+            },
+            {
+              "tipo": "numero",
+              "n": 4
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "MÉDIA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MEDIA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MÉDIASE(C1:C3; \"a\"; A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "A1:A3",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 30
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "A1+B1",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "1/0",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#DIV/0!"
+      }
+    },
+    {
+      "formula": "MOD(5; 0)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#DIV/0!"
+      }
+    },
+    {
+      "formula": "\"abc\"+5",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "SQRT(-1)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#NUM!"
+      }
+    },
+    {
+      "formula": "RAIZ(-1)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#NUM!"
+      }
+    },
+    {
+      "formula": "NAOEXISTE(1)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#NAME?"
+      }
+    },
+    {
+      "formula": "LOG(-10)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#NUM!"
+      }
+    },
+    {
+      "formula": "NA()",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#N/A"
+      }
+    },
+    {
+      "formula": "NÃODISP()",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#N/A"
+      }
+    },
+    {
+      "formula": "E1",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#CIRCULAR!"
+      }
+    },
+    {
+      "formula": "#DIV/0!",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#DIV/0!"
+      }
+    },
+    {
+      "formula": "#VALUE!",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "#REF!",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#REF!"
+      }
+    },
+    {
+      "formula": "#NAME?",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#NAME?"
+      }
+    },
+    {
+      "formula": "#NUM!",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#NUM!"
+      }
+    },
+    {
+      "formula": "#N/A",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#N/A"
+      }
+    },
+    {
+      "formula": "#SPILL!",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#SPILL!"
+      }
+    },
+    {
+      "formula": "#CIRCULAR!",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#CIRCULAR!"
+      }
+    },
+    {
+      "formula": "FILTER(A1:A5; C1:C5=\"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 30
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "FILTRO(A1:A5; C1:C5=\"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 30
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "UNIQUE(C1:C5)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "texto",
+              "s": "a"
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "b"
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "ÚNICO(C1:C5)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "texto",
+              "s": "a"
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "b"
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "UNICO(C1:C5)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "texto",
+              "s": "a"
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "b"
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "SORT(A1:A5; 1; FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 50
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 40
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 30
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "CLASSIFICAR(A1:A5; 1; FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 50
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 40
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 30
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "ORDENAR(A1:A5; 1; FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 50
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 40
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 30
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "TRANSPOSE(A1:C2)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            },
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "texto"
+            },
+            {
+              "tipo": "numero",
+              "n": 46082
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "a"
+            },
+            {
+              "tipo": "texto",
+              "s": "b"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "TRANSPOR(A1:C2)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            },
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "texto"
+            },
+            {
+              "tipo": "numero",
+              "n": 46082
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "a"
+            },
+            {
+              "tipo": "texto",
+              "s": "b"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "MATRIZ.TRANSPOSTA(A1:C2)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 10
+            },
+            {
+              "tipo": "numero",
+              "n": 20
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "texto"
+            },
+            {
+              "tipo": "numero",
+              "n": 46082
+            }
+          ],
+          [
+            {
+              "tipo": "texto",
+              "s": "a"
+            },
+            {
+              "tipo": "texto",
+              "s": "b"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "SEQUENCE(3; 2; 1; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            },
+            {
+              "tipo": "numero",
+              "n": 2
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 3
+            },
+            {
+              "tipo": "numero",
+              "n": 4
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 5
+            },
+            {
+              "tipo": "numero",
+              "n": 6
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "SEQUÊNCIA(3; 2; 1; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            },
+            {
+              "tipo": "numero",
+              "n": 2
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 3
+            },
+            {
+              "tipo": "numero",
+              "n": 4
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 5
+            },
+            {
+              "tipo": "numero",
+              "n": 6
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "SEQUENCIA(3; 2; 1; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            },
+            {
+              "tipo": "numero",
+              "n": 2
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 3
+            },
+            {
+              "tipo": "numero",
+              "n": 4
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 5
+            },
+            {
+              "tipo": "numero",
+              "n": 6
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "FREQUENCY(A1:A5; D1:D3)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 0
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 3
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "FREQUÊNCIA(A1:A5; D1:D3)",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 0
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 1
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 3
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "MMULT({1\\2;3\\4}; {5\\6;7\\8})",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 19
+            },
+            {
+              "tipo": "numero",
+              "n": 22
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 43
+            },
+            {
+              "tipo": "numero",
+              "n": 50
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "MATRIZ.MULT({1\\2;3\\4}; {5\\6;7\\8})",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": 19
+            },
+            {
+              "tipo": "numero",
+              "n": 22
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 43
+            },
+            {
+              "tipo": "numero",
+              "n": 50
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "MINVERSE({1\\2;3\\4})",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": -1.9999999999999996
+            },
+            {
+              "tipo": "numero",
+              "n": 0.9999999999999998
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 1.4999999999999998
+            },
+            {
+              "tipo": "numero",
+              "n": -0.49999999999999994
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "MATRIZ.INVERSO({1\\2;3\\4})",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "numero",
+              "n": -1.9999999999999996
+            },
+            {
+              "tipo": "numero",
+              "n": 0.9999999999999998
+            }
+          ],
+          [
+            {
+              "tipo": "numero",
+              "n": 1.4999999999999998
+            },
+            {
+              "tipo": "numero",
+              "n": -0.49999999999999994
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "MDETERM({1\\2;3\\4})",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": -2
+      }
+    },
+    {
+      "formula": "MATRIZ.DETERM({1\\2;3\\4})",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": -2
+      }
+    },
+    {
+      "formula": "SUM(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 60
+      }
+    },
+    {
+      "formula": "SOMA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 60
+      }
+    },
+    {
+      "formula": "PRODUCT(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 6000
+      }
+    },
+    {
+      "formula": "ABS(-15)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 15
+      }
+    },
+    {
+      "formula": "SQRT(16)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "RAIZ(16)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "EXP(1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2.718281828459045
+      }
+    },
+    {
+      "formula": "LN(2,718281828459045)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "LOG(100; 10)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "LOG10(100)",
+      "compila": false,
+      "erro": "Sobra \"(\" no fim da fórmula"
+    },
+    {
+      "formula": "SIGN(-5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": -1
+      }
+    },
+    {
+      "formula": "SIN(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "SEN(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "COS(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "TAN(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "TG(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "ASIN(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "ASEN(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "ACOS(1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "ATAN(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "ATG(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "ATAN2(1; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.7853981633974483
+      }
+    },
+    {
+      "formula": "SINH(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "SENH(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "COSH(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "TANH(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "TGH(0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "RADIANS(180)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3.141592653589793
+      }
+    },
+    {
+      "formula": "RADIANOS(180)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3.141592653589793
+      }
+    },
+    {
+      "formula": "DEGREES(PI())",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 180
+      }
+    },
+    {
+      "formula": "GRAUS(PI())",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 180
+      }
+    },
+    {
+      "formula": "INT(10,8)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "ROUND(10,567; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10.57
+      }
+    },
+    {
+      "formula": "ARRED(10,567; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10.57
+      }
+    },
+    {
+      "formula": "ROUNDUP(10,51; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10.6
+      }
+    },
+    {
+      "formula": "ARREDONDAR.PARA.CIMA(10,51; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10.6
+      }
+    },
+    {
+      "formula": "ROUNDDOWN(10,59; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10.5
+      }
+    },
+    {
+      "formula": "ARREDONDAR.PARA.BAIXO(10,59; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10.5
+      }
+    },
+    {
+      "formula": "TRUNC(10,59; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10.5
+      }
+    },
+    {
+      "formula": "MOD(10; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "RESTO(10; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "POWER(2; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 8
+      }
+    },
+    {
+      "formula": "POTÊNCIA(2; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 8
+      }
+    },
+    {
+      "formula": "POTENCIA(2; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 8
+      }
+    },
+    {
+      "formula": "CEILING(4,2; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "FLOOR(4,8; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "PI()",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3.141592653589793
+      }
+    },
+    {
+      "formula": "RAND()",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.4055608425131376
+      }
+    },
+    {
+      "formula": "ALEATÓRIO()",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.21091898921907148
+      }
+    },
+    {
+      "formula": "ALEATORIO()",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.5130191824738124
+      }
+    },
+    {
+      "formula": "RANDBETWEEN(1; 10)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "ALEATÓRIOENTRE(1; 10)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "FACT(5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 120
+      }
+    },
+    {
+      "formula": "FATORIAL(5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 120
+      }
+    },
+    {
+      "formula": "COMBIN(5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "COMBINAÇÃO(5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "PERMUT(5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "PERMUTAÇÃO(5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "ISEVEN(4)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ÉPAR(4)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "EPAR(4)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ISODD(5)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ÉÍMPAR(5)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ÉIMPAR(5)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "AVERAGE(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MÉDIA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MEDIA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MEDIAN(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "MED(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "MODE(C1:C5)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#N/A"
+      }
+    },
+    {
+      "formula": "MODO(C1:C5)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#N/A"
+      }
+    },
+    {
+      "formula": "MIN(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "MÍNIMO(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "MINIMO(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "MAX(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 50
+      }
+    },
+    {
+      "formula": "MÁXIMO(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 50
+      }
+    },
+    {
+      "formula": "MAXIMO(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 50
+      }
+    },
+    {
+      "formula": "LARGE(A1:A5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 40
+      }
+    },
+    {
+      "formula": "MAIOR(A1:A5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 40
+      }
+    },
+    {
+      "formula": "SMALL(A1:A5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MENOR(A1:A5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "COUNT(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "CONT.NÚM(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "CONT.NUM(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "COUNTA(B1:B5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "CONT.VALORES(B1:B5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "COUNTBLANK(A1:A10)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "COUNTUNIQUE(C1:C5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "CONT.ÚNICO(C1:C5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "STDEV(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 15.811388300841896
+      }
+    },
+    {
+      "formula": "DESVPAD(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 15.811388300841896
+      }
+    },
+    {
+      "formula": "STDEV.P(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 14.142135623730951
+      }
+    },
+    {
+      "formula": "VAR(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 250
+      }
+    },
+    {
+      "formula": "VAR.P(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 200
+      }
+    },
+    {
+      "formula": "AVEDEV(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 12
+      }
+    },
+    {
+      "formula": "DESV.MÉDIO(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 12
+      }
+    },
+    {
+      "formula": "DEVSQ(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1000
+      }
+    },
+    {
+      "formula": "DESVQ(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1000
+      }
+    },
+    {
+      "formula": "GEOMEAN(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 26.051710846973528
+      }
+    },
+    {
+      "formula": "MÉDIA.GEOMÉTRICA(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 26.051710846973528
+      }
+    },
+    {
+      "formula": "HARMEAN(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 21.8978102189781
+      }
+    },
+    {
+      "formula": "MÉDIA.HARMÔNICA(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 21.8978102189781
+      }
+    },
+    {
+      "formula": "SKEW(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "DISTORÇÃO(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "KURT(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": -1.1999999999999984
+      }
+    },
+    {
+      "formula": "CURT(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": -1.1999999999999984
+      }
+    },
+    {
+      "formula": "PERCENTILE(A1:A5; 0,5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "PERCENTIL(A1:A5; 0,5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "QUARTILE(A1:A5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "QUARTIL(A1:A5; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "RANK(30; A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "ORDEM(30; A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "SUMIF(C1:C5; \"a\"; A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 40
+      }
+    },
+    {
+      "formula": "SOMASE(C1:C5; \"a\"; A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 40
+      }
+    },
+    {
+      "formula": "SUMIFS(A1:A5; C1:C5; \"a\"; D1:D5; \">10\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "SOMASES(A1:A5; C1:C5; \"a\"; D1:D5; \">10\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "COUNTIF(C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "CONT.SE(C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "CONTSE(C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "COUNTIFS(C1:C5; \"a\"; D1:D5; \">10\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "CONT.SES(C1:C5; \"a\"; D1:D5; \">10\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "AVERAGEIF(C1:C5; \"a\"; A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MÉDIASE(C1:C5; \"a\"; A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "AVERAGEIFS(A1:A5; C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MÉDIASES(A1:A5; C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MAXIFS(A1:A5; C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "MÁXIMOSES(A1:A5; C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "MINIFS(A1:A5; C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "MÍNIMOSES(A1:A5; C1:C5; \"a\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "CORREL(A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "COVAR(A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 200
+      }
+    },
+    {
+      "formula": "SLOPE(A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "INCLINAÇÃO(A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "INTERCEPT(A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "INTERCEPÇÃO(A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "RSQ(A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "RQUAD(A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "FORECAST(60; A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 65
+      }
+    },
+    {
+      "formula": "PREVISÃO(60; A1:A5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 65
+      }
+    },
+    {
+      "formula": "NORM.DIST(1; 0; 1; VERDADEIRO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.8413447361676363
+      }
+    },
+    {
+      "formula": "DIST.NORM(1; 0; 1; VERDADEIRO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.8413447361676363
+      }
+    },
+    {
+      "formula": "NORM.S.DIST(1; VERDADEIRO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.8413447361676363
+      }
+    },
+    {
+      "formula": "DIST.NORMP(1; VERDADEIRO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.8413447361676363
+      }
+    },
+    {
+      "formula": "NORM.INV(0,95; 0; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1.6448534987120724
+      }
+    },
+    {
+      "formula": "INV.NORM(0,95; 0; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1.6448534987120724
+      }
+    },
+    {
+      "formula": "T.DIST(1; 10; VERDADEIRO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.8295534338569264
+      }
+    },
+    {
+      "formula": "DIST.T(1; 10; VERDADEIRO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.8295534338569264
+      }
+    },
+    {
+      "formula": "T.TEST(A1:A5; D1:D5; 2; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "TESTE.T(A1:A5; D1:D5; 2; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "CHISQ.DIST(2; 3; VERDADEIRO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.42759329554961545
+      }
+    },
+    {
+      "formula": "DIST.QUI(2; 3; VERDADEIRO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.42759329554961545
+      }
+    },
+    {
+      "formula": "CHISQ.TEST(A1:A2; D1:D2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.009823274507790192
+      }
+    },
+    {
+      "formula": "TESTE.QUI(A1:A2; D1:D2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0.009823274507790192
+      }
+    },
+    {
+      "formula": "IF(A1>5; \"sim\"; \"não\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "sim"
+      }
+    },
+    {
+      "formula": "SE(A1>5; \"sim\"; \"não\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "sim"
+      }
+    },
+    {
+      "formula": "IFS(A1=10; 1; A1=20; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "SES(A1=10; 1; A1=20; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "IFERROR(1/0; \"erro\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "erro"
+      }
+    },
+    {
+      "formula": "SEERRO(1/0; \"erro\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "erro"
+      }
+    },
+    {
+      "formula": "AND(A1>0; A2>0)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "E(A1>0; A2>0)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "OR(A1>100; A2>0)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "OU(A1>100; A2>0)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "NOT(FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "NÃO(FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "NAO(FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "XOR(VERDADEIRO; FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "TRUE()",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "VERDADEIRO()",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "FALSE()",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": false
+      }
+    },
+    {
+      "formula": "FALSO()",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": false
+      }
+    },
+    {
+      "formula": "ISERROR(1/0)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ÉERRO(1/0)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ISBLANK(A10)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ÉCÉL(A10)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ISNUMBER(A1)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ÉNÚM(A1)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ISTEXT(B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "ÉTEXTO(B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "IFNA(NA(); \"nd\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "nd"
+      }
+    },
+    {
+      "formula": "SENÃODISP(NÃODISP(); \"nd\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "nd"
+      }
+    },
+    {
+      "formula": "LET(x; 10; y; 20; x+y)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "DEIXAR(x; 10; y; 20; x+y)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 30
+      }
+    },
+    {
+      "formula": "SWITCH(A1; 10; \"dez\"; 20; \"vinte\"; \"outro\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "dez"
+      }
+    },
+    {
+      "formula": "PARÂMETRO(A1; 10; \"dez\"; 20; \"vinte\"; \"outro\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "dez"
+      }
+    },
+    {
+      "formula": "CONCAT(B1; \" \"; \"mundo\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "texto mundo"
+      }
+    },
+    {
+      "formula": "CONCATENAR(B1; \" \"; \"mundo\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "texto mundo"
+      }
+    },
+    {
+      "formula": "LEN(B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "NÚM.CARACT(B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "UPPER(B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "TEXTO"
+      }
+    },
+    {
+      "formula": "MAIÚSCULA(B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "TEXTO"
+      }
+    },
+    {
+      "formula": "LOWER(\"TEXTO\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "texto"
+      }
+    },
+    {
+      "formula": "MINÚSCULA(\"TEXTO\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "texto"
+      }
+    },
+    {
+      "formula": "PROPER(\"joao silva\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "Joao Silva"
+      }
+    },
+    {
+      "formula": "PRI.MAIÚSCULA(\"joao silva\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "Joao Silva"
+      }
+    },
+    {
+      "formula": "TRIM(\"  ola   \")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "ola"
+      }
+    },
+    {
+      "formula": "ARRUMAR(\"  ola   \")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "ola"
+      }
+    },
+    {
+      "formula": "LEFT(B1; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "tex"
+      }
+    },
+    {
+      "formula": "ESQUERDA(B1; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "tex"
+      }
+    },
+    {
+      "formula": "RIGHT(B1; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "xto"
+      }
+    },
+    {
+      "formula": "DIREITA(B1; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "xto"
+      }
+    },
+    {
+      "formula": "MID(B1; 2; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "ext"
+      }
+    },
+    {
+      "formula": "EXT.TEXTO(B1; 2; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "ext"
+      }
+    },
+    {
+      "formula": "REPT(\"a\"; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "aaa"
+      }
+    },
+    {
+      "formula": "REPETIR(\"a\"; 3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "aaa"
+      }
+    },
+    {
+      "formula": "SUBSTITUTE(\"abcabc\"; \"b\"; \"x\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "axcaxc"
+      }
+    },
+    {
+      "formula": "SUBSTITUIR(\"abcabc\"; \"b\"; \"x\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "axcaxc"
+      }
+    },
+    {
+      "formula": "FIND(\"x\"; B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "PROCURAR(\"x\"; B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "SEARCH(\"X\"; B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "LOCALIZAR(\"X\"; B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "VALUE(\"123,45\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 123.45
+      }
+    },
+    {
+      "formula": "VALOR(\"123,45\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 123.45
+      }
+    },
+    {
+      "formula": "TEXT(1250,5; \"R$ #.##0,00\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "R$ 1.250,50"
+      }
+    },
+    {
+      "formula": "TEXTO(1250,5; \"R$ #.##0,00\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "R$ 1.250,50"
+      }
+    },
+    {
+      "formula": "TEXTJOIN(\"; \"; VERDADEIRO; \"a\"; \"\"; \"b\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "a; b"
+      }
+    },
+    {
+      "formula": "UNIRTEXTO(\"; \"; VERDADEIRO; \"a\"; \"\"; \"b\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "a; b"
+      }
+    },
+    {
+      "formula": "TEXTSPLIT(\"a;b;c\"; \";\")",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "texto",
+              "s": "a"
+            },
+            {
+              "tipo": "texto",
+              "s": "b"
+            },
+            {
+              "tipo": "texto",
+              "s": "c"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "DIVIDIRTEXTO(\"a;b;c\"; \";\")",
+      "compila": true,
+      "valor": {
+        "tipo": "matriz",
+        "linhas": [
+          [
+            {
+              "tipo": "texto",
+              "s": "a"
+            },
+            {
+              "tipo": "texto",
+              "s": "b"
+            },
+            {
+              "tipo": "texto",
+              "s": "c"
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "formula": "JOIN(\"; \"; \"x\"; \"y\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "x; y"
+      }
+    },
+    {
+      "formula": "JUNTAR(\"; \"; \"x\"; \"y\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "x; y"
+      }
+    },
+    {
+      "formula": "REGEXEXTRACT(\"foo123bar\"; \"\\d+\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "123"
+      }
+    },
+    {
+      "formula": "REGEXEXTRAIR(\"foo123bar\"; \"\\d+\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "123"
+      }
+    },
+    {
+      "formula": "REGEXMATCH(\"hello\"; \"^h\")",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "REGEXCORRESP(\"hello\"; \"^h\")",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": true
+      }
+    },
+    {
+      "formula": "REGEXREPLACE(\"abc123def\"; \"\\d+\"; \"X\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "abcXdef"
+      }
+    },
+    {
+      "formula": "REGEXSUBSTITUIR(\"abc123def\"; \"\\d+\"; \"X\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "abcXdef"
+      }
+    },
+    {
+      "formula": "ROW(A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "LIN(A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "COLUMN(B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "COL(B1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "ROWS(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "LINS(A1:A5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 5
+      }
+    },
+    {
+      "formula": "COLUMNS(A1:D1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "COLS(A1:D1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 4
+      }
+    },
+    {
+      "formula": "CHOOSE(2; \"primeiro\"; \"segundo\"; \"terceiro\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "segundo"
+      }
+    },
+    {
+      "formula": "ESCOLHER(2; \"primeiro\"; \"segundo\"; \"terceiro\")",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "segundo"
+      }
+    },
+    {
+      "formula": "INDEX(A1:D5; 2; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "ÍNDICE(A1:D5; 2; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 20
+      }
+    },
+    {
+      "formula": "MATCH(\"b\"; C1:C5; 0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "CORRESP(\"b\"; C1:C5; 0)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "VLOOKUP(\"b\"; C1:D5; 2; FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 15
+      }
+    },
+    {
+      "formula": "PROCV(\"b\"; C1:D5; 2; FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 15
+      }
+    },
+    {
+      "formula": "HLOOKUP(\"b\"; C1:D5; 2; FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#N/A"
+      }
+    },
+    {
+      "formula": "PROCH(\"b\"; C1:D5; 2; FALSO)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#N/A"
+      }
+    },
+    {
+      "formula": "XLOOKUP(\"b\"; C1:C5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 15
+      }
+    },
+    {
+      "formula": "PROCX(\"b\"; C1:C5; D1:D5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 15
+      }
+    },
+    {
+      "formula": "DATE(2026; 3; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46082
+      }
+    },
+    {
+      "formula": "DATA(2026; 3; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46082
+      }
+    },
+    {
+      "formula": "DATEDIF(DATE(2026; 1; 1); DATE(2026; 3; 1); \"M\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "DATADIF(DATA(2026; 1; 1); DATA(2026; 3; 1); \"M\")",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "YEAR(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2026
+      }
+    },
+    {
+      "formula": "ANO(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2026
+      }
+    },
+    {
+      "formula": "MONTH(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "MÊS(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "MES(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "DAY(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "DIA(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "WEEKDAY(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 1
+      }
+    },
+    {
+      "formula": "EOMONTH(B2; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46142
+      }
+    },
+    {
+      "formula": "FIMMÊS(B2; 1)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46142
+      }
+    },
+    {
+      "formula": "EDATE(B2; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46143
+      }
+    },
+    {
+      "formula": "DATAM(B2; 2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46143
+      }
+    },
+    {
+      "formula": "NETWORKDAYS(DATE(2026; 3; 1); DATE(2026; 3; 10))",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 7
+      }
+    },
+    {
+      "formula": "DIATRABALHOTOTAL(DATA(2026; 3; 1); DATA(2026; 3; 10))",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 7
+      }
+    },
+    {
+      "formula": "WORKDAY(DATE(2026; 3; 1); 5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46087
+      }
+    },
+    {
+      "formula": "DIATRABALHO(DATE(2026; 3; 1); 5)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46087
+      }
+    },
+    {
+      "formula": "WEEKNUM(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "NÚMSEMANA(B2)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 10
+      }
+    },
+    {
+      "formula": "TODAY()",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46287
+      }
+    },
+    {
+      "formula": "HOJE()",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46287
+      }
+    },
+    {
+      "formula": "NOW()",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46287.929084282405
+      }
+    },
+    {
+      "formula": "AGORA()",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 46287.929084282405
+      }
+    },
+    {
+      "formula": "SOMARPRODUTO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 60
+      }
+    },
+    {
+      "formula": "SUMPRODUCT(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 60
+      }
+    },
+    {
+      "formula": "MEDIASE(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "MAIUSCULA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "10"
+      }
+    },
+    {
+      "formula": "MINUSCULA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "10"
+      }
+    },
+    {
+      "formula": "NUM.CARACT(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "CONCATENATE(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "texto",
+        "s": "102030"
+      }
+    },
+    {
+      "formula": "MATRIZ.MULTIPLICAR(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "INDICE(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "FREQÜÊNCIA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "FREQUENCIA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "DATEDIFF(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "DATA.DIF(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "FIMMES(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "NUMSEMANA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 2
+      }
+    },
+    {
+      "formula": "PARAMETRO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "SENAODISP(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "MAPEAR(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "REDUZIR(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "REDUCE(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "CONTSES(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "MEDIASES(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "MAXIMOSES(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "MINIMOSES(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "CONTAR.ÚNICO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "CONTAR.UNICO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 3
+      }
+    },
+    {
+      "formula": "INCLINACAO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "INTERCEPCAO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "PREVISAO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "DISTNORM(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "DISTNORMP(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "INVNORM(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "DISTT(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "TESTET(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "DISTQUI(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "TESTEQUI(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "É.ERRO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": false
+      }
+    },
+    {
+      "formula": "EIMPAR(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "logico",
+        "b": false
+      }
+    },
+    {
+      "formula": "IMPORTARDADOS(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "IMPORTDATA(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "IMPORTARJSON(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "IMPORTJSON(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "BUSCAR.TEXTO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "FETCHTEXT(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "BUSCARTEXTO(A1:A3)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#VALUE!"
+      }
+    },
+    {
+      "formula": "1+",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \"fim\""
+    },
+    {
+      "formula": "SUM(",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \"fim\""
+    },
+    {
+      "formula": "1))",
+      "compila": false,
+      "erro": "Sobra \")\" no fim da fórmula"
+    },
+    {
+      "formula": "SUM(1; 2 +)",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \")\""
+    },
+    {
+      "formula": "1 ** 2",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \"*\""
+    },
+    {
+      "formula": "SUM(1; 2",
+      "compila": false,
+      "erro": "Esperava \")\" mas encontrei \"fim\""
+    },
+    {
+      "formula": "{1;2;3",
+      "compila": false,
+      "erro": "Esperava \"}\" mas encontrei \"fim\""
+    },
+    {
+      "formula": "{1;2\\3}",
+      "compila": false,
+      "erro": "Matriz com linhas de tamanhos diferentes"
+    },
+    {
+      "formula": "((1+2)",
+      "compila": false,
+      "erro": "Esperava \")\" mas encontrei \"fim\""
+    },
+    {
+      "formula": "1 == 1",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \"=\""
+    },
+    {
+      "formula": "+ * 2",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \"*\""
+    },
+    {
+      "formula": "A1:",
+      "compila": false,
+      "erro": "Intervalo inválido"
+    },
+    {
+      "formula": ":A1",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \":\""
+    },
+    {
+      "formula": "\"",
+      "compila": false,
+      "erro": "Texto sem aspas de fechamento"
+    },
+    {
+      "formula": "\"texto sem fechar",
+      "compila": false,
+      "erro": "Texto sem aspas de fechamento"
+    },
+    {
+      "formula": "1.2.3",
+      "compila": false,
+      "erro": "Sobra \".3\" no fim da fórmula"
+    },
+    {
+      "formula": "SUM(;)",
+      "compila": true,
+      "valor": {
+        "tipo": "numero",
+        "n": 0
+      }
+    },
+    {
+      "formula": "()",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \")\""
+    },
+    {
+      "formula": "1,,2",
+      "compila": false,
+      "erro": "Sobra \",\" no fim da fórmula"
+    },
+    {
+      "formula": "1 + * 2",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \"*\""
+    },
+    {
+      "formula": "SOMA(1; 2; ",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \"fim\""
+    },
+    {
+      "formula": "=SOMA(1)",
+      "compila": false,
+      "erro": "Fórmula incompleta perto de \"=\""
+    },
+    {
+      "formula": "MÉDIA(;)",
+      "compila": true,
+      "valor": {
+        "tipo": "erro",
+        "codigo": "#DIV/0!"
+      }
+    }
+  ]
+}

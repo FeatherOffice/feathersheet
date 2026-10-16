@@ -1,0 +1,343 @@
+//! Métricas da seleção no rodapé, portadas de ui/barras/statusbar.ts.
+//! Usa o armazenamento esparso do motor e cache por aba/versão/intervalo.
+//! Áreas grandes são somadas em blocos durante pulsos curtos, sem bloquear
+//! cada redesenho ou cada movimento de seleção. O aviso de erro da célula
+//! ativa (botão vermelho à direita, como no TS) também fica em cache.
+use super::*;
+use feathersheet_core::formula::explicar::explicar_erro;
+use feathersheet_core::planilha::sheet::ContagemSelecao;
+
+/// Medido (examples/medir_contagem.rs do core): 200 mil números em 0,8 ms;
+/// no .parquet de 13,7 milhões (examples/medir_contagem_parquet.rs do io),
+/// 5 ns por número e 14 ns por texto. Até 2 milhões de células a conta sai
+/// direto (~10–30 ms); acima, em lotes grandes: lotes de 4.096 linhas
+/// custavam 10× mais que a conta inteira (34 s contra 4,3 s na tabela).
+const CELULAS_DIRETAS: u64 = 2_000_000;
+const CELULAS_POR_LOTE: u64 = 500_000;
+const ORCAMENTO_MS: u128 = 12;
+const COR_ERRO: iced::Color = iced::Color::from_rgb(220.0 / 255.0, 75.0 / 255.0, 77.0 / 255.0);
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Chave {
+    folha: usize,
+    versao: u32,
+    area: Rect,
+}
+/// Folha, versão, linha e coluna da célula cujo erro está em cache.
+type ChaveErro = (usize, u32, u32, u32);
+
+#[derive(Default)]
+pub(super) struct Estado {
+    chave: Option<Chave>,
+    pub(super) pendente: bool,
+    /// A seleção cai fora da área usada: o rodapé fica em branco, como no TS.
+    fora_da_area: bool,
+    conta: ContagemSelecao,
+    primeira: u32,
+    proxima: u32,
+    ultima: u32,
+    erro_chave: Option<ChaveErro>,
+    erro: Option<String>,
+}
+impl Estado {
+    fn porcentagem(&self) -> u32 {
+        let total = (self.ultima as u64).saturating_sub(self.primeira as u64) + 1;
+        let pronto = (self.proxima as u64).saturating_sub(self.primeira as u64);
+        ((pronto as f64 * 100.0 / total as f64).round() as u32).min(100)
+    }
+}
+
+/// Formatação pt-BR sem dependência adicional, agrupando milhares e até
+/// duas casas decimais (equivalente ao Intl.NumberFormat do TypeScript).
+fn formatar_numero(v: f64) -> String {
+    if !v.is_finite() {
+        return v.to_string();
+    }
+    // O Intl arredonda meio para longe de zero; o `{:.2}` do Rust arredonda
+    // meio para o par. Arredondar antes evita 0,125 virar "0,12".
+    let arredondado = (v.abs() * 100.0).round() / 100.0;
+    if arredondado == 0.0 {
+        return "0".into();
+    }
+    let positivo = format!("{:.2}", arredondado);
+    let (inteiro, dec) = positivo.split_once('.').unwrap_or((&positivo, "00"));
+    let mut milhar = String::with_capacity(inteiro.len() + inteiro.len() / 3);
+    for (i, c) in inteiro.chars().enumerate() {
+        if i > 0 && (inteiro.len() - i) % 3 == 0 {
+            milhar.push('.');
+        }
+        milhar.push(c);
+    }
+    let decimais = dec.trim_end_matches('0');
+    let prefixo = if v < 0. { "-" } else { "" };
+    if decimais.is_empty() {
+        format!("{prefixo}{milhar}")
+    } else {
+        format!("{prefixo}{milhar},{decimais}")
+    }
+}
+fn formatar_inteiro(v: u64) -> String {
+    let s = v.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push('.');
+        }
+        out.push(c);
+    }
+    out
+}
+/// Texto do rodapé. Como no TS, a contagem vem sempre; soma, média, mín e máx
+/// só quando há números. Na barra estreita, as estatísticas da frente somem
+/// primeiro (adaptação de largura própria do Rust, para não cortar a tela).
+fn texto_resumo(c: &ContagemSelecao, largura: f32) -> String {
+    let qtd = format!("Contagem: {}", formatar_inteiro(c.count));
+    if c.numbers == 0 {
+        return qtd;
+    }
+    let soma = format!("Soma: {}", formatar_numero(c.sum));
+    if largura < 790. {
+        return qtd;
+    }
+    if largura < 1080. {
+        return format!("{soma}     {qtd}");
+    }
+    let media = format!("Média: {}", formatar_numero(c.media().unwrap_or(0.)));
+    if largura < 1450. {
+        return format!("{soma}     {media}     {qtd}");
+    }
+    format!(
+        "{soma}     {media}     Mín: {}     Máx: {}     {qtd}",
+        formatar_numero(c.min),
+        formatar_numero(c.max)
+    )
+}
+
+impl App {
+    /// Sincroniza a cache pelo estado atual sem recalcular durante repaint.
+    pub(super) fn sincronizar_resumo(&self) {
+        // O conversor de 1M linhas trabalha em múltiplos ticks. Recontar a
+        // seleção original após cada lote seria trabalho quadrático inútil.
+        // A versão publicada após commit/cancel reativa o resumo normalmente.
+        if self.assistente_divisao.as_ref()
+            .is_some_and(|e| e.conversao_em_andamento())
+        {
+            let mut resumo = self.resumo_selecao.borrow_mut();
+            resumo.pendente = false;
+            resumo.chave = None; // ao terminar, refaz o resumo de verdade
+            return;
+        }
+        let area = self.area_selecionada();
+        let versao = self.workbook.versao(self.folha);
+        let chave = Chave { folha: self.folha, versao, area: area.clone() };
+        let mut estado = self.resumo_selecao.borrow_mut();
+        if estado.chave.as_ref() == Some(&chave) {
+            return;
+        }
+        estado.chave = Some(chave);
+        estado.conta = ContagemSelecao::default();
+        estado.pendente = false;
+        estado.fora_da_area = false;
+        let Some(aba) = self.workbook.aba(self.folha) else { return };
+        if aba.sheet.is_empty() {
+            return;
+        }
+        let usado = aba.sheet.used_rect();
+        let r0 = area.r0.max(usado.r0);
+        let c0 = area.c0.max(usado.c0);
+        let r1 = area.r1.min(usado.r1);
+        let c1 = area.c1.min(usado.c1);
+        if r1 < r0 || c1 < c0 {
+            estado.fora_da_area = true;
+            return;
+        }
+        let recortada = Rect::new(r0, c0, r1, c1);
+        // A chave corresponde à seleção original; o processo usa o recorte.
+        let celulas = (r1 as u64 - r0 as u64 + 1) * (c1 as u64 - c0 as u64 + 1);
+        if celulas <= CELULAS_DIRETAS {
+            estado.conta = aba.sheet.contar_selecao(&recortada, Some(&self.workbook));
+        } else {
+            // Redefine a área processada, mantendo a chave da seleção original.
+            estado.primeira = r0;
+            estado.proxima = r0;
+            estado.ultima = r1;
+            estado.pendente = true;
+        }
+    }
+
+    /// Erro da célula ativa, com cache por célula e versão: só recalcula quando
+    /// a célula ou o conteúdo mudam, nunca a cada quadro.
+    fn sincronizar_erro(&self) {
+        let versao = self.workbook.versao(self.folha);
+        let chave: ChaveErro = (self.folha, versao, self.linha, self.coluna);
+        let mut estado = self.resumo_selecao.borrow_mut();
+        if estado.erro_chave == Some(chave) {
+            return;
+        }
+        estado.erro_chave = Some(chave);
+        estado.erro = explicar_erro(&self.workbook, self.folha, self.linha, self.coluna)
+            .map(|e| format!("{} — {}", e.code, e.summary));
+    }
+
+    /// Cada pulso termina dentro do orçamento esperado em casos normais.
+    /// Os números parciais aparecem só com o aviso "Somando N%…" na frente.
+    pub(super) fn avancar_resumo(&self) {
+        self.sincronizar_resumo();
+        let mut estado = self.resumo_selecao.borrow_mut();
+        if !estado.pendente {
+            return;
+        }
+        let Some(chave) = estado.chave.as_ref() else { return };
+        let Some(aba) = self.workbook.aba(chave.folha) else {
+            estado.pendente = false;
+            return;
+        };
+        let usado = aba.sheet.used_rect();
+        let c0 = chave.area.c0.max(usado.c0);
+        let c1 = chave.area.c1.min(usado.c1);
+        if c1 < c0 {
+            estado.pendente = false;
+            return;
+        }
+        let colunas = c1 as u64 - c0 as u64 + 1;
+        let linhas = (CELULAS_POR_LOTE / colunas).clamp(1, 500_000) as u32;
+        let inicio = Instant::now();
+        while estado.pendente {
+            let r0 = estado.proxima;
+            let r1 = r0.saturating_add(linhas - 1).min(estado.ultima);
+            let parte = aba.sheet.contar_selecao(&Rect::new(r0, c0, r1, c1),
+                Some(&self.workbook));
+            estado.conta.somar_lote(&parte);
+            if r1 >= estado.ultima {
+                estado.pendente = false;
+                break;
+            }
+            estado.proxima = r1 + 1;
+            if inicio.elapsed().as_millis() >= ORCAMENTO_MS {
+                break;
+            }
+        }
+    }
+
+    /// Resumo curto na barra existente de 36 px, à esquerda do zoom, com o
+    /// aviso de erro da célula ativa à direita (clicar abre a explicação).
+    pub(super) fn view_resumo_selecao(&self) -> Element<'_, Msg> {
+        if self.assistente_divisao.as_ref()
+            .is_some_and(|e| e.conversao_em_andamento())
+        {
+            return container(text("Convertendo texto em colunas…").size(11)
+                .color(COR_TEXTO_MUTED()))
+                .padding([0, 8]).width(Length::Fill).into();
+        }
+        self.sincronizar_resumo();
+        self.sincronizar_erro();
+        let largura = self.tamanho_principal.width;
+        let estado = self.resumo_selecao.borrow();
+        let texto = if estado.fora_da_area {
+            String::new()
+        } else if estado.pendente {
+            format!("Somando {}%…   {}", estado.porcentagem(),
+                texto_resumo(&estado.conta, largura))
+        } else {
+            texto_resumo(&estado.conta, largura)
+        };
+        let resumo = text(texto).size(11).color(COR_TEXTO_MUTED())
+            .wrapping(text::Wrapping::None).width(Length::Fill);
+        let mut linha = row![resumo].spacing(8).align_y(Alignment::Center);
+        if let Some(erro) = estado.erro.as_ref() {
+            let aviso = button(text(erro.clone()).size(11).color(COR_ERRO)
+                .wrapping(text::Wrapping::None))
+                .padding([0, 4])
+                .style(|_, _| button::Style::default())
+                .on_press(Msg::ExplicacaoErroAbrir);
+            linha = linha.push(
+                container(aviso).max_width(largura * 0.52).clip(true)
+            );
+        }
+        container(linha).padding([0, 8]).width(Length::Fill).into()
+    }
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+    #[test]
+    fn numeros_ptbr_e_adaptacao_de_largura() {
+        assert_eq!(formatar_numero(1234.5), "1.234,5");
+        assert_eq!(formatar_numero(-10000.25), "-10.000,25");
+        assert_eq!(formatar_numero(0.125), "0,13");
+        assert_eq!(formatar_numero(0.001), "0");
+        assert_eq!(formatar_inteiro(1002003), "1.002.003");
+        let c = ContagemSelecao { count: 4, numbers: 3, sum: 30., min: 5., max: 15. };
+        assert_eq!(texto_resumo(&c, 1600.),
+            "Soma: 30     Média: 10     Mín: 5     Máx: 15     Contagem: 4");
+        assert_eq!(texto_resumo(&c, 700.), "Contagem: 4");
+    }
+    #[test]
+    fn status_altera_com_selecao_e_edicao_mas_nao_com_redesenho() {
+        let mut app = App::default();
+        app.workbook.escrever_celula(0, 0, 0, "10".into());
+        app.workbook.escrever_celula(0, 1, 0, "20".into());
+        app.workbook.escrever_celula(0, 1, 1, "teste".into());
+        app.linha = 0; app.coluna = 0; app.fim_selecao = (1, 1);
+        let _: Element<'_, Msg> = app.view_resumo_selecao();
+        assert_eq!(app.resumo_selecao.borrow().conta.sum, 30.);
+        assert_eq!(app.resumo_selecao.borrow().conta.count, 3);
+        let _ = app.view_resumo_selecao();
+        app.workbook.escrever_celula(0, 0, 0, "40".into());
+        let _ = app.view_resumo_selecao();
+        assert_eq!(app.resumo_selecao.borrow().conta.sum, 60.);
+        app.linha = 1; app.coluna = 1; app.fim_selecao = (1, 1);
+        let _ = app.view_resumo_selecao();
+        assert_eq!(app.resumo_selecao.borrow().conta.count, 1);
+        assert_eq!(app.resumo_selecao.borrow().conta.numbers, 0);
+    }
+    #[test]
+    fn selecao_fora_da_area_usada_fica_em_branco() {
+        let mut app = App::default();
+        app.workbook.escrever_celula(0, 0, 0, "10".into());
+        app.linha = 5; app.coluna = 5; app.fim_selecao = (5, 5);
+        let _ = app.view_resumo_selecao();
+        assert!(app.resumo_selecao.borrow().fora_da_area);
+        app.linha = 0; app.coluna = 0; app.fim_selecao = (0, 0);
+        let _ = app.view_resumo_selecao();
+        assert!(!app.resumo_selecao.borrow().fora_da_area);
+    }
+    #[test]
+    fn resumo_fica_suspenso_enquanto_converte_grande_selecao() {
+        let mut app = App::default();
+        app.workbook.escrever_celula(0, 0, 0, "A;B".into());
+        app.workbook.escrever_celula(0, 3_000_000, 0, "C;D".into());
+        app.linha = 0; app.coluna = 0; app.fim_selecao = (3_000_000, 0);
+        app.sincronizar_resumo();
+        assert!(app.resumo_selecao.borrow().pendente);
+        app.abrir_assistente_divisao();
+        app.evento_assistente_divisao(assistente_divisao::Evento::Concluir);
+        assert!(app.assistente_divisao.as_ref().unwrap().conversao_em_andamento());
+        let _: Element<'_, Msg> = app.view_resumo_selecao();
+        app.sincronizar_resumo();
+        assert!(!app.resumo_selecao.borrow().pendente);
+        app.evento_assistente_divisao(assistente_divisao::Evento::Cancelar);
+        let _: Element<'_, Msg> = app.view_resumo_selecao();
+        assert!(app.resumo_selecao.borrow().pendente);
+    }
+
+    #[test]
+    fn selecao_grande_processa_em_lotes_sem_ficar_preso_no_limite() {
+        let mut app = App::default();
+        app.workbook.escrever_celula(0, 0, 0, "10".into());
+        app.workbook.escrever_celula(0, 3_000_000, 0, "30".into());
+        app.linha = 0; app.coluna = 0; app.fim_selecao = (MAX_ROWS - 1, 0);
+        let _ = app.view_resumo_selecao();
+        assert!(app.resumo_selecao.borrow().pendente);
+        // Simula os pulsos até terminar, sem aguardar relógio de interface.
+        for _ in 0..100 {
+            if !app.resumo_selecao.borrow().pendente { break; }
+            app.avancar_resumo();
+        }
+        let estado = app.resumo_selecao.borrow();
+        assert!(!estado.pendente);
+        assert_eq!(estado.conta.count, 2);
+        assert_eq!(estado.conta.sum, 40.);
+    }
+}

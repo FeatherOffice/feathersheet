@@ -1,0 +1,10 @@
+[package]
+name = "feathersheet-macros"
+version = "0.0.1"
+edition = "2021"
+description = "Execução local de macros JavaScript no interpretador Rust Boa"
+
+[dependencies]
+feather-macros = { path = "../../../feather-io/crates/feather-macros" }
+serde_json = "1"
+feathersheet-core = { path = "../feathersheet-core" }

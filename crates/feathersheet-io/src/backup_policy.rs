@@ -1,0 +1,79 @@
+//! Política de backup de `src/io/backup-policy.ts`, migrada para Rust.
+//!
+//! Protege a interface de cópias frequentes muito caras. A gravação explícita
+//! do usuário não é bloqueada por esta política.
+pub const MAX_CELULAS_COPIA: u64 = 300_000;
+pub const CUSTO_INTOLERAVEL_MS: u64 = 300;
+pub const INTERVALO_MINIMO_MS: u64 = 800;
+pub const INTERVALO_MAXIMO_MS: u64 = 30_000;
+
+/// Mesmo critério do TypeScript: não fazer cópia rápida durante importação
+/// em lote ou para mais de 300 mil células.
+#[inline]
+pub fn copia_vale_a_pena(celulas: u64, importacao_em_lote: bool) -> bool {
+    !importacao_em_lote && celulas <= MAX_CELULAS_COPIA
+}
+
+/// Custos acima de 300 ms são intoleráveis para snapshots rápidos.
+#[inline]
+pub fn custo_insustentavel(custo_ms: u64) -> bool {
+    custo_ms > CUSTO_INTOLERAVEL_MS
+}
+
+/// Mantém a UI gastando no máximo ~10% do tempo com snapshots rápidos.
+/// Saturação é importante para cronômetros e arquivos excepcionalmente grandes.
+#[inline]
+pub fn intervalo_da_copia(custo_ms: u64) -> u64 {
+    custo_ms.saturating_mul(10).clamp(INTERVALO_MINIMO_MS, INTERVALO_MAXIMO_MS)
+}
+
+/// Intervalo efetivo do autosave FSHZ nativo.
+///
+/// Ao contrário do backup rápido descartável do navegador, salvar FSHZ em
+/// disco é recuperação durável: NUNCA é desligado silenciosamente para uma
+/// pasta grande. Em vez disso é limitado à cadência de 30 segundos, mesmo
+/// quando o usuário configurou intervalos mais curtos. Salvar manualmente não
+/// passa por este cálculo.
+pub fn intervalo_autosave(
+    configurado_ms: u64,
+    custo_ultima_gravacao_ms: u64,
+    celulas: u64,
+    importacao_em_lote: bool,
+) -> u64 {
+    let minimo = if copia_vale_a_pena(celulas, importacao_em_lote) {
+        intervalo_da_copia(custo_ultima_gravacao_ms)
+    } else {
+        INTERVALO_MAXIMO_MS
+    };
+    configurado_ms.max(minimo)
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    #[test]
+    fn limites_e_paridade_com_o_typescript() {
+        assert!(copia_vale_a_pena(300_000,false));
+        assert!(!copia_vale_a_pena(300_001,false));
+        assert!(!copia_vale_a_pena(1,true));
+        assert!(!custo_insustentavel(300));
+        assert!(custo_insustentavel(301));
+        for (custo, espera) in [
+            (0,800), (20,800), (80,800), (150,1_500),
+            (301,3_010), (8_000,30_000),
+            (u64::MAX,30_000),
+        ] {
+            assert_eq!(intervalo_da_copia(custo),espera);
+        }
+    }
+
+    #[test]
+    fn autosave_nao_desaparece_para_pastas_grandes() {
+        assert_eq!(intervalo_autosave(2_000,0,100,false),2_000);
+        assert_eq!(intervalo_autosave(2_000,800,100,false),8_000);
+        assert_eq!(intervalo_autosave(2_000,0,300_001,false),30_000);
+        assert_eq!(intervalo_autosave(2_000,0,200,true),30_000);
+        assert_eq!(intervalo_autosave(60_000,0,300_001,false),60_000);
+    }
+}

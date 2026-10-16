@@ -1,0 +1,31 @@
+[package]
+name = "feathersheet-io"
+version = "0.0.1"
+edition = "2021"
+
+# Onde o Arrow entra do lado Rust — ver docs/ARQUITETURA.md, "O que muda no
+# repositório". Ao contrário do `feathersheet-core`, aqui dependência se
+# justifica: quem grava o `.fshz` precisa do mesmo formato Arrow que o lado
+# TypeScript já usa (`apache-arrow`, decisão de 19/09/2026 — "arrow é vida"),
+# e reescrever o leitor/escritor de IPC Arrow à mão seria o tipo de risco que
+# a regra "portar é traduzir, não melhorar" existe para evitar.
+[dependencies]
+feather-io = { path = "../../../feather-io/crates/feather-io" }
+feather-charts = { path = "../../../feather-charts" }
+feather-draw = { git = "https://github.com/FeatherOffice/feather-draw", tag = "v0.1.1" }
+feathersheet-core = { path = "../feathersheet-core" }
+arrow = { version = "56", default-features = false, features = ["ipc"] }
+# Leitura de .parquet (15/10/2026). Sem zstd: o crate zstd traz biblioteca C
+# (regra da suíte: Rust puro). Snappy, Gzip (zlib-rs), LZ4 e Brotli são Rust puro.
+parquet = { version = "56", default-features = false, features = ["arrow", "snap", "brotli", "flate2-zlib-rs", "lz4"] }
+flate2 = "1.1.10"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+rmp-serde = "1.3"
+# O leitor de `.xlsx` (xlsx_read/), que veio do src-tauri: Rust puro, compila
+# também para o `.wasm`.
+zip = { version = "4.2.0", default-features = false, features = ["deflate"] }
+quick-xml = "0.39.4"
+
+[dev-dependencies]
+

@@ -1,0 +1,188 @@
+//! As funções `vba.*` que o código gerado usa: o que o VBA faz de um jeito que o
+//! JavaScript não faz igual (comparar e somar Variant, `Mid` contando do 1, arredondar
+//! para o par, `Format`, `MsgBox`). Cada macro leva só as que usa — e as que essas usam.
+
+use std::collections::BTreeSet;
+
+/// (nome, dependências, código do método no objeto `vba`).
+const AJUDAS: &[(&str, &[&str], &str)] = &[
+    ("vazio", &[], "  /** Empty do VBA: célula vazia, variável sem valor. */\n  vazio(v) { return v === null || v === undefined || v === ''; },"),
+    ("str", &[], "  /** O valor como texto, como o VBA (Empty vira \"\", True vira \"True\"). */\n  str(v) { if (v === null || v === undefined) return ''; if (typeof v === 'boolean') return v ? 'True' : 'False'; return String(v); },"),
+    ("numero", &[], "  /** Texto que é número (aceita vírgula ou ponto decimal); NaN se não for. */\n  numero(v) { if (typeof v === 'number') return v; const t = String(v).trim(); if (!/^[+-]?(\\d+([.,]\\d*)?|[.,]\\d+)(e[+-]?\\d+)?$/i.test(t)) return NaN; return Number(t.replace(',', '.')); },"),
+    ("n", &["vazio", "numero"], "  /** O valor como número, como o VBA: Empty é 0, True é -1; texto que não é número dá o erro 13. */\n  n(v) { if (vba.vazio(v)) return 0; if (typeof v === 'boolean') return v ? -1 : 0; const x = vba.numero(v); if (Number.isNaN(x)) throw new TypeError(`Tipo incompatível: \"${v}\" não é número`); return x; },"),
+    ("cat", &["str"], "  /** O `&` do VBA: junta como texto. */\n  cat(...p) { return p.map(vba.str).join(''); },"),
+    ("soma", &["n"], "  /** O `+` do VBA com Variant: dois textos se juntam, o resto soma. */\n  soma(a, b) { return typeof a === 'string' && typeof b === 'string' ? a + b : vba.n(a) + vba.n(b); },"),
+    ("cmp", &["vazio", "numero", "str"], "  /** Compara dois Variant como o VBA: -1, 0 ou 1. Número contra texto numérico compara como número. */\n  cmp(a, b) { const lg = (x) => (typeof x === 'string' && /^(true|verdadeiro)$/i.test(x.trim()) ? true : typeof x === 'string' && /^(false|falso)$/i.test(x.trim()) ? false : x); if (typeof a === 'boolean' || typeof b === 'boolean') { a = lg(a); b = lg(b); } if (typeof a === 'boolean') a = a ? -1 : 0; if (typeof b === 'boolean') b = b ? -1 : 0; if (vba.vazio(a) && vba.vazio(b)) return 0; if (typeof a === 'number' || typeof b === 'number') { const x = vba.vazio(a) ? 0 : vba.numero(a); const y = vba.vazio(b) ? 0 : vba.numero(b); if (!Number.isNaN(x) && !Number.isNaN(y)) return x < y ? -1 : x > y ? 1 : 0; return typeof a === 'number' ? -1 : 1; } const s = vba.str(a); const t = vba.str(b); return s < t ? -1 : s > t ? 1 : 0; },"),
+    ("eq", &["cmp"], "  /** O `=` do VBA entre dois Variant. */\n  eq(a, b) { return vba.cmp(a, b) === 0; },"),
+    ("bool", &["vazio", "numero"], "  /** O valor como verdadeiro/falso, como o `If` do VBA. */\n  bool(v) { if (typeof v === 'boolean') return v; if (vba.vazio(v)) return false; if (typeof v === 'number') return v !== 0; const t = String(v).trim().toLowerCase(); if (t === 'true' || t === 'verdadeiro') return true; if (t === 'false' || t === 'falso') return false; const x = vba.numero(t); if (Number.isNaN(x)) throw new TypeError(`Tipo incompatível: \"${v}\" não é verdadeiro/falso`); return x !== 0; },"),
+    ("len", &["str"], "  len(v) { return vba.str(v).length; },"),
+    ("mid", &["str", "n"], "  /** Mid(texto, início, [quantos]) — começa do 1. */\n  mid(s, i, q) { const t = vba.str(s); const a = Math.max(0, vba.n(i) - 1); return q === undefined ? t.slice(a) : t.slice(a, a + Math.max(0, vba.n(q))); },"),
+    ("left", &["str", "n"], "  left(s, q) { return vba.str(s).substring(0, Math.max(0, vba.n(q))); },"),
+    ("right", &["str", "n"], "  right(s, q) { const t = vba.str(s); return t.substring(Math.max(0, t.length - vba.n(q))); },"),
+    ("instr", &["str", "n"], "  /** InStr([início,] texto, procurado): a posição (do 1) ou 0. */\n  instr(a, b, c) { let ini = 1; if (c !== undefined) { ini = vba.n(a); a = b; b = c; } return vba.str(a).indexOf(vba.str(b), ini - 1) + 1; },"),
+    ("instrRev", &["str"], "  instrRev(s, b) { return vba.str(s).lastIndexOf(vba.str(b)) + 1; },"),
+    ("replace", &["str"], "  replace(s, de, para) { return vba.str(s).split(vba.str(de)).join(vba.str(para)); },"),
+    ("trim", &["str"], "  /** Trim do VBA: só espaço, não tabulação. */\n  trim(s) { return vba.str(s).replace(/^ +| +$/g, ''); },"),
+    ("ltrim", &["str"], "  ltrim(s) { return vba.str(s).replace(/^ +/, ''); },"),
+    ("rtrim", &["str"], "  rtrim(s) { return vba.str(s).replace(/ +$/, ''); },"),
+    ("isNumeric", &["numero"], "  isNumeric(v) { if (v === null || v === undefined || typeof v === 'number' || typeof v === 'boolean') return true; return !Number.isNaN(vba.numero(v)); },"),
+    ("val", &["str"], "  /** Val: o número do começo do texto (ponto decimal, ignora espaços). */\n  val(s) { const m = vba.str(s).replace(/\\s+/g, '').match(/^[+-]?(\\d+\\.?\\d*|\\.\\d+)(e[+-]?\\d+)?/i); return m ? Number(m[0]) : 0; },"),
+    ("round", &["n"], "  /** Arredonda para o par no empate (o Round/CInt do VBA): 2,5 → 2; 3,5 → 4. */\n  round(x, casas = 0) { const f = 10 ** vba.n(casas); const v = vba.n(x) * f; const r = Math.round(v); const par = Math.abs(v % 1) === 0.5 ? 2 * Math.round(v / 2) : r; return par / f; },"),
+    ("cint", &["round"], "  cint(v) { return vba.round(v); },"),
+    ("mod", &["cint"], "  /** Mod do VBA: arredonda os dois e fica com o sinal de quem divide. */\n  mod(a, b) { return vba.cint(a) % vba.cint(b); },"),
+    ("divInt", &["cint"], "  /** A barra invertida do VBA: divisão inteira. */\n  divInt(a, b) { return Math.trunc(vba.cint(a) / vba.cint(b)); },"),
+    ("format", &["str", "numero", "data", "mascara"], r#"  /** Format(valor, máscara): números (0 # . , % e literais com \x ou "…") e datas (dd/mm/yyyy, hh:nn, mmmm). */
+  format(v, m) {
+    m = vba.str(m);
+    const nomeados = { fixed: '0.00', standard: '#,##0.00', percent: '0.00%', currency: 'R$ #,##0.00' };
+    if (nomeados[m.toLowerCase()]) m = nomeados[m.toLowerCase()];
+    const fichas = vba.mascara(m);
+    if (!fichas.some((f) => f.d) && /[dmyhns]/i.test(fichas.map((f) => f.l ?? '').join(''))) return vba.formatoData(vba.data(v), m);
+    let x = vba.numero(v);
+    if (Number.isNaN(x) || !fichas.some((f) => f.d)) return vba.str(v);
+    if (fichas.some((f) => f.l === '%')) x *= 100;
+    const ponto = fichas.findIndex((f) => f.p);
+    const inteira = ponto < 0 ? fichas : fichas.slice(0, ponto);
+    const decimal = ponto < 0 ? [] : fichas.slice(ponto + 1);
+    const casas = decimal.filter((f) => f.d).length;
+    let [int, frac = ''] = Math.abs(x).toFixed(casas).split('.');
+    int = int.padStart(inteira.filter((f) => f.d === '0').length, '0');
+    if (int === '0' && !inteira.some((f) => f.d === '0')) int = '';
+    let parte;
+    if (inteira.some((f) => f.m)) {
+      // Com milhar: literais de antes, o número agrupado, literais de depois.
+      const lit = (a) => a.map((f) => f.l ?? '').join('');
+      const pd = inteira.findIndex((f) => f.d);
+      const ud = inteira.length - 1 - [...inteira].reverse().findIndex((f) => f.d);
+      parte = lit(inteira.slice(0, pd)) + int.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + lit(inteira.slice(ud + 1));
+    } else {
+      // Os algarismos entram da direita para a esquerda nos 0/#; o que sobrar vai antes do primeiro.
+      const digitos = int.split('');
+      const saida = [];
+      let antes = 0;
+      for (let i = inteira.length - 1; i >= 0; i--) {
+        const f = inteira[i];
+        if (f.d) {
+          saida.unshift(digitos.length ? digitos.pop() : '');
+          antes = 0;
+        } else if (f.l !== undefined) {
+          saida.unshift(f.l);
+          antes++;
+        }
+      }
+      if (digitos.length) saida.splice(antes, 0, digitos.join(''));
+      parte = saida.join('');
+    }
+    let dec = '';
+    let k = 0;
+    for (const f of decimal) dec += f.d ? frac[k++] ?? '' : f.l ?? '';
+    return (x < 0 ? '-' : '') + parte + (casas ? ',' : '') + dec;
+  },"#),
+    ("mascara", &[], r#"  /** As fichas de uma máscara do Format: {d:'0'|'#'}, {p} (ponto), {m} (milhar), {l: literal}. */
+  mascara(m) {
+    const f = [];
+    for (let i = 0; i < m.length; i++) {
+      const c = m[i];
+      if (c === '\\') f.push({ l: m[++i] ?? '' });
+      else if (c === '"') { const j = m.indexOf('"', i + 1) < 0 ? m.length : m.indexOf('"', i + 1); f.push({ l: m.slice(i + 1, j) }); i = j; }
+      else if (c === '0' || c === '#') f.push({ d: c });
+      else if (c === '.') f.push({ p: true });
+      else if (c === ',') f.push({ m: true });
+      else f.push({ l: c });
+    }
+    return f;
+  },"#),
+    ("data", &["numero"], "  /** O valor como data do JavaScript (aceita a data serial da planilha). */\n  data(v) { if (v instanceof Date) return v; const x = vba.numero(v); if (!Number.isNaN(x)) return new Date(Date.UTC(1899, 11, 30) + Math.round(x * 86400000)); return new Date(String(v)); },"),
+    ("formatoData", &[], "  formatoData(d, m) { const meses = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']; const p = (x) => String(x).padStart(2, '0'); return m.replace(/yyyy|yy|mmmm|mmm|mm|dd|hh|nn|ss|m|d/gi, (t) => ({ yyyy: d.getFullYear(), yy: p(d.getFullYear() % 100), mmmm: meses[d.getMonth()], mmm: meses[d.getMonth()].slice(0, 3), mm: p(d.getMonth() + 1), dd: p(d.getDate()), hh: p(d.getHours()), nn: p(d.getMinutes()), ss: p(d.getSeconds()), m: d.getMonth() + 1, d: d.getDate() })[t.toLowerCase()]); },"),
+    ("msgBox", &["str", "n"], "  /** MsgBox: Sim/Não e OK/Cancelar pelo confirm; o resto pelo alert. Devolve vbYes (6), vbNo (7), vbOK (1) ou vbCancel (2). */\n  msgBox(texto, botoes = 0, titulo = '') { const t = (titulo ? vba.str(titulo) + '\\n\\n' : '') + vba.str(texto); const b = vba.n(botoes) & 7; if (b === 3 || b === 4) return confirm(t) ? 6 : 7; if (b === 1) return confirm(t) ? 1 : 2; alert(t); return 1; },"),
+    ("inputBox", &["str"], "  inputBox(texto, titulo = '', padrao = '') { return prompt((titulo ? vba.str(titulo) + '\\n\\n' : '') + vba.str(texto), vba.str(padrao)) ?? ''; },"),
+    ("partes", &[], "  /** \"$B$3:C5\" → [linha, coluna, linha, coluna] (do 1). Linha inteira (\"3:5\") e coluna inteira (\"B:D\") também. */\n  partes(e) { const ref = (r) => { const m = r.replace(/\\$/g, '').match(/^([A-Z]*)(\\d*)$/i); if (!m) throw new Error(`Endereço inválido: ${e}`); let c = 0; for (const ch of m[1].toUpperCase()) c = c * 26 + ch.charCodeAt(0) - 64; return [m[2] ? Number(m[2]) : 0, c]; }; const [a, b = a] = String(e).split('!').pop().split(':'); return [...ref(a), ...ref(b)]; },"),
+    ("linha", &["partes"], "  /** A linha (do 1) da primeira célula do endereço. */\n  linha(e) { return vba.partes(e)[0] || 1; },"),
+    ("coluna", &["partes"], "  /** A coluna (do 1) da primeira célula do endereço. */\n  coluna(e) { return vba.partes(e)[1] || 1; },"),
+    ("letra", &[], "  letra(c) { let s = ''; for (let x = c; x > 0; x = Math.floor((x - 1) / 26)) s = String.fromCharCode(65 + ((x - 1) % 26)) + s; return s; },"),
+    ("endAbs", &["partes", "letra"], "  /** O `.Address` do VBA: \"$B$3\". */\n  endAbs(e) { const [l0, c0, l1, c1] = vba.partes(e); const um = (l, c) => `$${vba.letra(c)}$${l}`; return l0 === l1 && c0 === c1 ? um(l0, c0) : `${um(l0, c0)}:${um(l1, c1)}`; },"),
+    ("faixa", &["partes", "letra"], "  /** Range(a, b): do canto de cima à esquerda ao de baixo à direita. */\n  faixa(a, b) { const p = vba.partes(a); const q = vba.partes(b); return `${vba.letra(Math.min(p[1], q[1]))}${Math.min(p[0], q[0])}:${vba.letra(Math.max(p[3], q[3]))}${Math.max(p[2], q[2])}`; },"),
+    ("celula", &["letra"], "  /** Cells(linha, coluna); a coluna pode ser número ou letra. */\n  celula(l, c) { return `${typeof c === 'string' && /^[A-Z]+$/i.test(c) ? c.toUpperCase() : vba.letra(Number(c))}${l}`; },"),
+    ("mesclar", &[], "  /** `.Merge`: uma célula só não muda nada no Excel (o motor recusaria). */\n  mesclar(aba, a) { const e = String(a); const p = e.split(':'); if (p.length < 2 || p[0] === p[1]) return; aba.merge(e); },"),
+    ("linhas", &["partes"], "  /** `.EntireRow`: \"A88:J92\" → \"88:92\". */\n  linhas(e) { const [l0, , l1] = vba.partes(e); return `${l0}:${l1}`; },"),
+    ("colunas", &["partes", "letra"], "  /** `.EntireColumn`: \"B3:D9\" → \"B:D\". */\n  colunas(e) { const [, c0, , c1] = vba.partes(e); return `${vba.letra(c0)}:${vba.letra(c1)}`; },"),
+    ("qtdLinhas", &["partes"], "  qtdLinhas(e) { const [l0, , l1] = vba.partes(e); return l1 - l0 + 1; },"),
+    ("qtdColunas", &["partes"], "  qtdColunas(e) { const [, c0, , c1] = vba.partes(e); return c1 - c0 + 1; },"),
+    ("like", &[], "  /** `texto Like padrão`: * ? # e [lista]. */\n  like(s, p) { const re = p.replace(/[.+^${}()|\\\\]/g, '\\\\$&').replace(/\\*/g, '.*').replace(/\\?/g, '.').replace(/#/g, '\\\\d').replace(/\\[!/g, '[^'); return new RegExp(`^${re}$`).test(s); },"),
+    ("contar", &["partes"], "  /** `.Count` do intervalo: quantas células. */\n  contar(e) { const [l0, c0, l1, c1] = vba.partes(e); return (l1 - l0 + 1) * (c1 - c0 + 1); },"),
+    ("celulas", &[], "  /** Os endereços das células do intervalo (o `For Each c In Range(…)`). */\n  celulas(aba, e) { const v = []; aba.range(e).forEach((_x, _l, _c, end) => v.push(end)); return v; },"),
+    ("fim", &["partes", "letra", "vazio"], "  /** `.End(direção)` do VBA (Ctrl+seta): xlUp -4162, xlDown -4121, xlToLeft -4159, xlToRight -4161. */\n  fim(aba, e, dir) { const [l0, c0] = vba.partes(e); const [dl, dc] = { [-4162]: [-1, 0], [-4121]: [1, 0], [-4159]: [0, -1], [-4161]: [0, 1] }[dir]; const MAXL = 1048576, MAXC = 16384; const tem = (l, c) => !vba.vazio(aba.get(`${vba.letra(c)}${l}`)); const ultL = aba.getLastRow(vba.letra(c0)); const ultC = aba.getLastColumn(l0); let l = l0, c = c0; if (dl > 0 && l >= ultL) return `${vba.letra(c)}${MAXL}`; if (dc > 0 && c >= ultC) return `${vba.letra(MAXC)}${l}`; if (dl < 0 && l > ultL) { l = Math.max(ultL, 1); if (ultL) return `${vba.letra(c)}${l}`; } const dentro = (x, y) => x >= 1 && y >= 1 && x <= MAXL && y <= MAXC; if (tem(l, c) && dentro(l + dl, c + dc) && tem(l + dl, c + dc)) { while (dentro(l + dl, c + dc) && tem(l + dl, c + dc)) { l += dl; c += dc; } } else { do { l += dl; c += dc; } while (dentro(l + dl, c + dc) && !tem(l, c)); if (!dentro(l, c)) { l -= dl; c -= dc; } } return `${vba.letra(c)}${l}`; },"),
+    ("corIndice", &[], "  /** A cor da paleta antiga do Excel (`ColorIndex`, 1 a 56). */\n  corIndice(i) { const p = ['#000000', '#ffffff', '#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff', '#800000', '#008000', '#000080', '#808000', '#800080', '#008080', '#c0c0c0', '#808080', '#9999ff', '#993366', '#ffffcc', '#ccffff', '#660066', '#ff8080', '#0066cc', '#ccccff', '#000080', '#ff00ff', '#ffff00', '#00ffff', '#800080', '#800000', '#008080', '#0000ff', '#00ccff', '#ccffff', '#ccffcc', '#ffff99', '#99ccff', '#ff99cc', '#cc99ff', '#ffcc99', '#3366ff', '#33cccc', '#99cc00', '#ffcc00', '#ff9900', '#ff6600', '#666699', '#969696', '#003366', '#339966', '#003300', '#333300', '#993300', '#993366', '#333399', '#333333']; return p[Number(i) - 1] ?? '#000000'; },"),
+    ("semFundo", &[], "  /** Tira a cor de fundo (`Interior.Color = xlNone`). */\n  semFundo(aba, e) { aba.style(e, { bg: undefined }); },"),
+    ("alinH", &[], "  /** xlLeft/xlCenter/xlRight/xlGeneral → o nome da API. */\n  alinH(v) { return { [-4131]: 'left', [-4108]: 'center', [-4152]: 'right', 1: 'general', 7: 'center' }[v] ?? 'general'; },"),
+    ("alinV", &[], "  alinV(v) { return { [-4160]: 'top', [-4108]: 'middle', [-4107]: 'bottom' }[v] ?? 'bottom'; },"),
+    ("matriz", &[], "  /** Dim v(n) / Dim v(n, m): matriz que vai de 0 a n (o VBA conta com o limite). */\n  matriz(...lim) { const [n, ...resto] = lim; return Array.from({ length: Math.max(0, n + 1) }, () => (resto.length ? vba.matriz(...resto) : undefined)); },"),
+    ("redim", &["matriz"], "  /** ReDim [Preserve]: a matriz nova, com os valores antigos se `preservar`. */\n  redim(antiga, preservar, ...lim) { const nova = vba.matriz(...lim); if (preservar && Array.isArray(antiga)) antiga.slice(0, nova.length).forEach((x, i) => { nova[i] = x; }); return nova; },"),
+    ("ubound", &[], "  ubound(m, dim = 1) { let a = m; for (let i = 1; i < dim; i++) a = a[0]; return a.length - 1; },"),
+    ("abas", &[], "  /** As abas da pasta, para o `For Each ws In Worksheets`. */\n  abas() { return sheet.sheets().map((n) => wb.sheet(n)); },"),
+    ("hoje", &[], "  hoje() { const d = new Date(); d.setHours(0, 0, 0, 0); return d; },"),
+    ("ano", &["data"], "  ano(v) { return vba.data(v).getFullYear(); },"),
+    ("mes", &["data"], "  mes(v) { return vba.data(v).getMonth() + 1; },"),
+    ("dia", &["data"], "  dia(v) { return vba.data(v).getDate(); },"),
+    ("arredBaixo", &["n"], "  /** WorksheetFunction.RoundDown. */\n  arredBaixo(x, casas = 0) { const f = 10 ** vba.n(casas); return Math.trunc(vba.n(x) * f) / f; },"),
+    ("arredCima", &["n"], "  arredCima(x, casas = 0) { const f = 10 ** vba.n(casas); const v = vba.n(x) * f; return (v < 0 ? Math.floor(v) : Math.ceil(v)) / f; },"),
+    ("erro", &[], "  /** O `Err` do VBA: o `catch` guarda o erro; `Err.Number`/`Err.Description` leem. */\n  erro(e) { vba._erro = e; },\n  erroNumero() { return vba._erro ? (vba._erro.number ?? 1) : 0; },\n  erroTexto() { return vba._erro ? String(vba._erro.message ?? vba._erro) : ''; },"),
+    ("copiar", &[], "  /** `Range.Copy`/`.Cut` sem destino: guarda a origem para o `Paste` seguinte. */\n  copiar(aba, e, cortar = false) { vba._copia = { aba, e, cortar }; },"),
+    ("colar", &[], "  /** `ActiveSheet.Paste` / `Range.PasteSpecial`: cola o último `Copy` (ou move o último `Cut`) a partir da primeira célula de `alvo`. */\n  colar(aba, alvo, modo = 'all') { const c = vba._copia; if (!c) throw new Error('Nada foi copiado antes do Paste'); const destino = String(alvo).split(':')[0]; const mesma = c.aba.name === aba.name; if (c.cortar && mesma) c.aba.move(c.e, destino); else { c.aba.copy(c.e, destino, mesma ? { paste: modo } : { paste: modo, sheet: aba.name }); if (c.cortar) c.aba.clear(c.e); } if (c.cortar) vba._copia = null; },"),
+    ("novaPasta", &[], "  /** `Workbooks.Add`: a pasta nova da macro é a lista das abas copiadas para ela (`null` é a aba em branco que o Excel cria); o `SaveAs` grava só as copiadas. */\n  novaPasta() { return { abas: [null] }; },"),
+    ("ordem", &[], "  /** O `Worksheet.Sort` do Excel: chaves, intervalo e cabeçalho guardados por aba até o `.Apply`. */\n  ordem(aba) { const m = vba._ordens ?? (vba._ordens = {}); return m[aba.name] ?? (m[aba.name] = { chaves: [], faixa: null, cabecalho: 0 }); },"),
+    ("ordenar", &["ordem", "ordenarFaixa"], "  /** `.Sort.Apply`: ordena o `.SetRange` (ou a primeira chave) pelas chaves de `.SortFields.Add`. */\n  ordenar(aba) { const o = vba.ordem(aba); if (!o.chaves.length) return; vba.ordenarFaixa(aba, o.faixa ?? o.chaves[0][0], o.chaves, o.cabecalho); },"),
+    ("ordenarFaixa", &["coluna", "letra", "partes", "numero", "vazio"], "  /** Ordena `faixa` por [[intervalo da chave, xlAscending 1 / xlDescending 2]]; cabeçalho xlYes 1, xlNo 2, xlGuess 0 (adivinha: linha 1 texto e linha 2 número). */\n  ordenarFaixa(aba, faixa, chaves, cab = 2) { const keys = chaves.filter(([k]) => k).map(([k, o]) => ({ col: vba.letra(vba.coluna(k)), order: Number(o) === 2 ? 'desc' : 'asc' })); let header = Number(cab) === 1; if (cab === undefined || Number(cab) === 0) { const l = vba.partes(faixa)[0] || 1; header = keys.some(({ col }) => { const a = aba.get(`${col}${l}`), b = aba.get(`${col}${l + 1}`); return typeof a === 'string' && !vba.vazio(a) && Number.isNaN(vba.numero(a)) && !vba.vazio(b) && !Number.isNaN(vba.numero(b)); }); } aba.sort(faixa, keys, { header }); },"),
+    ("validar", &["n"], "  /** `Validation.Add Type, AlertStyle, Operator, Formula1, Formula2` → a validação da API. */\n  validar(aba, e, tipo, alerta = 1, op = 1, f1, f2) { tipo = Number(tipo); if (!tipo) { aba.clearDataValidation(e); return; } const mode = Number(alerta) === 1 ? 'stop' : 'warn'; const t = f1 === undefined ? '' : String(f1).trim(); let regra; if (tipo === 3) { regra = t.startsWith('=') ? { type: 'list', source: t } : { type: 'list', values: t.split(/[,;]/).map((s) => s.trim()).filter((s) => s) }; } else if ((tipo === 1 || tipo === 2) && !t.startsWith('=')) { const o = { 1: 'between', 2: 'notBetween', 3: 'equal', 4: 'notEqual', 5: 'greaterThan', 6: 'lessThan', 7: 'greaterThanOrEqual', 8: 'lessThanOrEqual' }[Number(op)] ?? 'between'; regra = /etween/.test(o) ? { type: 'number', operator: o, min: vba.n(f1), max: vba.n(f2) } : { type: 'number', operator: o, value: vba.n(f1) }; regra.integer = tipo === 1; } else { log(`Validação do Excel (tipo ${tipo}${t.startsWith('=') ? ', com fórmula' : ''}) ainda sem equivalente: ${e} ficou sem regra.`); aba.clearDataValidation(e); return; } regra.mode = mode; aba.setDataValidation(e, regra); },"),
+];
+
+/// O bloco `const vba = { … };` com as funções pedidas (e as dependências delas), em ordem
+/// fixa. Vazio se nenhuma foi pedida.
+pub fn bloco(pedidas: &BTreeSet<&'static str>) -> String {
+    let mut todas: BTreeSet<&str> = BTreeSet::new();
+    let mut fila: Vec<&str> = pedidas.iter().copied().collect();
+    while let Some(n) = fila.pop() {
+        if todas.insert(n) {
+            if let Some((_, deps, _)) = AJUDAS.iter().find(|(x, _, _)| *x == n) {
+                fila.extend(deps.iter().copied());
+            }
+        }
+    }
+    if todas.is_empty() {
+        return String::new();
+    }
+    let corpo: Vec<&str> = AJUDAS.iter().filter(|(n, _, _)| todas.contains(n)).map(|(_, _, c)| *c).collect();
+    format!("// O jeito do VBA de fazer as coisas, onde o JavaScript faz diferente.\nconst vba = {{\n{}\n}};\n", corpo.join("\n"))
+}
+
+/// Todas as ajudas (para os testes).
+pub fn todas() -> String {
+    bloco(&AJUDAS.iter().map(|(n, _, _)| *n).collect())
+}
+
+/// O nome existe na lista (para o gerador não pedir ajuda que não existe).
+pub fn existe(nome: &str) -> bool {
+    AJUDAS.iter().any(|(n, _, _)| *n == nome)
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    #[test]
+    fn leva_as_dependencias_e_nada_mais() {
+        let b = bloco(&BTreeSet::from(["eq"]));
+        assert!(b.contains("eq(a, b)") && b.contains("cmp(a, b)") && b.contains("vazio(v)"));
+        assert!(!b.contains("mid("));
+        assert!(bloco(&BTreeSet::new()).is_empty());
+    }
+
+    #[test]
+    fn toda_dependencia_existe() {
+        for (n, deps, _) in AJUDAS {
+            for d in *deps {
+                assert!(existe(d), "{n} depende de {d}, que não existe");
+            }
+        }
+    }
+}

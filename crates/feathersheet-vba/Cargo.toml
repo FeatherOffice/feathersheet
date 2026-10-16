@@ -1,0 +1,31 @@
+[package]
+name = "feathersheet-vba"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.77.2"
+description = "Converte macros VBA (do .xlsm do Excel) para as macros em JavaScript do FeatherSheet."
+
+# Rust puro (regra 7 da suíte), compila também para wasm:
+# - `zip` e `quick-xml` nas mesmas versões do `feathersheet-io`: abrir o .xlsm e ler
+#   o nome de cada aba (o VBA chama a aba pelo "codename", `Sheet8`, não pelo nome);
+# - `cfb`: o `xl/vbaProject.bin` é um arquivo composto OLE (Compound File Binary).
+#   A descompressão do VBA (MS-OVBA) é pequena e está escrita aqui (`ovba.rs`).
+[dependencies]
+zip = { version = "4.2.0", default-features = false, features = ["deflate"] }
+quick-xml = "0.39.4"
+cfb = "0.14"
+serde = { version = "1", features = ["derive"] }
+
+[lib]
+name = "feathersheet_vba"
+
+[lints.clippy]
+too_many_lines = "deny"
+cognitive_complexity = "deny"
+
+# Só nos testes: roda o JavaScript convertido no motor embutido (Boa) das macros.
+[dev-dependencies]
+feathersheet-macros = { path = "../feathersheet-macros" }
+feathersheet-core = { path = "../feathersheet-core" }
+feathersheet-io = { path = "../feathersheet-io" }
+

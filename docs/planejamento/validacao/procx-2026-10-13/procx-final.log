@@ -1,0 +1,15 @@
+   Compiling feathersheet-core v0.1.0 (/run/media/maragon/Arquivos/GitHub/FeatherOffice/feathersheet/crates/feathersheet-core)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running tests/procx_compacto.rs (crates/feathersheet-core/target/debug/deps/procx_compacto-7db195aff8583c15)
+
+running 7 tests
+test referencias_externas_circulares_continuam_detectadas ... ok
+test referencia_qualificada_a_propria_aba_recalcula_sem_pasta ... ok
+test procx_compacto_recalcula_resultado_e_dependentes_locais ... ok
+test mudar_produtos_preserva_colunas_que_nao_dependem_do_procx ... ok
+test consulta_sem_hospedeiro_nao_contamina_calculo_da_pasta ... ok
+test sintaxe_qualificada_nao_suportada_preserva_o_erro ... ok
+test renomear_e_inserir_na_aba_consultada_reescreve_faixas_compactas ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

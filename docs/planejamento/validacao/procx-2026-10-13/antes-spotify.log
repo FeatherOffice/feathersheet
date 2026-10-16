@@ -1,0 +1,7 @@
+medida	segundos	rss_mib	pico_mib
+abrir	44.719625	1135.105	1135.105
+calcular_tudo	6.771898	1135.230	1135.230
+calculada_consolidada	0.000024	1135.230	1135.230
+consolidados	0
+consultas_grade_ms	p50=0.066345	p95=0.085803	max=0.088898
+estrutura	Planilha1	literais 102587670 · fórmulas empacotadas 0 · avulsas 4 · estilos 0 · textos 0 · resultados guardados 1 · sujas 0 · faixas lidas 0 células

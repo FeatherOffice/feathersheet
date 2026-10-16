@@ -1,0 +1,350 @@
+{
+  "idioma": {
+    "codigo": "en-US",
+    "nome": "English (United States)",
+    "decimal": ".",
+    "milhar": ",",
+    "separadorDeArgumentos": ",",
+    "moeda": "$",
+    "codigoDaMoeda": "USD",
+    "moedaAntes": true,
+    "espacoNaMoeda": false
+  },
+  "ajuda": {
+    "rotulos": {
+      "titulo": "FeatherSheet Help",
+      "busca": "Search help (function, command, topic)…",
+      "uso": "How to use",
+      "funcoes": "Spreadsheet functions",
+      "macros": "Macros",
+      "atalhos": "Shortcuts",
+      "apelidos": "Also",
+      "semResultado": "Nothing found for this search.",
+      "configuraveis": "Configurable (change them in Settings)",
+      "fixos": "Fixed",
+      "categorias": "Categories",
+      "todas": "All",
+      "anterior": "Previous",
+      "proximo": "Next",
+      "nestaSecao": "In this section"
+    },
+    "introducoes": {
+      "uso": "FeatherSheet is a spreadsheet that runs entirely on your machine: no account, no login, none of your content leaves it. Here is how to use each part, from the basics (typing and writing formulas) to the advanced (pivot tables, OpenQuery and macros). Follow along with the arrow, or pick a topic in the side menu.",
+      "funcoes": "Every function you can use in a formula, by category, with its arguments and what it does. Arguments in brackets are optional. Every function accepts its Portuguese or English name. Tip: pressing F1 while writing a formula opens right on the function under the cursor.",
+      "macros": "Macros are JavaScript and automate what you would do by hand: fill, format, switch sheets, create new functions for cells. Open them in Ferramentas → Macros. The spreadsheet is the sheet object; Ctrl+Enter runs and Ctrl+Z undoes the whole macro. Addresses use A1 notation (\"B2\", \"A1:D10\"); numeric rows and columns start at 1.",
+      "atalhos": "Keys that make the work faster. Fixed ones always apply; configurable ones can be changed in Settings → Shortcuts, and the key shown here is the one in effect now."
+    },
+    "comoUsar": {
+      "comecar": {
+        "titulo": "Getting started",
+        "corpo": [
+          "Click a cell and type. Enter confirms and moves down; Tab confirms and moves right; Esc cancels.",
+          "• F2 or double-click edits the cell without erasing it.",
+          "• Ctrl + arrow jumps to the end of the data; with Shift, it selects up to there.",
+          "• Ctrl+Z undoes and Ctrl+Y redoes — whole macros included.",
+          "Commands live in the ribbon at the top. Ctrl+F1 swaps the ribbon for drop-down menus and a compact toolbar (and back)."
+        ]
+      },
+      "formulas": {
+        "titulo": "Formulas",
+        "corpo": [
+          "Every formula starts with \"=\". In this locale arguments are separated by \",\" and \".\" is the decimal point: =SUM(A1:A10, 0.5).",
+          "• A1 is a cell; A1:B10 is a range; $A$1 stays fixed when the formula is copied.",
+          "• Another sheet: 'My Sheet'!A1 (quotes are only needed when the name has a space).",
+          "• Functions accept their Portuguese or English name (SOMA or SUM). The full list is under \"Spreadsheet functions\".",
+          "While you type, suggestions and argument hints show up. Clicking or dragging on the grid inserts the reference; each colored reference box can be dragged (move) or pulled by its corner (resize).",
+          "Functions that return several cells (FILTER, UNIQUE, SORT, SEQUENCE…) spill the result down and to the right. If something is in the way, the cell shows #SPILL!.",
+          "Formula with an error: right-click the cell → \"Explicar este erro\" shows the failing part and how to fix it."
+        ]
+      },
+      "preencher": {
+        "titulo": "Fill, copy and move",
+        "corpo": [
+          "• Drag the small square at the corner of the selection (the fill handle) to continue a series: 1, 2, 3…, dates, \"Item 1, Item 2…\" and formulas.",
+          "• Double-clicking the handle fills down to the end of the data in the neighbouring column.",
+          "• Ctrl+D copies the cell above downwards; Ctrl+R copies the cell on the left to the right.",
+          "• Dragging the border of the selection moves the cells; formulas that read the block follow along.",
+          "• Ctrl+Shift+V pastes values only."
+        ]
+      },
+      "abas": {
+        "titulo": "Sheets",
+        "corpo": [
+          "Sheets live in the bottom bar. \"+\" creates a new one (or Shift+F11); Ctrl+PageUp and Ctrl+PageDown switch sheets.",
+          "Right-click a sheet tab: rename, duplicate, change color, hide and unhide."
+        ]
+      },
+      "formatar": {
+        "titulo": "Formatting",
+        "corpo": [
+          "Font, color, borders, alignment and number format (currency, %, decimals) are in the Home tab of the ribbon. The format painter copies formatting from one cell to others.",
+          "• Conditional formatting (Formatar → Formatação condicional): colors cells by rule — greater than, contains text, duplicates, custom formula, color scale and data bar.",
+          "• Alternating colors (Formatar) stripes the rows of a table.",
+          "• Freeze (Ver) keeps the first rows or columns in place while you scroll."
+        ]
+      },
+      "tabelas": {
+        "titulo": "Tables, filters and pivots",
+        "corpo": [
+          "• Ctrl+T turns the data into a table: header, stripes, total row and a filter on each column. The table grows by itself when you type right below it.",
+          "• Ctrl+Shift+L turns the filter on or off. Sorting is in the Dados (Data) menu.",
+          "• Inserir → Tabela Dinâmica (pivot table) summarizes the data: drag fields to rows, columns and values (sum, count, average…)."
+        ]
+      },
+      "graficos": {
+        "titulo": "Charts and images",
+        "corpo": [
+          "Select the data and use Inserir → Gráfico (chart). The chart floats over the grid: drag to move, pull the corner to resize, and the side editor changes the type (17 types), series and colors. It follows the data when it changes.",
+          "Images: Inserir → Imagem, paste (Ctrl+V) or drop the file on the grid."
+        ]
+      },
+      "dados": {
+        "titulo": "Data tools",
+        "corpo": [
+          "• Find and replace: Ctrl+H.",
+          "• In the Dados (Data) menu: remove duplicates, trim spaces, split text into columns (separator and type of each column, with preview) and column statistics.",
+          "• Data validation (ribbon, Data tab): drop-down list, number between limits, date, text — warning or rejecting on entry.",
+          "• OpenQuery (Dados → OpenQuery…): imports and transforms data — filter, group, merge tables, web sources — and keeps the steps so you can refresh later."
+        ]
+      },
+      "macros": {
+        "titulo": "Macros and buttons",
+        "corpo": [
+          "Macros are JavaScript (Ferramentas → Macros). Ctrl+Enter runs, and Ctrl+Z undoes the whole macro. \"Executar ao abrir\" (run on open) runs the macro every time the spreadsheet opens — that is how custom functions keep working.",
+          "Inserir → Botão de macro creates a button on the grid that runs a macro when clicked. Drag to move; right-click to edit or delete.",
+          "Every function a macro can use is in the \"Macros\" section of this Help."
+        ]
+      },
+      "arquivos": {
+        "titulo": "Files",
+        "corpo": [
+          "The native format is .fshz. Ctrl+S saves and Ctrl+Shift+S saves under another name. Open also reads .xlsx, .csv and .tsv.",
+          "Arquivo → Exportar writes the workbook as .xlsx or the current sheet as .csv.",
+          "Autosave writes the file at the interval chosen in Settings.",
+          "Everything runs on your machine: no account, no login, none of your content leaves it."
+        ]
+      },
+      "config": {
+        "titulo": "Settings",
+        "corpo": [
+          "In Settings: light or dark theme, color scheme and accent, grid font and size, zoom, autosave, language (which also decides the formula separator) and keyboard shortcuts."
+        ]
+      }
+    },
+    "atalhosFixos": {
+      "ajuda": "Help",
+      "faixa": "Show or hide the ribbon",
+      "editar": "Edit the cell",
+      "confirmar": "Confirm and move down / right",
+      "fimDosDados": "Jump to the end of the data",
+      "selecionarAteOFim": "Select to the end",
+      "desfazer": "Undo / redo",
+      "copiar": "Copy / cut / paste",
+      "negrito": "Bold / italic / underline",
+      "imprimir": "Print",
+      "monitor": "Monitor (memory, console, metrics)",
+      "executarMacro": "Run the macro (in the Macros panel)"
+    }
+  },
+  "atalhos": {
+    "createTable": "Create table",
+    "toggleFilter": "Create / toggle filter",
+    "findReplace": "Find and replace",
+    "memoryProfiler": "Memory & process monitor",
+    "save": "Save",
+    "saveAs": "Save as…",
+    "toggleFormulas": "Show formulas",
+    "selecionarColuna": "Select the whole column",
+    "selecionarLinha": "Select the whole row",
+    "preencherBaixo": "Fill down",
+    "preencherDireita": "Fill right",
+    "dataDeHoje": "Insert today's date",
+    "horaAgora": "Insert the current time",
+    "autoSoma": "AutoSum",
+    "ocultarLinha": "Hide rows",
+    "ocultarColuna": "Hide columns",
+    "reexibirLinhas": "Unhide rows",
+    "reexibirColunas": "Unhide columns",
+    "formatoMoeda": "Currency format",
+    "formatoPorcentagem": "Percent format",
+    "proximaAba": "Next sheet",
+    "abaAnterior": "Previous sheet",
+    "novaAba": "New sheet",
+    "colarValores": "Paste values only"
+  },
+  "funcoes": {
+    "categorias": {
+      "Matemática": "Math",
+      "Estatística": "Statistics",
+      "Matriz dinâmica": "Dynamic arrays",
+      "Lógica": "Logical",
+      "Texto": "Text",
+      "Pesquisa e referência": "Lookup and reference",
+      "Data e hora": "Date and time",
+      "Fonte de dados": "Data sources"
+    }
+  },
+  "macros": {
+    "introducao": "Macros are JavaScript. The spreadsheet is the sheet object. Ctrl+Enter runs, and everything the macro does is undone at once with Ctrl+Z. Addresses use A1 notation (\"B2\", \"A1:D10\"); numeric rows and columns start at 1.",
+    "secoes": {
+      "celulas": "Cells",
+      "intervalos": "Ranges",
+      "formatacao": "Formatting",
+      "selecao": "Selection and size",
+      "abas": "Sheets",
+      "funcoes": "Custom functions",
+      "saida": "Output",
+      "excel-valores": "Values, formulas and copying",
+      "excel-formato": "Font, color and borders",
+      "excel-estrutura": "Rows and columns",
+      "excel-navegacao": "Finding data and moving between ranges",
+      "excel-dados": "Sorting, validating and highlighting",
+      "excel-pasta": "Sheets and workbook (wb)",
+      "excel-app": "Application (app)",
+      "excel-fn": "Worksheet functions (app.fn)"
+    },
+    "funcoes": {
+      "value": "The computed value of the cell.",
+      "formula": "The text typed in the cell, starting with \"=\" when it is a formula.",
+      "set": "Writes a value or a formula into the cell. Returns `sheet`, so calls chain: `sheet.set(\"A1\", 1).set(\"A2\", 2)`.",
+      "clear": "Clears the content and the formatting of the cell or range (the VBA `Range.Clear`). To clear only one: `clearContents` and `clearFormats`.",
+      "style": "Formats the cell or range with an object. Returns `sheet`, for chaining. The keys are in \"Formatting\", below.",
+      "range": "A range, with the functions below. They can be chained.",
+      "Range.values": "Matrix with the computed values.",
+      "Range.formulas": "Matrix with the typed text (formulas included).",
+      "Range.set": "A single value fills the whole range; a matrix is pasted from the corner.",
+      "Range.forEach": "Walks through the cells. Row and column start at 0, inside the range.",
+      "Range.map": "Writes into each cell what the function returns (undefined leaves it unchanged).",
+      "Range.style": "Formats the whole range.",
+      "Range.clear": "Clears the range contents.",
+      "Range.address": "The range address (\"A1:D10\").",
+      "Range.rows": "How many rows and columns the range has.",
+      "style-keys": "Text: bold, italic, underline, strikethrough; text and fill color as \"#rrggbb\"; size and font.",
+      "style-layout": "align: \"left\" | \"center\" | \"right\"; vAlign: \"top\" | \"middle\" | \"bottom\"; wrap: wrap text; rotation: degrees from -90 to 90.",
+      "style-number": "format: \"auto\", \"number\", \"integer\", \"currency\", \"accounting\", \"percent\", \"scientific\", \"date\", \"datetime\", \"time\", \"duration\" or \"text\"; decimals: fixed decimal places.",
+      "selection": "The range selected in the grid.",
+      "select": "Selects a cell or range and scrolls to it. Returns `sheet`.",
+      "lastRow": "Number (starting at 1) of the last row and last column with data.",
+      "address": "The A1 address of a numeric row and column (starting at 1).",
+      "sheets": "The names of all sheets, in tab order.",
+      "name": "The name of the sheet where the macro started running.",
+      "goToSheet": "Goes to another sheet, like clicking its tab. Good for a macro button that navigates. The rest of the macro keeps writing to the sheet where it started.",
+      "showComponent": "Opens a component (an HTML and CSS screen built in the macro editor, Alt+F11) in a small window. Inside it, an element with data-macro=\"module\" runs that module on click (fields with a name arrive in the variable valores) and data-fechar closes the window.",
+      "defineFunction": "Creates a function to use in cells (=TAX(D2)). Ranges arrive as a list. Check \"Run on open\" so it keeps working.",
+      "log": "Writes to the panel output box.",
+      "status": "Shows a short message in the status bar.",
+      "get": "The calculated value of the cell (for a range, the top-left one). The VBA `Range.Value`.",
+      "setFormula": "Writes a formula. On a range, relative references adjust cell by cell, like Excel. Returns `sheet` for chaining.",
+      "setFormulaR1C1": "Writes a formula in R1C1 notation (`R[0]C[-2]` is relative, `R3C4` is absolute).",
+      "getText": "The text exactly as it appears on screen, with the format applied (`Range.Text`).",
+      "setNumberFormat": "Applies an Excel number mask: `\"#,##0.00\"`, `\"0%\"`, `\"dd/mm/yyyy\"`, `\"R$ #,##0.00\"`, `\"@\"`. It also accepts a custom code, such as `\"dd\"`, `\"mmmm/yyyy\"` or `\"0 \\\"kWh\\\"\"`. A code the app does not understand raises an error.",
+      "clearContents": "Clears only values and formulas; the formatting stays (`ClearContents`).",
+      "clearFormats": "Clears only the formatting; the values stay (`ClearFormats`).",
+      "copy": "Copies and pastes. `paste`: `\"all\"` (default), `\"values\"`, `\"formulas\"` or `\"formats\"`. Formulas adjust to the new place. `to` is the top-left corner of the destination.",
+      "move": "Moves content and formatting elsewhere. Formulas that referred to the source follow (`Range.Cut`).",
+      "find": "The address of the first cell (topmost, leftmost) that has the text, or `null`. `range` narrows the search; `inFormulas` searches what was typed.",
+      "replace": "Replaces text inside the range; returns how many cells changed.",
+      "getAddress": "The A1 address of a range.",
+      "autoFill": "Fills a series, like dragging the handle: 1, 2, 3…, dates, numbered text, formulas. Returns how many cells it filled.",
+      "setFontFamily": "Font name.",
+      "setFontSize": "Font size in **pixels** (the sheet default is 13).",
+      "setBold": "Bold.",
+      "setItalic": "Italic.",
+      "setUnderline": "Underline: `\"single\"`/`true` on, `\"none\"`/`false` off. Double becomes single.",
+      "setStrikethrough": "Strikethrough.",
+      "setFontColor": "Text color: `\"#RRGGBB\"` or the VBA number (`app.rgb(r, g, b)`).",
+      "setBackground": "Cell background color.",
+      "setAlignHorizontal": "`\"left\"`, `\"center\"`, `\"right\"` or `\"general\"` (automatic: numbers right, text left).",
+      "setAlignVertical": "`\"top\"`, `\"middle\"` or `\"bottom\"`.",
+      "setWrapText": "Wraps the text onto several lines inside the cell.",
+      "setTextRotation": "Text rotation, from -90 to 90 degrees.",
+      "setHyperlink": "Puts a link on the cell; `text` (optional) is what it shows.",
+      "setBorder": "Borders, merging with the existing ones: `top`, `bottom`, `left`, `right`, `insideH`, `insideV`, `all`, `none` and `color`. Only a thin solid line exists; a different `style` or `width` raises an error.",
+      "setOutline": "The outer outline of the range in one call (`BorderAround`).",
+      "setShowGridlines": "Shows or hides the gridlines.",
+      "setRowHeight": "Row height (the first is 1), in **pixels**.",
+      "setColumnWidth": "Column width (letter or number), in **pixels**.",
+      "autoFitColumn": "Fits the column width to its content. Only on the sheet on screen.",
+      "hideRow": "Hides the row (or shows it again with `false`).",
+      "hideColumn": "Hides the column (or shows it again with `false`).",
+      "insertRow": "Inserts rows before the row, pushing the rest down. Only on the sheet on screen; goes into the structure Ctrl+Z.",
+      "insertColumn": "Inserts columns before the column, pushing the rest right. Only on the sheet on screen.",
+      "deleteRow": "Deletes rows. Only on the sheet on screen.",
+      "deleteColumn": "Deletes columns. Only on the sheet on screen.",
+      "deleteCells": "Deletes the cells and pulls the cells below (\"up\") or to the right (\"left\") into place, like Excel's Delete cells….",
+      "insertCells": "Inserts empty cells and pushes the selection down (\"down\") or right (\"right\").",
+      "rowCount": "How many rows the range has.",
+      "columnCount": "How many columns the range has.",
+      "cell": "The cell at row and column (the first is 1), as a range.",
+      "getLastRow": "Number of the last row with data in the column; 0 if the column is empty. The `Cells(Rows.Count, 1).End(xlUp).Row`.",
+      "getLastColumn": "Number of the last column with data in the row; 0 if the row is empty.",
+      "getDataRange": "The smallest rectangle containing everything used (`UsedRange`), or `null` if the sheet is empty.",
+      "getRegion": "The contiguous block of data around the cell (`CurrentRegion`, Ctrl+Shift+*).",
+      "offset": "Shifts the range by rows and columns (negative goes up/left).",
+      "resize": "A range of `rows` × `cols` from the top-left cell.",
+      "columnOf": "Column `n` (the first is 1) inside the range.",
+      "rowOf": "Row `n` (the first is 1) inside the range.",
+      "merge": "Merges the cells; only the top-left content stays.",
+      "unmerge": "Undoes the merges the range touches.",
+      "isMerged": "Is the cell part of a merged region?",
+      "specialCells": "The addresses of the cells in the range of a kind: `\"blanks\"`, `\"formulas\"`, `\"constants\"` or `\"errors\"`.",
+      "activeCell": "The focused cell: the top-left corner of the selection.",
+      "intersect": "The intersection of two ranges, or `null` if they do not touch.",
+      "union": "The smallest range covering both.",
+      "sort": "Sorts by one or more columns (`order`: `\"asc\"` or `\"desc\"`). `header: true` keeps the first row in place.",
+      "removeDuplicates": "Removes duplicate rows (by the given columns, or all); returns how many were removed.",
+      "setDataValidation": "Data validation: `{ type: \"list\", values }` or `source: \"A1:A5\"`; `\"number\"` (`operator` between/greaterThan/lessThan/equal, `min`, `max`, `value`); `\"date\"`; `\"text\"`; `\"checkbox\"`. `errorMessage` and `mode: \"warn\"` (the default is to reject).",
+      "clearDataValidation": "Removes the validation from the range.",
+      "addConditionalFormat": "Conditional formatting: `{ type: \"cellValue\", operator, value, value2, fill, color, bold, italic }` or `{ type: \"formula\", formula, fill }`. Operators of the panel: greaterThan, between, textContains, duplicate, aboveAverage…",
+      "addColorScale": "A color scale from the smallest to the largest value.",
+      "addDataBar": "In-cell data bars.",
+      "clearConditionalFormats": "Removes the conditional formatting rules that touch the range.",
+      "wb.sheet": "The API (`sheet`) of another sheet, by name or position (the first is 1). Inserting/deleting rows and columns only works on the sheet on screen.",
+      "wb.addSheet": "Creates a new sheet and returns its API.",
+      "wb.deleteSheet": "Removes the sheet (the workbook needs at least one).",
+      "wb.renameSheet": "Renames the sheet.",
+      "wb.copySheet": "Duplicates the sheet and returns the copy's API.",
+      "wb.moveSheet": "Moves the sheet to the position (the first is 1).",
+      "wb.setTabColor": "Sheet tab color; `null` removes it.",
+      "wb.setSheetVisible": "Shows or hides the sheet (the workbook needs one visible).",
+      "wb.activate": "Brings the sheet to the front.",
+      "wb.freezePanes": "Freezes the top rows and left columns.",
+      "wb.addName": "Names a range (on the active sheet, or written as `\"Plan1!A1:A10\"`).",
+      "wb.sheetCount": "How many sheets the workbook has (a property, no parentheses).",
+      "wb.name": "The name of the open document (a property, no parentheses).",
+      "sheet.exportPdf": "Exports this sheet to PDF, using the print area. The path is relative to the open file's folder (`\\` becomes `/`). Returns `sheet`.",
+      "sheet.saveAs": "Saves only this sheet to a new file, `.xlsx` or `.fshz` (by extension). The path is relative to the open file's folder (`\\` becomes `/`). Returns `sheet`.",
+      "wb.saveSheetsAs": "Saves a new workbook with only the given sheets (list of names or numbers), as `.xlsx` or `.fshz`. The path is relative to the open file's folder (`\\` becomes `/`).",
+      "app.batch": "Runs the block. The macro already runs in a single transaction (one Ctrl+Z undoes it all); it exists so code converted from VBA (`ScreenUpdating`) stays the same.",
+      "app.calculate": "Recalculates the sheet.",
+      "app.status": "Message on the bottom bar.",
+      "app.setEventsEnabled": "Turns the event macros (on open, on activate, on change) on or off. Turns back on by itself when the macro ends.",
+      "app.rgb": "The VBA `RGB(r, g, b)`: the color as a number (BGR order). The color functions accept the number or `\"#RRGGBB\"`.",
+      "app.vbaColorToHex": "A VBA numeric color (BGR) as `\"#RRGGBB\"`.",
+      "app.isError": "Is the value a spreadsheet error (`#N/A`, `#DIV/0!`…)?",
+      "app.error": "Creates a spreadsheet error to write into a cell.",
+      "app.fn.sum": "Sum of the numbers; text and empty cells are ignored. Accepts a list or matrix (`range.values()`).",
+      "app.fn.average": "Average of the numbers; `#DIV/0!` if there are none.",
+      "app.fn.count": "How many numbers.",
+      "app.fn.countA": "How many non-empty cells.",
+      "app.fn.max": "The largest number.",
+      "app.fn.min": "The smallest number.",
+      "app.fn.median": "The median.",
+      "app.fn.countIf": "Counts the values meeting the Excel criterion: `\">5\"`, `\"<>x\"`, case-insensitive text, `*` and `?` wildcards.",
+      "app.fn.sumIf": "Conditional sum: sums `sumValues` (or the values themselves) where `values` meets the criterion.",
+      "app.fn.averageIf": "Conditional average.",
+      "app.fn.vlookup": "Vertical lookup: finds the key in the 1st column and returns column `col` (the first is 1) of the same row. `#N/A` if not found. Exact match by default (`exact = false` accepts the largest value that does not exceed it).",
+      "app.fn.hlookup": "Horizontal lookup: like `vlookup`, searching the 1st row.",
+      "app.fn.match": "The position (the first is 1) of the value in the list: `0` exact, `1` the largest not exceeding (ascending), `-1` the smallest not below (descending). `#N/A` if not found.",
+      "app.fn.index": "The value at the position: `index(list, n)` or `index(matrix, row, col)` (the first is 1)."
+    },
+    "guia": {
+      "titulo": "Macro guide",
+      "busca": "Search function…",
+      "fechar": "Close",
+      "inserir": "Click to insert into the editor",
+      "vazio": "No function with that name."
+    },
+    "exemplo": "// The spreadsheet is `sheet`. Ctrl+Enter runs; Ctrl+Z undoes the whole macro.\n// Every function, with examples: \"Guide\" button.\n\n// 1) Read and write\nsheet.set(\"F1\", \"Report\");\nsheet.log(\"A1 is:\", sheet.value(\"A1\"));\n\n// 2) Work with a range\nsheet.range(\"A1:D1\").style({ bold: true });\n\n// 3) Fill with a loop\nfor (let row = 2; row <= 6; row++) {\n  sheet.set(\"F\" + row, \"=D\" + row + \"*0.1\");\n}\n\n// 4) Create a function to use in cells: =TAX(D2)\nsheet.defineFunction(\"TAX\", (value) => value * 0.15);\n\n// 5) Go to another sheet (good for a macro button)\n// sheet.goToSheet(\"Summary\");\n"
+  }
+}

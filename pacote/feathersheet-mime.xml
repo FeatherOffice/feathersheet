@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- O tipo do .fshz, que o sistema não conhece: é o que deixa o gerenciador
+     de arquivos mostrar "Planilha do FeatherSheet" e abrir com dois cliques. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-feathersheet">
+    <comment>Planilha do FeatherSheet</comment>
+    <comment xml:lang="pt_BR">Planilha do FeatherSheet</comment>
+    <icon name="feathersheet"/>
+    <glob pattern="*.fshz"/>
+  </mime-type>
+</mime-info>
