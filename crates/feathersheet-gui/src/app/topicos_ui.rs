@@ -137,8 +137,8 @@ impl App {
                 self.alterado = true;
                 self.trocar_selecao(self.linha, self.coluna);
                 self.status = if remover { tr!("Subtotais removidos. Ctrl+Z desfaz.").into() } else { tr!("Subtotais inseridos. Ctrl+Z desfaz.").into() };
-                feathersheet_core::diario::anotar(format!("[subtotal] {} · {:.2} s",
-                    if remover { "remover" } else { "inserir" }, t.elapsed().as_secs_f64()));
+                feathersheet_core::diario::anotar(trf!("[subtotal] {} · {:.2} s",
+                    if remover { tr!("remover") } else { tr!("inserir") }, t.elapsed().as_secs_f64()));
             }
             Err(erro) => if let Some(s) = &mut self.subtotal { s.erro = Some(erro); },
         }

@@ -11,6 +11,8 @@ use feathersheet_core::{
 };
 
 /// Importação do disco: o texto completo nunca coexiste com a pasta viva.
+/// Vai por colunas (ver `csv_colunas`); TSV é sempre TAB, e no CSV o
+/// separador do idioma só vale se dividir o cabeçalho.
 pub fn importar_csv_tsv_arquivo(
     caminho: &std::path::Path,
     tsv: bool,
@@ -19,6 +21,28 @@ pub fn importar_csv_tsv_arquivo(
     let arquivo = std::fs::File::open(caminho).map_err(|e| e.to_string())?;
     let mut workbook = Workbook::new();
     let aba = &mut workbook.aba_mut(0).unwrap().sheet;
+    let inicio = std::time::Instant::now();
+    let leitor = std::io::BufReader::with_capacity(64 * 1024, crate::progresso::Contador(arquivo));
+    let (delim, leitor) = crate::csv_colunas::separador_e_leitor(leitor, tsv, separador)
+        .map_err(|e| format!("Não consegui ler CSV/TSV UTF-8: {e}"))?;
+    if !delim.is_ascii() {
+        importar_celula_a_celula(leitor, delim, aba)?;
+        return Ok(workbook);
+    }
+    let celulas = crate::csv_colunas::importar(leitor, delim as u8, aba)?;
+    feathersheet_core::anotar!(
+        "[abrir] CSV: {celulas} células em {:.1} s · {} núcleos · por colunas",
+        inicio.elapsed().as_secs_f64(), feathersheet_core::paralelismo::nucleos());
+    Ok(workbook)
+}
+
+/// Separador fora do ASCII (só por quem chama a biblioteca; a interface
+/// passa `,` ou `;`): o caminho célula a célula.
+fn importar_celula_a_celula(
+    leitor: impl std::io::BufRead,
+    delim: char,
+    aba: &mut feathersheet_core::planilha::sheet::Sheet,
+) -> Result<(), String> {
     let mut linha = 0u32;
     let mut excedeu = false;
     let entregar = |lote: &mut Vec<Vec<String>>| {
@@ -35,18 +59,12 @@ pub fn importar_csv_tsv_arquivo(
             linha += 1;
         }
     };
-    // TSV é sempre TAB; no CSV o separador do idioma só vale se dividir o cabeçalho.
-    let leitor = std::io::BufReader::with_capacity(64 * 1024, crate::progresso::Contador(arquivo));
-    if tsv {
-        feather_io::csv_lotes::dividir_csv_leitor(leitor, Some('\t'), 512, entregar)
-    } else {
-        feather_io::csv_lotes::dividir_csv_leitor_preferindo(leitor, separador, 512, entregar)
-    }
-    .map_err(|e| format!("Não consegui ler CSV/TSV UTF-8: {e}"))?;
+    feather_io::csv_lotes::dividir_csv_leitor(leitor, Some(delim), 512, entregar)
+        .map_err(|e| format!("Não consegui ler CSV/TSV UTF-8: {e}"))?;
     if excedeu {
         return Err("CSV/TSV excede os limites de linhas ou colunas da planilha".into());
     }
-    Ok(workbook)
+    Ok(())
 }
 
 /// Abre texto CSV/TSV UTF-8 em uma pasta colunar, sem converter valores para

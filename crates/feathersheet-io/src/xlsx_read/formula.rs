@@ -226,3 +226,44 @@ mod tests {
         assert_eq!(safe_formula("SUM(A1:A2)"), "=SOMA(A1:A2)");
     }
 }
+
+/// Medição (ignorada): o custo de traduzir e de analisar as fórmulas da
+/// aba Dados da Planilha Pesada, 1 milhão de linhas de cada.
+/// `cargo test --release medir_traducao -- --ignored --nocapture`.
+#[cfg(test)]
+mod medicao {
+    use std::time::Instant;
+    use feathersheet_core::planilha::sheet::carga::{CelulaPreparada, Padroes};
+
+    #[test]
+    #[ignore]
+    fn medir_traducao() {
+        let modelos: [(u32, fn(u32) -> String); 7] = [
+            (6, |r| format!("E{r}*F{r}")),
+            (7, |r| format!("IF(E{r}>50,G{r}*0.1,0)")),
+            (8, |r| format!("G{r}-H{r}")),
+            (9, |r| format!("MONTH(B{r})")),
+            (10, |r| format!("K{}+I{r}", r - 1)),
+            (11, |r| format!("_xlfn.XLOOKUP(D{r},Produtos!$A$2:$A$201,Produtos!$C$2:$C$201)")),
+            (12, |r| format!("IF(I{r}>2000,\"Alto\",IF(I{r}>800,\"Médio\",\"Baixo\"))")),
+        ];
+        let linhas = 1_000_000u32;
+        let ingles: Vec<(u32, u32, String)> = (3..linhas + 3).flat_map(|r| modelos.iter().map(move |(c, f)| (r - 1, *c, f(r)))).collect();
+        let t = Instant::now();
+        let pt: Vec<(u32, u32, String)> = ingles.iter().map(|(r, c, f)| (*r, *c, super::formula_from_excel(f))).collect();
+        eprintln!("[traduzir] {} fórmulas em {:.2} s · {:?}", pt.len(), t.elapsed().as_secs_f64(), &pt[..7].iter().map(|x| &x.2).collect::<Vec<_>>());
+        let t = Instant::now();
+        let mut padroes = Padroes::default();
+        let mut n = 0;
+        for (r, c, f) in &pt {
+            let p = CelulaPreparada::preparar(*r, *c, f, (0, f.len() as u32), 0, None, &mut padroes);
+            n += std::hint::black_box(&p).row as usize & 1;
+        }
+        eprintln!("[preparar] {:.2} s ({n})", t.elapsed().as_secs_f64());
+        let t = Instant::now();
+        for (r, c, f) in &pt {
+            std::hint::black_box(feathersheet_core::formula::formula_pattern::pattern_for(f, *r as i32, *c as i32));
+        }
+        eprintln!("[só pattern_for] {:.2} s", t.elapsed().as_secs_f64());
+    }
+}

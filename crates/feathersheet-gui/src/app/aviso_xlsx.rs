@@ -7,14 +7,10 @@ use iced::widget::column;
 impl App {
     /// Guarda o aviso se alguma função usada não existe no Excel.
     pub(super) fn avisar_funcoes_fora_do_excel(&mut self, usadas: &std::collections::BTreeSet<String>) {
-        let ingles = self.config.idioma == "en-US";
         let fora: Vec<String> = usadas.iter()
             .filter(|n| feathersheet_core::funcoes::FORA_DO_EXCEL.contains(&n.as_str())
                 || self.workbook.funcoes_externas.contains(n.as_str()))
-            .map(|n| if ingles { n.clone() } else {
-                feathersheet_core::formula::assistente::aliases_of(n).first()
-                    .map_or_else(|| n.clone(), |pt| pt.to_string())
-            })
+            .map(|n| crate::idioma::nome_funcao(n))
             .collect();
         if fora.is_empty() { return; }
         self.monitor.registrar(Nivel::Aviso, tr!("Exportar"), &trf!(

@@ -9,6 +9,8 @@ use std::rc::Rc;
 #[derive(Clone, Default)]
 pub struct ImpressaoVisual {
     pub area: Option<Rect>,
+    /// As outras áreas de impressão da aba (cada uma vai para outra página).
+    pub outras: Vec<Rect>,
     /// Primeira linha/coluna de cada nova página (corte guloso do TS).
     pub quebras_linhas: Rc<Vec<u32>>,
     pub quebras_colunas: Rc<Vec<u32>>,
@@ -38,7 +40,7 @@ impl Grade<'_> {
         let esquerda = CABECALHO_LINHA;
         let base = bounds.height;
         let direita = bounds.width;
-        if let Some(a) = imp.area.as_ref() {
+        for a in imp.area.iter().chain(imp.outras.iter()) {
             let cs: Vec<_> = colunas.iter().filter(|(c,_,_)| *c >= a.c0 && *c <= a.c1).collect();
             let rs: Vec<_> = linhas.iter().filter(|(r,_,_)| *r >= a.r0 && *r <= a.r1).collect();
             if let (Some(c_ini), Some(c_fim), Some(r_ini), Some(r_fim)) =

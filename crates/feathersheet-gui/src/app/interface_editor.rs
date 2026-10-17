@@ -69,6 +69,10 @@ impl App {
             if tabelas::sob_celula(&self.workbook,self.folha,self.linha,self.coluna).is_some() {
                 self.aba_faixa(tr!("Design da Tabela"), AbaFaixa::Tabela)
             } else { Space::with_width(0).into() },
+            // Contextual: "Tabela Dinâmica" com a célula numa dinâmica (ou o painel aberto).
+            if self.dinamica_na_faixa() {
+                self.aba_faixa(tr!("Tabela Dinâmica"), AbaFaixa::Dinamica)
+            } else { Space::with_width(0).into() },
             // Contextual: "Editar forma" só enquanto houver forma selecionada.
             if self.tem_forma_selecionada() { self.aba_editar_forma() }
             else { Space::with_width(0).into() },
@@ -118,16 +122,25 @@ impl App {
                 .map(|area| feathersheet_core::celulas::locale::apresentar_formula(
                     &a.sheet.get_raw(area.r0, area.c0), &self.regionalizacao())))
             .unwrap_or_else(|| tr!("Valor ou fórmula (ex.: =SOMA(A1:A5))").to_string());
+        // Apontando para a fórmula de outra janela: a barra mostra a fórmula
+        // de lá (só leitura), com o arquivo dela, como nas duas pastas do Excel.
+        let campo_fx: Element<'_, Msg> = match self.vinculos.formula_remota.as_ref().filter(|_| !self.editor_formula.ativo) {
+            Some((arquivo, formula)) => row![
+                text(format!("[{arquivo}]")).size(12).color(COR_AZUL_ACENTO()),
+                text_input("", formula).width(Length::Fill).padding(8),
+            ].spacing(6).align_y(Alignment::Center).width(Length::Fill).into(),
+            None => CampoFx::new(
+                text_input(&exemplo_fx, &self.edicao)
+                    .id(iced::widget::text_input::Id::new("feathersheet.fx"))
+                    .on_input(Msg::Editar).on_submit(Msg::EnviarEditor)
+                    .width(Length::Fill).padding(8),
+                &self.edicao
+            ).into(),
+        };
         let editor=column![
             row![
                 end, text("fx").size(16).color(COR_AZUL_ACENTO()),
-                CampoFx::new(
-                    text_input(&exemplo_fx, &self.edicao)
-                        .id(iced::widget::text_input::Id::new("feathersheet.fx"))
-                        .on_input(Msg::Editar).on_submit(Msg::EnviarEditor)
-                        .width(Length::Fill).padding(8),
-                    &self.edicao
-                ),
+                campo_fx,
                 button(feather_ui::icones::icone("circle-check", 16.0)
                     .style(|_, _| iced::widget::svg::Style { color: Some(iced::Color::WHITE) }))
                     .padding([6, 9]).style(estilo_botao_primario).on_press(Msg::Confirmar)
@@ -258,20 +271,25 @@ impl App {
                 },
                 ..Default::default()
             });
+        // Da posição ao zoom: o botão direito abre "Personalizar barra de
+        // status" (as abas à esquerda têm o menu próprio delas).
+        let celula: Element<'_, Msg> = if self.barra_status_mostra("celula") {
+            text(self.texto_celula_abas()).size(11).color(COR_TEXTO_MUTED()).into()
+        } else { Space::with_width(0).into() };
+        let zoom: Element<'_, Msg> = if self.barra_status_mostra("zoom") {
+            zoom.into()
+        } else { Space::with_width(0).into() };
+        let status = iced::widget::mouse_area(
+            // As guias ocupam o resto (Fill): isto fica à direita, colado no zoom.
+            row![celula, self.view_resumo_selecao(), self.aviso_calcular(), zoom]
+                .spacing(5).height(Length::Fill).align_y(Alignment::Center),
+        ).on_right_press(Msg::BarraStatus(barra_status::Evento::Abrir));
         let rodape = row![
             self.view_abas(),
             // Aviso temporário ao lado das guias (antes cobria as abas).
             self.view_aviso_abas().unwrap_or_else(|| Space::with_width(0).into()),
             self.view_progresso_abertura(),
-            text(if self.workbook.len() == 1 {
-                trf!("{}  ·  {} aba", cell_name(self.linha, self.coluna), 1)
-            } else {
-                trf!("{}  ·  {} abas", cell_name(self.linha, self.coluna), self.workbook.len())
-            })
-                .size(11).color(COR_TEXTO_MUTED()),
-            self.view_resumo_selecao(),
-            self.aviso_calcular(),
-            zoom,
+            status,
         ].spacing(5).padding([0, 8]).height(Length::Fixed(36.0))
             .align_y(Alignment::Center);
         let centro: Element<'_, Msg> = if let Some((tipo, x, y)) = self.contexto {
@@ -317,6 +335,7 @@ impl App {
         let corpo = column![
             editor_visivel,
             self.view_faixa_salvamento(),
+            self.view_faixa_vinculos(),
             self.com_graficos_salvos(centro),
             container(rodape).style(estilo_rodape),
         ].height(Length::Fill);
@@ -502,6 +521,7 @@ impl App {
         let base = self.sobrepor_condicional(base);
         let base = self.sobrepor_perfil_coluna(base);
         let base = self.sobrepor_estatisticas(base);
+        let base = self.sobrepor_barra_status(base);
         let base = self.sobrepor_nomes(base);
         let base = self.sobrepor_congelar(base);
         let base = self.sobrepor_menu_tinta(base);
@@ -635,6 +655,7 @@ impl App {
             return self.sobrepor_explicacao_erro(base);
         }
         let base = self.sobrepor_aviso_xlsx(base);
+        let base = self.sobrepor_editar_links(base);
         // Validação de dados e o alerta de erro, no diálogo interno comum.
         let base = self.sobrepor_serie(base);
         self.sobrepor_validacao(base)

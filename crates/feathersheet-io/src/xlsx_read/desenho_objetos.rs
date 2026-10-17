@@ -254,7 +254,7 @@ fn figura(zip: &mut ZipArchive<Cursor<Vec<u8>>>, caminho: &str) -> Option<String
     Some(format!("data:{mime};base64,{}", base64(&bytes)))
 }
 
-fn base64(bytes: &[u8]) -> String {
+pub(super) fn base64(bytes: &[u8]) -> String {
     const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut s = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for b in bytes.chunks(3) {

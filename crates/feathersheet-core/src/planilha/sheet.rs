@@ -64,6 +64,8 @@ pub mod nomes_selecao;
 pub mod topicos;
 pub mod protecao;
 pub mod comentarios;
+/// Sujar só as fórmulas que leem uma área de outro arquivo.
+mod vinculo_externo;
 
 /// Corrente funda de dependências (saldo acumulado de 1 milhão de linhas:
 /// `K3=K2+I3`, `K4=K3+I4`…). O cálculo sob demanda é recursivo: pedir
@@ -168,6 +170,11 @@ pub(crate) fn pattern_check(raw: &str) -> bool {
     let mut qualificadas = 0;
     ast.walk(&mut |n| match n {
         Node::Name(_) | Node::Range { sheet: None, .. } => precisa_do_grafo = true,
+        // Outro arquivo (`[Vendas.fshz]Dados!A1`): fica avulsa, onde a
+        // atualização que chega de fora acha quem lê cada célula
+        // (`vinculo_externo.rs`) e onde o cálculo em paralelo não vai.
+        Node::Ref { sheet: Some(s), .. } | Node::Range { sheet: Some(s), .. }
+            if crate::planilha::vinculo::e_externa(s) => precisa_do_grafo = true,
         Node::Ref { sheet: Some(_), .. } => qualificadas += 1,
         Node::Range { sheet: Some(_), .. } => qualificadas += 2,
         _ => {},
@@ -215,6 +222,12 @@ pub struct Sheet {
     /// em pixels; `None` = a da grade.
     pub largura_padrao: Option<u32>,
     pub row_heights: HashMap<u32, u32>,
+    /// Linhas ocultas da `n` até o fim da planilha ("ocultar da 30 até a
+    /// última", 16/10/2026): um número só, sem guardar 100 milhões de
+    /// alturas. `None` = nenhuma. Vale junto com as alturas 0 do mapa.
+    pub linhas_ocultas_desde: Option<u32>,
+    /// O mesmo para as colunas.
+    pub colunas_ocultas_desde: Option<u32>,
     /// Estrutura de tópicos (Dados → Agrupar). Ver [`topicos`].
     pub topicos: topicos::Topicos,
     /// Proteger planilha (Formatar ▾). Ver [`protecao`].
@@ -326,6 +339,8 @@ impl Sheet {
             col_widths: HashMap::new(),
             largura_padrao: None,
             row_heights: HashMap::new(),
+            linhas_ocultas_desde: None,
+            colunas_ocultas_desde: None,
             topicos: Default::default(),
             protecao: None,
             comentarios: Default::default(),
@@ -369,6 +384,21 @@ impl Sheet {
     }
 
     #[inline]
+    /// A linha está oculta (altura 0 ou depois de `linhas_ocultas_desde`).
+    pub fn linha_oculta(&self, row: u32) -> bool {
+        self.linhas_ocultas_desde.is_some_and(|n| row >= n) || self.row_heights.get(&row) == Some(&0)
+    }
+
+    /// A coluna está oculta (largura 0 ou depois de `colunas_ocultas_desde`).
+    pub fn coluna_oculta(&self, col: u32) -> bool {
+        self.colunas_ocultas_desde.is_some_and(|n| col >= n) || self.col_widths.get(&col) == Some(&0)
+    }
+
+    /// Há alguma linha oculta (para pular a consulta por célula quando não há).
+    pub fn tem_linhas_ocultas(&self) -> bool {
+        self.linhas_ocultas_desde.is_some() || self.row_heights.values().any(|&h| h == 0)
+    }
+
     pub fn cell_key(row: u32, col: u32) -> u64 {
         key(row, col)
     }
@@ -515,13 +545,26 @@ impl Sheet {
     /// Pedido de fora do avaliador: refaz o cálculo enquanto houver célula
     /// adiada pelo teto de profundidade, sempre a mais funda primeiro.
     fn valor_na_superficie(&self, row: u32, col: u32, host: Option<&dyn Hospedeiro>) -> Value {
+        // Quase sempre nada fica adiado: sem a lista abaixo, que era uma
+        // alocação por célula lida (a dinâmica lê milhões, 17/10/2026).
+        corrente::entrar();
+        let valor = self.valor_interno(row, col, host);
+        corrente::sair();
+        if !corrente::voltando() { return valor; }
+        let mut ja_calculado = Some(valor);
         let eu = self as *const Self as usize;
         let mut pendentes = vec![(row, col)];
         loop {
             let (r, c) = *pendentes.last().expect("sempre há o pedido original");
-            corrente::entrar();
-            let valor = self.valor_interno(r, c, host);
-            corrente::sair();
+            let valor = match ja_calculado.take() {
+                Some(v) => v,
+                None => {
+                    corrente::entrar();
+                    let v = self.valor_interno(r, c, host);
+                    corrente::sair();
+                    v
+                }
+            };
             match corrente::tomar_adiada() {
                 None => {
                     pendentes.pop();
@@ -1033,7 +1076,9 @@ impl Sheet {
         }
         let ctx = SheetCtx { sheet: self, host };
         let ev = Evaluator::na_celula(&ctx, row, col);
-        let valor = if !self.deps.array_cells.is_empty() && self.deps.array_cells.contains(&k) {
+        let valor = if let Some(erro) = externa.then(|| self.intervalo_externo_sem_valores(node, host)).flatten() {
+            erro
+        } else if !self.deps.array_cells.is_empty() && self.deps.array_cells.contains(&k) {
             self.avaliar_ancora(k, &ev, node, externa && host.is_none())
         } else {
             ev.eval(node)
@@ -1280,6 +1325,13 @@ impl Sheet {
         self.geracao.set(self.geracao.get().wrapping_add(1));
     }
 
+    /// A geração atual (sobe em [`Self::tocar`]): quem guarda algo lido da
+    /// aba fora dela (os dados de um gráfico, na interface) compara este
+    /// número para saber se o guardado ainda vale.
+    pub fn geracao(&self) -> u64 {
+        self.geracao.get()
+    }
+
     /// Os valores do retângulo lidos de uma vez, guardados até a aba mudar.
     /// `None` quando não compensa ou não é seguro guardar: faixa pequena ou
     /// enorme, aba com função volátil, ou cálculo sendo desfeito — quem
@@ -1449,6 +1501,9 @@ impl Sheet {
             }
         }
         self.row_heights = next_rh;
+        if let Some(n) = self.linhas_ocultas_desde.filter(|&n| n >= at) {
+            self.linhas_ocultas_desde = Some(n.saturating_add(count).min(MAX_ROWS - 1));
+        }
 
         if self.max_row >= at && self.max_row > 0 {
             self.max_row += count;
@@ -1507,6 +1562,10 @@ impl Sheet {
             }
         }
         self.row_heights = next_rh;
+        // Excluir dentro da faixa oculta não a muda; acima dela, ela sobe.
+        if let Some(n) = self.linhas_ocultas_desde {
+            self.linhas_ocultas_desde = Some(if n >= end { n - count } else if n > at { at } else { n });
+        }
 
         self.formulas.shift_rows(at, count, true);
         self.deps.shift_rows(at, count, true);
@@ -1549,6 +1608,9 @@ impl Sheet {
             }
         }
         self.col_widths = next_cw;
+        if let Some(n) = self.colunas_ocultas_desde.filter(|&n| n >= at) {
+            self.colunas_ocultas_desde = Some(n.saturating_add(count).min(MAX_COLS - 1));
+        }
 
         if self.max_col >= at && self.max_col > 0 {
             self.max_col += count;
@@ -1600,6 +1662,9 @@ impl Sheet {
             }
         }
         self.col_widths = next_cw;
+        if let Some(n) = self.colunas_ocultas_desde {
+            self.colunas_ocultas_desde = Some(if n >= end { n - count } else if n > at { at } else { n });
+        }
 
         self.formulas.shift_columns(at, count, true);
         self.deps.shift_columns(at, count, true);
@@ -1610,8 +1675,9 @@ impl Sheet {
     }
 }
 
-/// Resumo da seleção compatível com o statusbar.ts: ignora vazios,
-/// erros e linhas ocultas (altura 0). Números alimentam as cinco métricas.
+/// Resumo da seleção para a barra de status: ignora vazios e linhas ocultas
+/// (altura 0). Números alimentam soma, média, mínimo, máximo e desvio padrão;
+/// erros só são contados à parte (não entram na contagem, como no Excel).
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContagemSelecao {
     pub count: u64,
@@ -1619,38 +1685,64 @@ pub struct ContagemSelecao {
     pub sum: f64,
     pub min: f64,
     pub max: f64,
+    /// Células com erro (#DIV/0!, #N/D…).
+    pub erros: u64,
+    /// Média corrente e soma dos quadrados dos desvios (Welford): o desvio
+    /// padrão sai sem perder precisão em números grandes e parecidos.
+    pub media_corrente: f64,
+    pub m2: f64,
 }
 impl Default for ContagemSelecao {
     fn default() -> Self {
-        Self { count: 0, numbers: 0, sum: 0., min: f64::INFINITY, max: f64::NEG_INFINITY }
+        Self {
+            count: 0, numbers: 0, sum: 0., min: f64::INFINITY, max: f64::NEG_INFINITY,
+            erros: 0, media_corrente: 0., m2: 0.,
+        }
     }
 }
 impl ContagemSelecao {
     fn registrar(&mut self, valor: &Value) {
         match valor {
-            Value::Empty | Value::Error(_) => {}
+            Value::Empty => {}
+            Value::Error(_) => self.erros += 1,
             Value::Number(v) => {
                 self.count += 1;
                 self.numbers += 1;
                 self.sum += *v;
                 self.min = self.min.min(*v);
                 self.max = self.max.max(*v);
+                let delta = *v - self.media_corrente;
+                self.media_corrente += delta / self.numbers as f64;
+                self.m2 += delta * (*v - self.media_corrente);
             }
             Value::Text(_) | Value::Bool(_) => self.count += 1,
         }
     }
 
-    /// Reúne lotes sem perder os extremos.
+    /// Reúne lotes sem perder os extremos (desvio pela fórmula de Chan).
     pub fn somar_lote(&mut self, outro: &Self) {
+        let (na, nb) = (self.numbers as f64, outro.numbers as f64);
+        if nb > 0. {
+            let n = na + nb;
+            let delta = outro.media_corrente - self.media_corrente;
+            self.m2 += outro.m2 + delta * delta * na * nb / n;
+            self.media_corrente += delta * nb / n;
+        }
         self.count += outro.count;
         self.numbers += outro.numbers;
         self.sum += outro.sum;
         self.min = self.min.min(outro.min);
         self.max = self.max.max(outro.max);
+        self.erros += outro.erros;
     }
 
     pub fn media(&self) -> Option<f64> {
         (self.numbers > 0).then(|| self.sum / self.numbers as f64)
+    }
+
+    /// Desvio padrão amostral (DESVPAD): precisa de dois números.
+    pub fn desvio_padrao(&self) -> Option<f64> {
+        (self.numbers > 1).then(|| (self.m2.max(0.) / (self.numbers - 1) as f64).sqrt())
     }
 }
 impl Sheet {
@@ -1671,9 +1763,9 @@ impl Sheet {
         let contexto = SheetCtx { sheet: self, host };
         // Linha oculta (altura 0, filtro) não conta. Sem nenhuma oculta, pula
         // a consulta ao mapa a cada célula: era metade do custo em 13 milhões.
-        let tem_ocultas = self.row_heights.values().any(|&h| h == 0);
+        let tem_ocultas = self.tem_linhas_ocultas();
         contexto.varrer(&intervalo, &mut |valor, linha, _coluna| {
-            if tem_ocultas && self.row_heights.get(&linha).copied() == Some(0) { return; }
+            if tem_ocultas && self.linha_oculta(linha) { return; }
             resultado.registrar(valor);
         });
         resultado
@@ -1835,7 +1927,7 @@ impl<'a> EvalContext for SheetCtx<'a> {
     }
 
     fn linha_oculta(&self, row: u32, sheet: Option<&str>) -> bool {
-        self.alvo(sheet).is_some_and(|a| a.row_heights.get(&row) == Some(&0))
+        self.alvo(sheet).is_some_and(|a| a.linha_oculta(row))
     }
 
     fn celula_com_subtotal(&self, row: u32, col: u32, sheet: Option<&str>) -> bool {

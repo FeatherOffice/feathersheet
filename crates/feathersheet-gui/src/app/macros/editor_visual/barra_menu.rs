@@ -51,7 +51,10 @@ pub(super) fn menu_itens(id: u8) -> Vec<(&'static str, Option<Msg>)> {
             (tr!("Opções do editor"), None), (tr!("Fonte / Tabulação"), None),
             (tr!("Sempre depurar"), None),
         ],
-        _ => vec![(tr!("Guia de macros  F1"), None), (tr!("Atalhos"), None)],
+        _ => vec![
+            (tr!("Guia de macros  F1"), Some(Msg::AjudaAbrirSecao("macros"))),
+            (tr!("Atalhos"), Some(Msg::AjudaAbrirSecao("atalhos"))),
+        ],
     }
 }
 /// Mapeamento centralizado: nenhum item dos menus TS deve depender de glifo Unicode.
@@ -206,7 +209,7 @@ pub(super) fn ferramentas<'a>(app: &'a App) -> Element<'a, Msg> {
         botao_icone(tr!("Módulo"), "file-code", Some(Msg::MacroNovoModulo), false),
         botao_icone(tr!("Componente"), "forms", event(EventoVisual::Documento("componente:previsao".into())), false),
         botao_icone(tr!("Salvar módulo"), "device-floppy", Some(Msg::MacroGuardarModulo), false),
-        botao_icone(tr!("Guia"), "help", None, false),
+        botao_icone(tr!("Guia"), "help", Some(Msg::AjudaAbrirSecao("macros")), false),
     ].spacing(7).align_y(Alignment::Center).width(Length::Shrink)
         .height(Length::Fixed(34.0));
     // Uma barra rolável no eixo horizontal não pode conter Fill.

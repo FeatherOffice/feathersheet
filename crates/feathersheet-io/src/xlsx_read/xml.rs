@@ -228,6 +228,8 @@ pub struct CelulaXml {
     pub s: Campo,
     pub t: Campo,
     pub cm: Campo,
+    /// Metadado de valor (`vm`): a imagem "Colocar na célula" do Excel.
+    pub vm: Campo,
     pub f: Campo,
     pub f_t: Campo,
     pub f_si: Campo,
@@ -238,7 +240,7 @@ pub struct CelulaXml {
 
 impl CelulaXml {
     fn limpar(&mut self) {
-        for c in [&mut self.r, &mut self.s, &mut self.t, &mut self.cm, &mut self.f, &mut self.f_t,
+        for c in [&mut self.r, &mut self.s, &mut self.t, &mut self.cm, &mut self.vm, &mut self.f, &mut self.f_t,
             &mut self.f_si, &mut self.f_ref, &mut self.v, &mut self.inline] {
             c.limpar();
         }
@@ -249,6 +251,7 @@ impl CelulaXml {
             "s" => self.s.get(),
             "t" => self.t.get(),
             "cm" => self.cm.get(),
+            "vm" => self.vm.get(),
             _ => None,
         }
     }
@@ -358,7 +361,7 @@ fn ler_linha<R: BufRead>(reader: &mut Reader<R>, buf: &mut Vec<u8>, linha: &mut 
                 match local(e.name().as_ref()) {
                     b"c" => {
                         let c = linha.nova_celula();
-                        atributos(e, decoder, &mut [(b"r", &mut c.r), (b"s", &mut c.s), (b"t", &mut c.t), (b"cm", &mut c.cm)]);
+                        atributos(e, decoder, &mut [(b"r", &mut c.r), (b"s", &mut c.s), (b"t", &mut c.t), (b"cm", &mut c.cm), (b"vm", &mut c.vm)]);
                         alvo = Alvo::Nada;
                     }
                     b"f" if linha.usadas > 0 => {

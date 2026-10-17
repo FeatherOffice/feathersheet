@@ -154,6 +154,10 @@ pub enum Evento {
     Editar(String),
     /// Botão direito no gráfico: menu com Editar e Excluir.
     Contexto(String),
+    /// O mouse passou por um item do menu (é a mensagem de abrir submenu;
+    /// o menu do gráfico não tem): nada muda. Era `FecharContexto`, e o
+    /// menu sumia antes do clique (17/10/2026).
+    PassouNoMenu,
     FecharContexto,
     Inserir,
     Estilo(CampoEstilo, String),
@@ -303,6 +307,9 @@ impl Default for Aparencia {
 }
 #[derive(Default)]
 pub(super) struct Estado {
+    /// Id da tabela dinâmica de um gráfico dinâmico que está nascendo; vai
+    /// para o JSON como `pivotSource` e o gráfico segue a dinâmica.
+    pub(super) dinamica: Option<String>,
     pub(super) aberto: bool,
     pub(super) cursor: iced::Point,
     /// X do botão Gráfico no instante da abertura; não acompanha o cursor depois.
@@ -334,12 +341,20 @@ pub(super) struct Estado {
     categorias: bool,
     colunas: bool,
     agrupar: bool,
+    /// Mais de 200 mil células: só resumido (o "Não resumir" some).
+    pub(super) resumo_obrigatorio: bool,
     /// Coluna (ou linha) das categorias, relativa ao começo do intervalo.
     coluna_categoria: u32,
     /// Séries ocultas, pela ordem de origem (sem a coluna de categoria).
     ocultas: Vec<u32>,
     /// Conta de cada série quando as categorias iguais são juntadas.
     contas: std::collections::BTreeMap<u32, AggregateFn>,
+    /// Séries de texto (pela ordem de origem), com a chave do que foi olhado
+    /// (aba, versão, intervalo, orientação, categoria): só se recalcula
+    /// quando isso muda, nunca a cada desenho do painel.
+    tipos: Option<(String, std::collections::BTreeSet<u32>)>,
+    /// Os números já extraídos de cada gráfico (ver [`CacheDados`]).
+    pub(super) dados: CacheDados,
     /// Aba de onde vêm os dados (`sourceSheet` no gráfico do `.xlsx`).
     aba_id: Option<u32>,
     /// Aba onde o gráfico está desenhado e gravado (pode não ser a dos dados).
@@ -359,6 +374,122 @@ pub(super) struct Estado {
     svg: Option<String>,
     mensagem: String,
 }
+impl Estado {
+    /// A série `n` (ordem de origem) tem texto: só pode ser contada.
+    pub(super) fn serie_texto(&self, n: u32) -> bool {
+        self.tipos.as_ref().is_some_and(|(_, texto)| texto.contains(&n))
+    }
+
+    /// A conta que a série `n` usa ao resumir: a escolhida, se serve ao tipo
+    /// dela; senão Contar (série de texto) ou Soma (série de números).
+    pub(super) fn conta_da_serie(&self, n: u32) -> AggregateFn {
+        let texto = self.serie_texto(n);
+        self.contas.get(&n).copied()
+            .filter(|c| !texto || c.serve_para_texto())
+            .unwrap_or(if texto { AggregateFn::Count } else { AggregateFn::Sum })
+    }
+}
+
+/// Os números extraídos de cada gráfico (`ChartData`), pela aba dos dados,
+/// a versão e a geração dela e só a parte da configuração que muda os
+/// números. Agrupar lê TODAS as linhas (até 1 milhão), e uma troca no painel
+/// (a categoria, por exemplo) lia a tabela três vezes: a prévia, o desenho do
+/// gráfico gravado e a camada da planilha. Com isto, lê uma. Mudou a aba,
+/// a chave muda sozinha; o teto evita juntar memória sem fim.
+#[derive(Default)]
+pub(super) struct CacheDados(
+    std::cell::RefCell<std::collections::HashMap<ChaveDados, std::sync::Arc<feathersheet_core::grafico::chart::ChartData>>>,
+);
+
+/// (id da aba, versão, geração da aba, configuração que muda os números).
+type ChaveDados = (u32, u32, u64, String);
+
+impl CacheDados {
+    /// A aba `aba` passou da geração `antes` para `depois` só porque o JSON
+    /// dos gráficos dela foi regravado (nenhuma célula mudou): o que foi
+    /// lido continua valendo. Sem isto, gravar o gráfico (cada troca no
+    /// painel, cada passo do arraste) fazia reler a tabela inteira.
+    pub(super) fn renovar(&self, aba: u32, antes: u64, depois: u64) {
+        if antes == depois {
+            return;
+        }
+        let mut mapa = self.0.borrow_mut();
+        let velhas: Vec<ChaveDados> = mapa.keys().filter(|k| k.0 == aba && k.2 == antes).cloned().collect();
+        for k in velhas {
+            if let Some(dados) = mapa.remove(&k) {
+                mapa.insert((k.0, k.1, depois, k.3), dados);
+            }
+        }
+    }
+}
+
+/// Quantos conjuntos de dados guardar; passando, recomeça do zero.
+const MAX_DADOS_GUARDADOS: usize = 32;
+
+/// A aba de onde vêm os dados de um gráfico, para guardar o que foi lido.
+#[derive(Clone, Copy)]
+pub(super) struct Fonte<'a> {
+    pub cache: &'a CacheDados,
+    /// Id da aba (não o índice, que muda ao mover/excluir abas).
+    pub aba: u32,
+    pub versao: u32,
+}
+
+/// Só o que muda os números do gráfico, em texto: a prévia e o gráfico
+/// gravado chegam aqui por caminhos diferentes (id, `sourceSheet`, cores,
+/// conta padrão escrita ou não) e precisam dar a mesma chave.
+fn chave_dos_dados(config: &ChartConfig, lacuna_zero: bool) -> String {
+    use feathersheet_core::grafico::chart::DateHierarchy;
+    let mut c = config.clone();
+    c.id.clear();
+    c.source_sheet = None;
+    c.aggregate_fn = Some(c.aggregate_fn.unwrap_or_default());
+    c.category_column_index = Some(c.category_column_index.unwrap_or(0));
+    let estilo = std::mem::take(&mut c.style);
+    c.style.hidden_series = estilo.hidden_series;
+    c.style.date_hierarchy = estilo.date_hierarchy.filter(|h| *h != DateHierarchy::None);
+    format!("{}|{}", u8::from(lacuna_zero), serde_json::to_string(&c).unwrap_or_default())
+}
+
+/// Os números do gráfico: lidos da aba uma vez e reaproveitados enquanto ela
+/// não muda (`fonte`; sem ela, lê sempre). `lacuna_zero`: célula vazia na
+/// série vale 0 — o gráfico do `.xlsx`, ver `editor::desenhar_grafico_salvo`.
+pub(super) fn dados_do_grafico(
+    sheet: &feathersheet_core::Sheet,
+    config: &ChartConfig,
+    lacuna_zero: bool,
+    fonte: Option<Fonte<'_>>,
+) -> std::sync::Arc<feathersheet_core::grafico::chart::ChartData> {
+    use feathersheet_core::celulas::values::Value as V;
+    use feathersheet_core::grafico::chart::{extract_chart_data, extract_chart_data_with};
+    let extrair = || {
+        if lacuna_zero {
+            let (r0, c0) = (config.range.r0, config.range.c0);
+            extract_chart_data_with(&|r, c| match sheet.get_value(r, c) {
+                V::Empty if r > r0 && c > c0 => V::Number(0.0),
+                v => v,
+            }, config)
+        } else {
+            extract_chart_data(sheet, config)
+        }
+    };
+    let Some(f) = fonte else { return std::sync::Arc::new(extrair()) };
+    let base = chave_dos_dados(config, lacuna_zero);
+    let chave = |geracao: u64| (f.aba, f.versao, geracao, base.clone());
+    let guardado = f.cache.0.borrow().get(&chave(sheet.geracao())).cloned();
+    if let Some(dados) = guardado {
+        return dados;
+    }
+    let dados = std::sync::Arc::new(extrair());
+    // A geração DEPOIS de ler: se a leitura mexeu na aba, a chave já é a nova.
+    let mut mapa = f.cache.0.borrow_mut();
+    if mapa.len() >= MAX_DADOS_GUARDADOS {
+        mapa.clear();
+    }
+    mapa.insert(chave(sheet.geracao()), dados.clone());
+    dados
+}
+
 /// Uma única política visual para a prévia e o gráfico embutido.
 /// Toda a extração/agregação permanece no Sheet; Charts recebe apenas dados,
 /// cor e rótulo, sem recontar valores ou alterar os arquivos .fshz.
@@ -632,12 +763,104 @@ impl App {
 
     /// Uma edição do painel: grava no gráfico (Ctrl+Z) e redesenha.
     fn editar_ao_vivo(&mut self, campo: Option<&'static str>) {
+        // A conta das séries de texto entra no mesmo passo de Ctrl+Z.
+        self.normalizar_contas();
         self.salvar_grafico_ao_vivo(campo);
         self.atualizar_grafico();
     }
 
+    /// A geração da aba `indice` agora (para [`CacheDados::renovar`]).
+    pub(super) fn geracao_da_aba(&self, indice: usize) -> Option<(u32, u64)> {
+        self.workbook.aba(indice).map(|a| (a.id, a.sheet.geracao()))
+    }
+
+    /// Depois de regravar só o JSON dos gráficos da aba `indice` (que estava
+    /// na geração `antes`): os números guardados dela continuam valendo.
+    pub(super) fn renovar_dados_da_aba(&self, indice: usize, antes: Option<(u32, u64)>) {
+        if let (Some((id, antes)), Some((id_agora, depois))) = (antes, self.geracao_da_aba(indice)) {
+            if id == id_agora {
+                self.graficos.dados.renovar(id, antes, depois);
+            }
+        }
+    }
+
+    /// A aba de índice `indice` como fonte de dados guardáveis.
+    pub(super) fn fonte_dados(&self, indice: usize) -> Option<Fonte<'_>> {
+        self.workbook.aba(indice).map(|a| Fonte {
+            cache: &self.graficos.dados,
+            aba: a.id,
+            versao: self.workbook.versao(indice),
+        })
+    }
+
+    /// Recalcula quais séries são de texto, só se o intervalo, a orientação,
+    /// a categoria ou os dados mudaram desde a última vez.
+    fn atualizar_tipos_series(&mut self) {
+        let g = &self.graficos;
+        let versao = (0..self.workbook.len())
+            .find(|&i| self.workbook.aba(i).is_some_and(|a| Some(a.id) == g.aba_id))
+            .map(|i| self.workbook.versao(i));
+        let chave = format!("{:?}|{versao:?}|{}|{}|{}|{}|{}", g.aba_id, g.intervalo.trim(), g.colunas, g.cabecalho, g.categorias, g.coluna_categoria);
+        if g.tipos.as_ref().is_some_and(|(c, _)| *c == chave) {
+            return;
+        }
+        let texto = self.series_de_texto();
+        self.graficos.tipos = Some((chave, texto));
+    }
+
+    /// Série de texto não soma: com o resumo ligado, a conta guardada que
+    /// não serve (Soma, Média…) ou a que falta vira Contar. Devolve se mudou.
+    fn normalizar_contas(&mut self) -> bool {
+        self.atualizar_tipos_series();
+        let g = &mut self.graficos;
+        if !g.agrupar {
+            return false;
+        }
+        let Some((_, texto)) = &g.tipos else { return false };
+        let mut mudou = false;
+        for &n in texto {
+            if !g.contas.get(&n).is_some_and(|c| c.serve_para_texto()) {
+                g.contas.insert(n, AggregateFn::Count);
+                mudou = true;
+            }
+        }
+        mudou
+    }
+
+    /// Acima de 200 mil células o gráfico só existe resumido: liga o resumo
+    /// sozinho (soma em cada série, como no menu) e grava, se já está na
+    /// planilha. Devolve se ligou agora.
+    fn exigir_resumo_se_grande(&mut self) -> bool {
+        let Some(r) = parse_range_ref(self.graficos.intervalo.trim()).map(|r| r.normalized()) else {
+            self.graficos.resumo_obrigatorio = false;
+            return false;
+        };
+        let Some(aba) = (0..self.workbook.len()).filter_map(|i| self.workbook.aba(i))
+            .find(|a| Some(a.id) == self.graficos.aba_id) else { return false };
+        let mut faixa = ChartRange { r0: r.r0, c0: r.c0, r1: r.r1, c1: r.c1 };
+        self.graficos.resumo_obrigatorio = editor::cortar_intervalo(&aba.sheet, &mut faixa, false).is_none();
+        if !self.graficos.resumo_obrigatorio || self.graficos.agrupar {
+            return false;
+        }
+        self.graficos.agrupar = true;
+        if self.graficos.id.is_some() {
+            self.salvar_grafico_ao_vivo(None);
+        }
+        true
+    }
+
     fn atualizar_grafico(&mut self) {
+        let ligou_resumo = self.exigir_resumo_se_grande();
+        if self.normalizar_contas() && self.graficos.id.is_some() {
+            self.salvar_grafico_ao_vivo(None);
+        }
         self.graficos.svg = None;
+        // Gráfico já gravado: a prévia é o desenho dele na planilha (o mesmo
+        // caminho da camada, com o fundo e as cores do Excel quando houver).
+        // Desenhado ANTES, para a prévia só refazer listas e avisos (os
+        // números saem do mesmo cache) e não desenhar um SVG jogado fora.
+        let salvo = self.svg_do_grafico_em_edicao();
+        let desenhar_previa = salvo.is_none();
         let resultado = (|| {
             let r = parse_range_ref(self.graficos.intervalo.trim())
                 .ok_or(tr!("Intervalo inválido. Use A1:C10."))?
@@ -645,24 +868,27 @@ impl App {
             if r.sheet.is_some() {
                 return Err(tr!("Informe apenas o intervalo da aba de origem.").into());
             }
-            let celulas = u64::from(r.r1 - r.r0 + 1) * u64::from(r.c1 - r.c0 + 1);
-            if celulas > 200_000 {
-                return Err(tr!("Selecione até 200.000 células para este painel de gráficos.").into());
-            }
-            let aba = (0..self.workbook.len())
-                .filter_map(|i| self.workbook.aba(i))
-                .find(|a| Some(a.id) == self.graficos.aba_id)
+            let indice = (0..self.workbook.len())
+                .find(|&i| self.workbook.aba(i).is_some_and(|a| Some(a.id) == self.graficos.aba_id))
                 .ok_or(tr!("A aba de origem foi removida. Abra um novo gráfico."))?;
+            let aba = self.workbook.aba(indice)
+                .ok_or(tr!("A aba de origem foi removida. Abra um novo gráfico."))?;
+            let fonte = Fonte { cache: &self.graficos.dados, aba: aba.id, versao: self.workbook.versao(indice) };
+            // Mais de 200 mil células só resumindo (soma, média, contagem,
+            // desvio padrão…): aí o gráfico lê todas as linhas.
+            let mut cortado = ChartRange { r0: r.r0, c0: r.c0, r1: r.r1, c1: r.c1 };
+            if editor::cortar_intervalo(&aba.sheet, &mut cortado, self.graficos.agrupar).is_none() {
+                return Err(if self.graficos.agrupar {
+                    tr!("Mesmo resumindo, o gráfico lê até 100 milhões de células. Selecione menos colunas.")
+                } else {
+                    tr!("Mais de 200.000 células: ligue \"Resumir categorias iguais\" (em Dados) para usar todas as linhas com soma, média, contagem ou desvio padrão, ou selecione menos células.")
+                }.into());
+            }
             let pilha = empilhamento(self.graficos.tipo.motor());
             let config = ChartConfig {
                 tipo: pilha.map_or(self.graficos.tipo.motor(), |p| p.0),
                 title: self.graficos.titulo.clone(),
-                range: ChartRange {
-                    r0: r.r0,
-                    c0: r.c0,
-                    r1: r.r1,
-                    c1: r.c1,
-                },
+                range: cortado,
                 series_in_columns: self.graficos.colunas,
                 has_headers: self.graficos.cabecalho,
                 has_category_labels: self.graficos.categorias,
@@ -680,9 +906,7 @@ impl App {
             // Mantém os sete tipos já consolidados no Charts legado, bem como
             // todo o processamento de células, agrupamento e FSHZ no Sheet.
             if self.graficos.tipo.avancado() {
-                let mut dados = feathersheet_core::grafico::chart::extract_chart_data(
-                    &aba.sheet, &config
-                );
+                let mut dados = (*dados_do_grafico(&aba.sheet, &config, false, Some(fonte))).clone();
                 renomear_series_dados(&mut dados, &config.style.hidden_series, &self.graficos.aparencia);
                 self.graficos.series = dados.series.iter().enumerate()
                     .map(|(i,s)| format!("{} — {}",i+1,s.name)).collect();
@@ -698,8 +922,11 @@ impl App {
                 ));
                 return Ok(svg);
             }
+            // Gráfico do `.xlsx`: lacuna vale 0, como no desenho do gravado.
+            let lacuna_zero = self.graficos.painel.excel.is_some();
+            let dados = dados_do_grafico(&aba.sheet, &config, lacuna_zero, Some(fonte));
             let mut contrato =
-                feathersheet_io::grafico_compartilhado::extrair_grafico(&aba.sheet, &config)
+                feathersheet_io::grafico_compartilhado::preparar_grafico(&config, (*dados).clone())
                     .map_err(|_| tr!("Selecione uma tabela com categorias e valores numéricos. Se a tabela não tem cabeçalhos, desative essa opção.").to_string())?;
             aplicar_nomes_origem(&mut contrato, &self.graficos.aparencia);
             self.graficos.series = contrato
@@ -741,6 +968,9 @@ impl App {
             } else {
                 avisos.join("; ")
             };
+            if !desenhar_previa {
+                return Ok(String::new());
+            }
             match pilha {
                 Some((_, emp)) => preparar_svg(&contrato.grafico, &aparencia_empilhada(&self.graficos.aparencia, emp)),
                 None => preparar_svg(&contrato.grafico, &self.graficos.aparencia),
@@ -750,9 +980,11 @@ impl App {
             Ok(svg) => self.graficos.svg = Some(svg),
             Err(e) => self.graficos.mensagem = e,
         }
-        // Gráfico já gravado: a prévia é o desenho dele na planilha (o mesmo
-        // caminho da camada, com o fundo e as cores do Excel quando houver).
-        if let Some(svg) = self.svg_do_grafico_em_edicao() {
+        if ligou_resumo {
+            self.graficos.mensagem = trf!("Mais de 200.000 células: o gráfico resume as categorias iguais. Escolha a conta de cada série (soma, média, contagem, desvio padrão…). {}",
+                self.graficos.mensagem);
+        }
+        if let Some(svg) = salvo {
             if self.graficos.svg.is_none() {
                 self.graficos.mensagem.clear();
             }
@@ -762,14 +994,19 @@ impl App {
 
     fn svg_do_grafico_em_edicao(&self) -> Option<String> {
         let id = self.graficos.id.as_deref()?;
-        let aba = self.workbook.aba(self.indice_aba_grafico()?)?;
+        let indice_grafico = self.indice_aba_grafico()?;
+        let aba = self.workbook.aba(indice_grafico)?;
         let v = feathersheet_io::graficos_salvos::listar(&aba.sheet).ok()?
             .into_iter().find(|v| v["id"].as_str() == Some(id))?;
-        let dados = v["sourceSheet"].as_str()
+        let indice = v["sourceSheet"].as_str()
             .and_then(|n| self.workbook.indice_por_nome(n))
-            .and_then(|i| self.workbook.aba(i))
-            .map_or(&aba.sheet, |a| &a.sheet);
-        editor::svg_do_grafico_salvo(dados, &v)
+            .filter(|&i| self.workbook.aba(i).is_some())
+            .unwrap_or(indice_grafico);
+        let dados = self.workbook.aba(indice).map_or(&aba.sheet, |a| &a.sheet);
+        let svg = editor::svg_do_grafico_salvo_em(dados, &v, self.fonte_dados(indice))?;
+        // A camada desenha este mesmo gráfico com a mesma chave: já fica pronto.
+        self.guardar_svg_camada(indice, &v, &svg);
+        Some(svg)
     }
     /// Menu do botão direito do gráfico aberto: (id, x, y na janela).
     pub(in crate::app) fn graficos_contexto(&self) -> Option<(String, f32, f32)> {
@@ -892,8 +1129,13 @@ impl App {
                 // A assinatura global do mouse usa coordenadas da janela.
                 let cursor_abertura = self.graficos.cursor;
                 let copiado = self.graficos.copiado.take();
+                // O que já foi lido e desenhado continua valendo.
+                let dados = std::mem::take(&mut self.graficos.dados);
+                let svgs = std::mem::take(&mut self.graficos.svgs);
                 self.graficos = Estado {
                     copiado,
+                    dados,
+                    svgs,
                     aberto: false,
                     cursor: cursor_abertura,
                     ancora_seletor_x: cursor_abertura.x,
@@ -921,6 +1163,9 @@ impl App {
             Evento::Cursor(p) => {
                 self.graficos.cursor = p;
                 let zoom = (self.config.zoom as f64 / 100.).max(0.01);
+                // Mover/redimensionar só regrava a posição no JSON: os números
+                // do gráfico não precisam ser lidos de novo a cada passo.
+                let geracao_antes = self.geracao_da_aba(self.folha);
                 if let Some((id, aba_id, origem, x, y)) = self.graficos.arraste.clone() {
                     if let Some(aba) = self.workbook.aba_mut(self.folha).filter(|a| a.id == aba_id)
                     {
@@ -978,6 +1223,7 @@ impl App {
                         }
                     }
                 }
+                self.renovar_dados_da_aba(self.folha, geracao_antes);
             }
             Evento::Pairar(id, p) => {
                 if self.graficos.arraste.is_none() && self.graficos.redimensionamento.is_none() {
@@ -1038,6 +1284,7 @@ impl App {
                 self.graficos.redimensionamento = None;
                 self.graficos.contexto = Some((id, self.ponteiro_x, self.ponteiro_y));
             }
+            Evento::PassouNoMenu => {}
             Evento::FecharContexto => self.graficos.contexto = None,
             Evento::Remover(id) => {
                 self.graficos.contexto = None;
@@ -1185,6 +1432,10 @@ impl App {
                 self.editar_ao_vivo(None);
             }
             Evento::Agrupar(v) => {
+                if !v && self.graficos.resumo_obrigatorio {
+                    self.graficos.mensagem = tr!("Com mais de 200.000 células o gráfico precisa resumir. Para ver ponto a ponto, selecione menos células.").into();
+                    return Task::none();
+                }
                 self.graficos.agrupar = v;
                 self.editar_ao_vivo(None);
             }
@@ -1232,6 +1483,7 @@ impl App {
                         g.agrupar = true;
                         g.contas.insert(n, c);
                     }
+                    None if g.resumo_obrigatorio => return Task::none(),
                     None => {
                         g.agrupar = false;
                         g.contas.clear();

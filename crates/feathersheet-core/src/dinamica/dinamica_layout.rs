@@ -24,7 +24,7 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
-use crate::dinamica::pivot::{montar_dinamica_com, montar_dinamica_filtrada, parse_date_key, DinamicaConfig};
+use crate::dinamica::pivot::{chave_de, montar_dinamica_com_chaves, montar_dinamica_filtrada, parse_date_key, DinamicaConfig};
 use crate::dinamica::acumulador::Acumulador;
 use crate::dinamica::exibicao::{
     chave_agrupada, comparar_natural, mostrar_como, CampoExtra, Eixo, Extras, Grade, MostrarComo, Ordenacao,
@@ -127,6 +127,13 @@ pub struct Resultado {
     pub linhas: Vec<InfoLinha>,
     /// Quantas colunas, à esquerda, são de rótulo.
     pub colunas_de_rotulo: usize,
+    /// De onde vem cada linha do resultado: o caminho dos itens de Linhas
+    /// (`""` = todas, no total geral; `None` = cabeçalho). Vazio quando a
+    /// dinâmica saiu pelo caminho antigo (ver [`linhas_da_celula`]).
+    pub caminhos: Vec<Option<String>>,
+    /// O mesmo para cada coluna: a chave dos itens de Colunas (`""` = o
+    /// total geral da linha ou sem campo em Colunas; `None` = rótulo).
+    pub chaves_colunas: Vec<Option<String>>,
 }
 
 /// Um nó da árvore de grupos. `ordenados` é a ordem dos filhos depois de
@@ -154,6 +161,18 @@ impl No {
 
 /// Os números de cada medida.
 type Numeros = Vec<Acumulador>;
+
+/// Separa o caminho de Linhas da chave de Colunas na chave de `por_caminho`.
+const JUNTA: char = '\u{1e}';
+
+/// As somas do grupo `chave`, criadas na primeira vez: só então a chave é
+/// copiada (antes, uma cópia por linha e por nível — 1 milhão de linhas).
+fn somas_de<'a>(mapa: &'a mut HashMap<String, Numeros>, chave: &str, config: &DinamicaConfig) -> &'a mut Numeros {
+    if !mapa.contains_key(chave) {
+        mapa.insert(chave.to_owned(), acumuladores(config));
+    }
+    mapa.get_mut(chave).expect("acabou de entrar")
+}
 
 fn acumuladores(config: &DinamicaConfig) -> Numeros {
     config.valores.iter().map(|m| Acumulador::novo(m.op)).collect()
@@ -212,6 +231,15 @@ fn folhas(no: &No, caminho: &str, saida: &mut Vec<String>) {
 }
 
 /// O item do campo na posição `d` de uma linha: a chave e a ordem natural.
+/// [`chave_do_campo`] de um valor já lido: sem agrupamento, o texto vira
+/// a chave sem cópia.
+fn chave_do_valor(v: Value, d: usize, campos: &[CampoExtra], agrupar_data: Option<AgruparData>) -> (String, Option<f64>) {
+    match campos.get(d).and_then(|c| c.agrupamento) {
+        Some(_) => chave_do_campo(&v, d, campos, agrupar_data),
+        None => (chave_de(v, agrupar_data), None),
+    }
+}
+
 fn chave_do_campo(
     v: &Value,
     d: usize,
@@ -227,9 +255,28 @@ fn chave_do_campo(
     }
 }
 
+/// O rótulo e a ordem do item que `v` vira num campo de Linhas ou de
+/// Colunas, com o agrupamento do campo — o mesmo texto que a dinâmica
+/// mostra. A interface usa para listar os itens base de "% de" e
+/// "Diferença de".
+pub fn rotulo_do_item(v: &Value, extra: &CampoExtra, agrupar_data: Option<AgruparData>) -> (String, Option<f64>) {
+    chave_do_campo(v, 0, std::slice::from_ref(extra), agrupar_data)
+}
+
+/// O formato de número que a coluna `j` do resultado pede pelo "Mostrar
+/// valores como" da medida dela (`None` = o formato de sempre). Depois das
+/// colunas de rótulo, as de valor vêm uma por medida, em ciclo (cada coluna
+/// de Colunas e o total geral da linha).
+pub fn formato_da_coluna(resultado: &Resultado, extras: &Extras, n_medidas: usize, j: usize) -> Option<&'static str> {
+    if n_medidas == 0 || j < resultado.colunas_de_rotulo {
+        return None;
+    }
+    extras.mostrar_como((j - resultado.colunas_de_rotulo) % n_medidas).formato_sugerido()
+}
+
 /// Monta a dinâmica com o layout pedido. `valor(linha, coluna)` é relativo à
 /// origem, e a linha 0 é o cabeçalho — o mesmo contrato do
-/// [`montar_dinamica_com`].
+/// [`crate::dinamica::pivot::montar_dinamica_com`].
 pub fn montar(
     total_linhas: usize,
     valor: impl Fn(usize, usize) -> Value,
@@ -262,14 +309,111 @@ pub fn montar_com_extras(
             })
         });
         let linhas = mapa_antigo(&matriz, 0);
-        return Resultado { matriz, linhas, colunas_de_rotulo: 1 };
+        return Resultado { matriz, linhas, colunas_de_rotulo: 1, caminhos: Vec::new(), chaves_colunas: Vec::new() };
     }
     if total_linhas <= 1 || (padrao && (opcoes.sao_antigas() || n == 0)) {
-        let matriz = montar_dinamica_com(total_linhas, &valor, config);
+        let (matriz, chaves_linhas, chaves_cols) = montar_dinamica_com_chaves(total_linhas, &valor, config, |_| true);
         let linhas = mapa_antigo(&matriz, n);
-        return Resultado { matriz, linhas, colunas_de_rotulo: n.max(1) };
+        // Os mesmos caminhos da árvore de grupos (cabeçalho sem, total
+        // geral vazio = todas as linhas): sem eles o Detalhes montava tudo
+        // de novo pelo caminho estruturado (10 s em 1 milhão de linhas).
+        let juntar = |k: &Vec<String>| Some(k.join(&SEPARADOR.to_string()));
+        let (caminhos, chaves_colunas) = if matriz.height() < 2 {
+            (Vec::new(), Vec::new())
+        } else {
+            let mut caminhos = vec![None];
+            caminhos.extend(chaves_linhas.iter().map(juntar));
+            caminhos.push(Some(String::new()));
+            let n_medidas = config.valores.len();
+            let mut cols: Vec<Option<String>> = vec![None; n.max(1)];
+            for k in &chaves_cols {
+                cols.extend(std::iter::repeat(juntar(k)).take(n_medidas));
+            }
+            if !config.colunas.is_empty() {
+                cols.extend(std::iter::repeat(Some(String::new())).take(n_medidas));
+            }
+            (caminhos, cols)
+        };
+        return Resultado { matriz, linhas, colunas_de_rotulo: n.max(1), caminhos, chaves_colunas };
     }
+    montar_estruturado(total_linhas, &valor, config, opcoes, extras)
+}
 
+/// As linhas da origem (a partir de 1, como em `valor`) que formam a célula
+/// (`linha`, `coluna`) do resultado: o "detalhar" do duplo clique do Excel.
+/// Devolve junto o resultado montado pela árvore de grupos, para a interface
+/// conferir que é o mesmo que está na planilha (a dinâmica simples sai pelo
+/// caminho antigo, que não anota de onde vem cada célula). `None` fora das
+/// células de valor.
+pub fn linhas_da_celula(
+    total_linhas: usize,
+    valor: impl Fn(usize, usize) -> Value,
+    config: &DinamicaConfig,
+    opcoes: &Opcoes,
+    extras: &Extras,
+    linha: usize,
+    coluna: usize,
+) -> Option<(Resultado, Vec<usize>)> {
+    // O mesmo cálculo da grade: a dinâmica simples sai pelo caminho rápido,
+    // que agora também anota os caminhos (antes, sempre a árvore inteira).
+    let resultado = montar_com_extras(total_linhas, &valor, config, opcoes, extras);
+    let caminho = resultado.caminhos.get(linha)?.clone()?;
+    let ck = resultado.chaves_colunas.get(coluna)?.clone()?;
+    let achadas = linhas_do_caminho(total_linhas, &valor, config, opcoes, extras, &caminho, &ck);
+    Some((resultado, achadas))
+}
+
+/// As linhas da origem de um caminho de Linhas e uma chave de Colunas já
+/// conhecidos (de um [`Resultado`] guardado): uma passada só pela origem,
+/// sem montar a dinâmica de novo.
+pub fn linhas_do_caminho(
+    total_linhas: usize,
+    valor: impl Fn(usize, usize) -> Value,
+    config: &DinamicaConfig,
+    opcoes: &Opcoes,
+    extras: &Extras,
+    caminho: &str,
+    ck: &str,
+) -> Vec<usize> {
+    let partes = |t: &str| -> Vec<String> {
+        if t.is_empty() { Vec::new() } else { t.split(SEPARADOR).map(str::to_string).collect() }
+    };
+    let (alvo_linhas, alvo_colunas) = (partes(caminho), partes(ck));
+    let rel = |c: usize| c.saturating_sub(config.origem.c0 as usize);
+    let mut achadas = Vec::new();
+    'linhas: for r in 1..total_linhas {
+        for f in &opcoes.filtros {
+            if f.valores.contains(&parse_date_key(&valor(r, rel(f.coluna)), None)) == f.excluir {
+                continue 'linhas;
+            }
+        }
+        for (d, alvo) in alvo_linhas.iter().enumerate() {
+            let (k, _) = chave_do_campo(&valor(r, rel(config.linhas[d])), d, &extras.linhas, config.agrupar_data);
+            if k != *alvo {
+                continue 'linhas;
+            }
+        }
+        for (d, alvo) in alvo_colunas.iter().enumerate() {
+            let (k, _) = chave_do_campo(&valor(r, rel(config.colunas[d])), d, &extras.colunas, config.agrupar_data);
+            if k != *alvo {
+                continue 'linhas;
+            }
+        }
+        achadas.push(r);
+    }
+    achadas
+}
+
+/// A dinâmica pela árvore de grupos (layouts, subtotais, extras), anotando
+/// de onde vem cada linha e cada coluna do resultado.
+fn montar_estruturado(
+    total_linhas: usize,
+    valor: &impl Fn(usize, usize) -> Value,
+    config: &DinamicaConfig,
+    opcoes: &Opcoes,
+    extras: &Extras,
+) -> Resultado {
+    let n = config.linhas.len();
     let c0 = config.origem.c0 as usize;
     let rel = |c: usize| c.saturating_sub(c0);
     let n_medidas = config.valores.len();
@@ -286,7 +430,9 @@ pub fn montar_com_extras(
     // linhas e nas colunas.
     let mut raiz = No::default();
     let mut raiz_col = No::default();
-    let mut por_caminho: HashMap<(String, String), Numeros> = HashMap::new();
+    // Chave = caminho + JUNTA + chave da coluna: procurar não aloca.
+    let mut por_caminho: HashMap<String, Numeros> = HashMap::new();
+    let mut dupla = String::new();
     let mut por_caminho_total: HashMap<String, Numeros> = HashMap::new();
     let mut por_coluna: HashMap<String, Numeros> = HashMap::new();
     let mut tudo: Numeros = acumuladores(config);
@@ -315,28 +461,29 @@ pub fn montar_com_extras(
         let mut chave_coluna = String::new();
         let mut no_col = &mut raiz_col;
         for (d, &c) in config.colunas.iter().enumerate() {
-            let (chave, ordem) = chave_do_campo(&valor(r, rel(c)), d, &extras.colunas, config.agrupar_data);
+            let (chave, ordem) = chave_do_valor(valor(r, rel(c)), d, &extras.colunas, config.agrupar_data);
             if d > 0 {
                 chave_coluna.push(SEPARADOR);
             }
             chave_coluna.push_str(&chave);
             no_col = no_col.filho(chave, ordem);
-            empurrar(por_coluna.entry(chave_coluna.clone()).or_insert_with(|| acumuladores(config)), &medidas);
+            empurrar(somas_de(&mut por_coluna, &chave_coluna, config), &medidas);
         }
         let mut caminho = String::new();
         let mut no = &mut raiz;
         for (d, &c) in config.linhas.iter().enumerate() {
-            let (chave, ordem) = chave_do_campo(&valor(r, rel(c)), d, &extras.linhas, config.agrupar_data);
+            let (chave, ordem) = chave_do_valor(valor(r, rel(c)), d, &extras.linhas, config.agrupar_data);
             if d > 0 {
                 caminho.push(SEPARADOR);
             }
             caminho.push_str(&chave);
             no = no.filho(chave, ordem);
-            empurrar(
-                por_caminho.entry((caminho.clone(), chave_coluna.clone())).or_insert_with(|| acumuladores(config)),
-                &medidas,
-            );
-            empurrar(por_caminho_total.entry(caminho.clone()).or_insert_with(|| acumuladores(config)), &medidas);
+            dupla.clear();
+            dupla.push_str(&caminho);
+            dupla.push(JUNTA);
+            dupla.push_str(&chave_coluna);
+            empurrar(somas_de(&mut por_caminho, &dupla, config), &medidas);
+            empurrar(somas_de(&mut por_caminho_total, &caminho, config), &medidas);
         }
         empurrar(&mut tudo, &medidas);
     }
@@ -348,7 +495,7 @@ pub fn montar_com_extras(
             (true, true) => &tudo,
             (true, false) => por_coluna.get(ck).unwrap_or(&vazio),
             (false, true) => por_caminho_total.get(caminho).unwrap_or(&vazio),
-            (false, false) => por_caminho.get(&(caminho.to_string(), ck.to_string())).unwrap_or(&vazio),
+            (false, false) => por_caminho.get(&format!("{caminho}{JUNTA}{ck}")).unwrap_or(&vazio),
         };
         acc[i].resultado()
     };
@@ -413,7 +560,7 @@ pub fn montar_com_extras(
         }
     }
 
-    let mut saida = Saida { linhas: vec![cab], info: vec![InfoLinha::nova(TipoLinha::Cabecalho, 0)] };
+    let mut saida = Saida { linhas: vec![cab], info: vec![InfoLinha::nova(TipoLinha::Cabecalho, 0)], caminhos: vec![None] };
     let ctx = Contexto { opcoes, n, largura_rotulo, do_caminho: &contas, brancos: &brancos };
     let mut anterior: Vec<String> = Vec::new();
     for nome in &raiz.ordenados {
@@ -427,14 +574,29 @@ pub fn montar_com_extras(
         ultima.extend(contas(""));
         saida.linhas.push(ultima);
         saida.info.push(InfoLinha::nova(TipoLinha::Total, 0));
+        saida.caminhos.push(Some(String::new()));
     }
 
-    Resultado { matriz: Matrix::new(saida.linhas), linhas: saida.info, colunas_de_rotulo: largura_rotulo }
+    let mut chaves_colunas: Vec<Option<String>> = vec![None; largura_rotulo];
+    for ck in &colunas {
+        chaves_colunas.extend(std::iter::repeat(Some(ck.clone())).take(n_medidas));
+    }
+    if total_linha_direita {
+        chaves_colunas.extend(std::iter::repeat(Some(String::new())).take(n_medidas));
+    }
+    Resultado {
+        matriz: Matrix::new(saida.linhas),
+        linhas: saida.info,
+        colunas_de_rotulo: largura_rotulo,
+        caminhos: saida.caminhos,
+        chaves_colunas,
+    }
 }
 
 struct Saida {
     linhas: Vec<Vec<Value>>,
     info: Vec<InfoLinha>,
+    caminhos: Vec<Option<String>>,
 }
 
 struct Contexto<'a> {
@@ -468,6 +630,7 @@ fn emitir(ctx: &Contexto, saida: &mut Saida, nome: &str, no: &No, caminho: Strin
             }
             saida.linhas.push(linha);
             saida.info.push(info);
+            saida.caminhos.push(Some(caminho.clone()));
             if !recolhido {
                 for n in &no.ordenados {
                     emitir(ctx, saida, n, &no.filhos[n], format!("{caminho}{SEPARADOR}{n}"), d + 1, anterior);
@@ -496,6 +659,7 @@ fn emitir(ctx: &Contexto, saida: &mut Saida, nome: &str, no: &No, caminho: Strin
                 *anterior = partes;
                 saida.linhas.push(linha);
                 saida.info.push(info);
+                saida.caminhos.push(Some(caminho.clone()));
             } else {
                 for n in &no.ordenados {
                     emitir(ctx, saida, n, &no.filhos[n], format!("{caminho}{SEPARADOR}{n}"), d + 1, anterior);
@@ -506,6 +670,7 @@ fn emitir(ctx: &Contexto, saida: &mut Saida, nome: &str, no: &No, caminho: Strin
                     linha.extend((ctx.do_caminho)(&caminho));
                     saida.linhas.push(linha);
                     saida.info.push(InfoLinha::nova(TipoLinha::Subtotal, d));
+                    saida.caminhos.push(Some(caminho.clone()));
                     // Depois do subtotal o grupo seguinte mostra os rótulos.
                     anterior.clear();
                 }
@@ -673,7 +838,7 @@ mod testes {
             coluna: 0, valores: ["a".to_string()].into_iter().collect(), excluir: true,
         });
         let resultado = montar(dados.len(), |r,c| dados[r][c].clone(), &config, &ops);
-        assert_eq!(resultado.matriz.height(), 3);
+        assert_eq!(resultado.matriz.height(), 2);
         let valor = crate::celulas::values::to_number(resultado.matriz.at(1,1));
         assert_eq!(valor, Ok(1.));
         assert_eq!(resultado.colunas_de_rotulo, 1);
@@ -699,4 +864,76 @@ mod testes {
         assert_eq!(texto(&r)[0], vec!["Rótulos de Linha", "novo (Valor)", "ok (Valor)", "Total Geral (Valor)"]);
         assert_eq!(texto(&r)[1], vec!["a", "0", "8", "8"]);
     }
+
+    #[test]
+    fn coluna_de_percentual_pede_formato_de_percentual() {
+        let d = dados();
+        let extras = Extras { valores: vec![MostrarComo::PercTotalGeral], ..Extras::default() };
+        let r = montar_com_extras(d.len(), |r, c| d[r].get(c).cloned().unwrap_or(Value::Empty),
+            &config(), &compacto(), &extras);
+        assert_eq!(r.colunas_de_rotulo, 1);
+        assert_eq!(formato_da_coluna(&r, &extras, 1, 0), None);
+        assert_eq!(formato_da_coluna(&r, &extras, 1, 1), Some("0,00%"));
+        // A linha "a" soma 8 de 9.
+        assert_eq!(r.matriz.rows()[1][1], Value::Number(8.0 / 9.0));
+        assert_eq!(formato_da_coluna(&r, &Extras::default(), 1, 1), None);
+    }
+
+    #[test]
+    fn rotulo_do_item_segue_o_agrupamento_do_campo() {
+        use crate::dinamica::exibicao::{Agrupamento, Faixas};
+        let extra = CampoExtra {
+            agrupamento: Some(Agrupamento::Faixas(Faixas { inicio: 0.0, fim: 100.0, intervalo: 10.0 })),
+            ..CampoExtra::default()
+        };
+        let (sem, _) = rotulo_do_item(&Value::Text("Norte".into()), &CampoExtra::default(), None);
+        assert_eq!(sem, "Norte");
+        let (com, ordem) = rotulo_do_item(&Value::Number(15.0), &extra, None);
+        assert_eq!((com, ordem.is_some()), (crate::dinamica::exibicao::chave_agrupada(&Value::Number(15.0),
+            extra.agrupamento.as_ref().unwrap()).0, true));
+    }
+
+    #[test]
+    fn detalhar_acha_as_linhas_do_grupo_do_item_e_do_total() {
+        let d = dados();
+        let valor = |r: usize, c: usize| d[r].get(c).cloned().unwrap_or(Value::Empty);
+        let (r, grupo) = linhas_da_celula(d.len(), valor, &config(), &compacto(), &Extras::default(), 1, 1)
+            .expect("célula de valor");
+        assert_eq!(texto(&r)[1][0], "a");
+        assert_eq!(grupo, vec![1, 2], "o grupo a junta b e c");
+        let item = r.caminhos.iter().position(|c| c.as_deref() == Some(&*format!("a{}c", SEPARADOR))).unwrap();
+        let (_, so_c) = linhas_da_celula(d.len(), valor, &config(), &compacto(), &Extras::default(), item, 1).unwrap();
+        assert_eq!(so_c, vec![2]);
+        let total = r.caminhos.len() - 1;
+        let (_, tudo) = linhas_da_celula(d.len(), valor, &config(), &compacto(), &Extras::default(), total, 1).unwrap();
+        assert_eq!(tudo, vec![1, 2, 3]);
+        assert!(linhas_da_celula(d.len(), valor, &config(), &compacto(), &Extras::default(), 1, 0).is_none(),
+            "rótulo não detalha");
+        assert!(linhas_da_celula(d.len(), valor, &config(), &compacto(), &Extras::default(), 0, 1).is_none(),
+            "cabeçalho não detalha");
+    }
+
+    #[test]
+    fn a_dinamica_simples_tambem_anota_os_caminhos() {
+        let d = dados();
+        let valor = |r: usize, c: usize| d[r].get(c).cloned().unwrap_or(Value::Empty);
+        for colunas in [vec![], vec![3]] {
+            let config = DinamicaConfig { colunas, ..config() };
+            let r = montar_com_extras(d.len(), valor, &config, &Opcoes::antigas(), &Extras::default());
+            assert_eq!(r.caminhos.len(), r.matriz.height());
+            assert_eq!(r.chaves_colunas.len(), r.matriz.rows()[0].len());
+            for (i, linha) in r.matriz.rows().iter().enumerate().skip(1) {
+                for (j, celula) in linha.iter().enumerate().skip(r.colunas_de_rotulo) {
+                    let (Some(caminho), Some(ck)) = (&r.caminhos[i], &r.chaves_colunas[j]) else {
+                        panic!("célula de valor sem caminho em ({i}, {j})");
+                    };
+                    let achadas = linhas_do_caminho(d.len(), valor, &config, &Opcoes::antigas(),
+                        &Extras::default(), caminho, ck);
+                    let soma: f64 = achadas.iter().map(|&r| to_number(&d[r][2]).unwrap()).sum();
+                    assert_eq!(Value::Number(soma), *celula, "({i}, {j}) com {:?}", config.colunas);
+                }
+            }
+        }
+    }
 }
+

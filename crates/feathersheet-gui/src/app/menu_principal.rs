@@ -438,7 +438,9 @@ fn selo_tipo(caminho: &str) -> (String, Color) {
         "FSHZ" => COR_AZUL_ACENTO(),
         _ => COR_TEXTO_MUTED(),
     };
-    (if ext.is_empty() { "—".into() } else { ext }, cor)
+    // O selo tem largura de quatro letras: "PARQUET" quebrava em duas linhas.
+    let rotulo = if ext.is_empty() { "—".into() } else { ext.chars().take(4).collect() };
+    (rotulo, cor)
 }
 
 fn negrito() -> iced::Font {
@@ -903,6 +905,18 @@ mod testes {
         let _: Element<'_, Msg> = app.view_tela_inicio(window::Id::unique());
         let _ = app.update(Msg::Novo);
         assert!(!app.em_tela_inicio);
+    }
+
+    /// Pedido de 16/10: "Abrir…" um .csv na tela inicial ficava sem resposta.
+    /// Escolhido o arquivo, a tela inicial sai na hora e o rodapé mostra a leitura.
+    #[test]
+    fn abrir_na_tela_inicial_sai_dela_e_mostra_o_carregamento() {
+        let (mut app, _) = App::novo_com(None);
+        assert!(app.em_tela_inicio);
+        let _ = app.update(Msg::ArquivoEscolhido(Some(PathBuf::from("/tmp/feathersheet-teste.csv"))));
+        assert!(!app.em_tela_inicio);
+        assert!(app.carregando);
+        let _: Element<'_, Msg> = app.view_progresso_abertura();
     }
 
     #[test]

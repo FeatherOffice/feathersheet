@@ -1,0 +1,118 @@
+# Instalador do macOS (meta da v0.1.0): .dmg com o FeatherSheet.app, um
+# para Intel (x86_64) e um para Apple Silicon (aarch64). Roda ao publicar
+# uma tag vX.Y.Z ou à mão (Actions ▸ macOS ▸ Run workflow). Sem assinatura
+# nem notarização ainda (v0.9): o macOS pede "Abrir assim mesmo" na
+# primeira vez (botão direito ▸ Abrir).
+#
+# Atenção: o repositório tem de compilar sozinho — dependências por caminho
+# (`../../../feather-io`, `[patch]` para cópias locais) quebram este job.
+name: macOS
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - alvo: x86_64-apple-darwin
+            maquina: macos-13
+            nome: intel
+          - alvo: aarch64-apple-darwin
+            maquina: macos-14
+            nome: apple-silicon
+    runs-on: ${{ matrix.maquina }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add ${{ matrix.alvo }}
+
+      - name: Compilar
+        working-directory: crates/feathersheet-gui
+        run: cargo build --release --target ${{ matrix.alvo }}
+
+      - name: Montar o .app e o .dmg
+        run: |
+          set -euo pipefail
+          versao="$(sed -n 's/^version = "\(.*\)"/\1/p' crates/feathersheet-gui/Cargo.toml | head -1)"
+          app="dist-mac/FeatherSheet.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp "crates/feathersheet-gui/target/${{ matrix.alvo }}/release/feathersheet" "$app/Contents/MacOS/feathersheet"
+          strip "$app/Contents/MacOS/feathersheet" || true
+
+          # Ícone: o .icns sai dos PNG do pacote.
+          icones="dist-mac/feathersheet.iconset"
+          mkdir -p "$icones"
+          for t in 16 32 128 256 512; do
+            cp "pacote/icones/feathersheet-$t.png" "$icones/icon_${t}x${t}.png"
+          done
+          cp pacote/icones/feathersheet-32.png "$icones/icon_16x16@2x.png"
+          cp pacote/icones/feathersheet-64.png "$icones/icon_32x32@2x.png"
+          cp pacote/icones/feathersheet-256.png "$icones/icon_128x128@2x.png"
+          cp pacote/icones/feathersheet-512.png "$icones/icon_256x256@2x.png"
+          iconutil -c icns "$icones" -o "$app/Contents/Resources/feathersheet.icns"
+
+          cat > "$app/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>FeatherSheet</string>
+            <key>CFBundleDisplayName</key><string>FeatherSheet</string>
+            <key>CFBundleIdentifier</key><string>org.featheroffice.feathersheet</string>
+            <key>CFBundleVersion</key><string>${versao}</string>
+            <key>CFBundleShortVersionString</key><string>${versao}</string>
+            <key>CFBundleExecutable</key><string>feathersheet</string>
+            <key>CFBundleIconFile</key><string>feathersheet</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+            <key>CFBundleDocumentTypes</key>
+            <array>
+              <dict>
+                <key>CFBundleTypeName</key><string>Planilha FeatherSheet</string>
+                <key>CFBundleTypeExtensions</key><array><string>fshz</string></array>
+                <key>CFBundleTypeRole</key><string>Editor</string>
+                <key>CFBundleTypeIconFile</key><string>feathersheet</string>
+              </dict>
+              <dict>
+                <key>CFBundleTypeName</key><string>Planilha</string>
+                <key>CFBundleTypeExtensions</key><array><string>xlsx</string><string>csv</string><string>parquet</string></array>
+                <key>CFBundleTypeRole</key><string>Editor</string>
+              </dict>
+            </array>
+          </dict>
+          </plist>
+          PLIST
+          sed -i '' 's/^          //' "$app/Contents/Info.plist"
+
+          # .dmg com o atalho para Aplicativos.
+          ln -s /Applications dist-mac/Applications
+          rm -rf "$icones"
+          dmg="FeatherSheet-${versao}-macos-${{ matrix.nome }}.dmg"
+          hdiutil create -volname "FeatherSheet ${versao}" -srcfolder dist-mac -ov -format UDZO "$dmg"
+          shasum -a 256 "$dmg" > "$dmg.sha256"
+          echo "DMG=$dmg" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feathersheet-macos-${{ matrix.nome }}
+          path: |
+            ${{ env.DMG }}
+            ${{ env.DMG }}.sha256
+
+      - name: Anexar à versão (só em tag)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${GITHUB_REF_NAME}" "$DMG" "$DMG.sha256" --clobber || echo "A versão ${GITHUB_REF_NAME} ainda não existe no GitHub; o .dmg ficou nos artefatos."

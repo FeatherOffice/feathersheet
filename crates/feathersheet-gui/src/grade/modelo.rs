@@ -83,6 +83,8 @@ pub struct Grade<'a> {
     pub areas_extras: &'a [Rect],
     /// Área de impressão e quebras da aba ativa (só visual, em memória).
     pub impressao: Option<super::ImpressaoVisual>,
+    /// Área do Ctrl+C nesta aba: contorno tracejado.
+    pub copiada: Option<Rect>,
     /// Setas de Fórmulas → Rastrear precedentes/dependentes da aba ativa.
     pub setas: &'a [crate::app::SetaRastreio],
     /// Balões de comentário à mostra (mouse, Mostrar todos, editor aberto).
@@ -92,8 +94,9 @@ pub struct Grade<'a> {
 }
 
 pub(crate) fn largura(w: &Workbook, aba: usize, coluna: u32) -> f32 {
-    w.aba(aba).map_or(LARGURA_PADRAO, |a| a.sheet.col_widths.get(&coluna)
-        .map(|&v| v as f32).unwrap_or_else(|| super::largura_padrao_da(&a.sheet)))
+    w.aba(aba).map_or(LARGURA_PADRAO, |a| if a.sheet.coluna_oculta(coluna) { 0.0 } else {
+        a.sheet.col_widths.get(&coluna).map(|&v| v as f32).unwrap_or_else(|| super::largura_padrao_da(&a.sheet))
+    })
 }
 /// Distância, em pixels lógicos, da borda esquerda da coluna A até a
 /// coluna `coluna`, com as larguras reais da aba. Botões e formas usam esta
@@ -105,7 +108,9 @@ pub(crate) fn inicio_x(w: &Workbook, aba: usize, coluna: u32) -> f32 {
 /// [`inicio_x`] direto na aba (para quem só tem o `Sheet`).
 pub(crate) fn inicio_x_da(sheet: &feathersheet_core::planilha::sheet::Sheet, coluna: u32) -> f32 {
     let padrao = super::largura_padrao_da(sheet);
-    (0..coluna.min(feathersheet_core::MAX_COLS))
+    // Colunas ocultas até o fim não somam largura.
+    let fim = sheet.colunas_ocultas_desde.map_or(coluna, |n| coluna.min(n));
+    (0..fim.min(feathersheet_core::MAX_COLS))
         .map(|c| sheet.col_widths.get(&c).map(|&v| v as f32).unwrap_or(padrao)).sum()
 }
 
@@ -117,12 +122,17 @@ pub(crate) fn inicio_y(w: &Workbook, aba: usize, linha: u32) -> f32 {
 
 /// [`inicio_y`] direto na aba.
 pub(crate) fn inicio_y_da(sheet: &feathersheet_core::planilha::sheet::Sheet, linha: u32) -> f32 {
+    // Linhas ocultas até o fim não somam altura.
+    let linha = sheet.linhas_ocultas_desde.map_or(linha, |n| linha.min(n));
     let proprias: f32 = sheet.row_heights.iter()
         .filter(|(r, _)| **r < linha).map(|(_, h)| *h as f32 - ALTURA_PADRAO).sum();
     linha as f32 * ALTURA_PADRAO + proprias
 }
 
 pub(crate) fn altura(w: &Workbook, aba: usize, linha: u32) -> f32 {
-    w.aba(aba).and_then(|a| a.sheet.row_heights.get(&linha).copied())
-        .map(|v| v as f32).unwrap_or(ALTURA_PADRAO)
+    match w.aba(aba) {
+        Some(a) if a.sheet.linhas_ocultas_desde.is_some_and(|n| linha >= n) => 0.0,
+        a => a.and_then(|a| a.sheet.row_heights.get(&linha).copied())
+            .map(|v| v as f32).unwrap_or(ALTURA_PADRAO),
+    }
 }

@@ -124,7 +124,7 @@ mod testes {
 
     #[test]
     fn faixas_congeladas_sao_fixas_e_sem_copia_do_intervalo_rolado() {
-        let eixo = Eixo::novo(10_000_000, 100., &HashMap::new());
+        let eixo = Eixo::novo(10_000_000, 100., &HashMap::new(), None);
         let (itens, div) = faixas(580., 90., 2, 1_000_000, 10_000_000, &eixo, 0.0);
         assert_eq!(div, 290.);
         assert_eq!(itens.iter().map(|v|v.0).collect::<Vec<_>>(),
@@ -132,7 +132,7 @@ mod testes {
     }
     #[test]
     fn faixa_rolavel_nunca_repete_o_congelado() {
-        let eixo = Eixo::novo(10_000_000, 28., &HashMap::new());
+        let eixo = Eixo::novo(10_000_000, 28., &HashMap::new(), None);
         let (itens, _) = faixas(250., 30., 2, 0, 10_000_000, &eixo, 0.0);
         let linhas: Vec<u32> = itens.into_iter().map(|v| v.0).collect();
         assert_eq!(linhas[..2], [0,1]);
@@ -141,7 +141,7 @@ mod testes {
     #[test]
     fn faixas_com_larguras_variaveis_e_ocultas_preservam_indices() {
         let medidas = HashMap::from([(0, 75), (1, 0)]);
-        let eixo = Eixo::novo(1_000_000, 100., &medidas);
+        let eixo = Eixo::novo(1_000_000, 100., &medidas, None);
         let (itens, div) = faixas(500., 90., 2, 15, 1_000_000, &eixo, 0.0);
         assert_eq!(div,165.);
         let ids: Vec<u32> = itens.into_iter().map(|v|v.0).collect();
@@ -149,7 +149,7 @@ mod testes {
     }
     #[test]
     fn viewport_pequeno_nao_congela_a_tela_inteira() {
-        let eixo = Eixo::novo(10_000_000, 100., &HashMap::new());
+        let eixo = Eixo::novo(10_000_000, 100., &HashMap::new(), None);
         let (itens, div) = faixas(250., 90., 200, 30, 10_000_000, &eixo, 0.0);
         assert!(div < 250.);
         assert!(itens.len() <= 3);
@@ -157,7 +157,7 @@ mod testes {
     #[test]
     fn ocultar_cem_mil_linhas_nao_pula_indevidamente_o_primeiro_valor() {
         let medidas = (0..100_000).map(|r| (r, 0)).collect::<HashMap<u32, u32>>();
-        let eixo = Eixo::novo(10_000_000, 28., &medidas);
+        let eixo = Eixo::novo(10_000_000, 28., &medidas, None);
         let (itens, div) = faixas(200., 30., 0, 0, 10_000_000, &eixo, 0.0);
         assert_eq!(div, 30.);
         assert_eq!(itens.first().map(|v| v.0), Some(100_000));
@@ -165,7 +165,7 @@ mod testes {
     }
     #[test]
     fn so_a_faixa_cortada_no_fim_volta_ao_tamanho_inteiro() {
-        let eixo = Eixo::novo(1_000, 18., &HashMap::new());
+        let eixo = Eixo::novo(1_000, 18., &HashMap::new(), None);
         // 30 + 3 × 18 = 84; fim útil em 90: a quarta linha aparece com 6 px.
         let (itens, _) = faixas(90., 30., 0, 0, 1_000, &eixo, 0.0);
         assert_eq!(itens.last().map(|f| f.2), Some(6.0));

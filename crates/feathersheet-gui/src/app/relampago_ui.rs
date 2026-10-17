@@ -35,7 +35,7 @@ impl App {
             cell_name(plano.escrever[0].0, coluna),
             cell_name(plano.escrever[n - 1].0, coluna),
             plano.exemplos.len());
-        feathersheet_core::diario::anotar(format!(
+        feathersheet_core::diario::anotar(trf!(
             "[relâmpago] {n} linha(s) · {} pedaço(s) · {:.1} ms",
             plano.programa.pedacos.len(), inicio.elapsed().as_secs_f64() * 1000.0));
     }

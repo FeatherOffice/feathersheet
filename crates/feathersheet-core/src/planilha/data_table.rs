@@ -99,6 +99,25 @@ impl DataTable {
         }
     }
 
+    /// Carga por blocos (CSV): um bloco de números pronto, ver
+    /// [`ChunkedColumn::colocar_bloco`]. Devolve as linhas da ponta.
+    pub fn carregar_bloco_num(&mut self, col: u32, idx: usize, valores: Box<[f64]>, mascara: Box<[u8]>) -> Option<(u32, u32)> {
+        let pontas = self.get_or_create_column(col).float_col.get_or_insert_with(ChunkedFloatColumn::new)
+            .colocar_bloco(idx, valores, mascara)?;
+        self.tracked_max_row = self.tracked_max_row.max(pontas.1);
+        self.tracked_max_col = self.tracked_max_col.max(col);
+        Some(pontas)
+    }
+
+    /// Carga por blocos (CSV): um bloco de ids de texto **já no pool**.
+    pub fn carregar_bloco_txt(&mut self, col: u32, idx: usize, ids: Box<[i32]>, mascara: Box<[u8]>) -> Option<(u32, u32)> {
+        let pontas = self.get_or_create_column(col).text_col.get_or_insert_with(ChunkedInt32Column::new)
+            .colocar_bloco(idx, ids, mascara)?;
+        self.tracked_max_row = self.tracked_max_row.max(pontas.1);
+        self.tracked_max_col = self.tracked_max_col.max(col);
+        Some(pontas)
+    }
+
     /// Carga de arquivo: a coluna inteira de texto/booleano de uma vez, com
     /// os ids **já no pool da aba** (quem chama traduz o dicionário local do
     /// arquivo uma vez por texto distinto, não uma vez por célula).
@@ -476,16 +495,36 @@ impl DataTable {
         let Some(entry) = self.columns.get_mut(&col) else {
             return;
         };
-        if let Some(fc) = &mut entry.float_col {
-            if fc.max_row >= 0 {
-                for r in r0.max(fc.min_row)..=r1.min(fc.max_row as u32) { fc.clear(r); }
+        // Bloco a bloco (era `clear` linha a linha: 100 milhões de linhas).
+        if let Some(fc) = &mut entry.float_col { fc.apagar_faixa(r0, r1); }
+        if let Some(tc) = &mut entry.text_col { tc.apagar_faixa(r0, r1); }
+    }
+
+    /// `r0..=r1` da coluna `col` passam a valer `val` (número, texto ou
+    /// booleano), bloco a bloco. `false` para vazio e erro (não vão assim).
+    pub fn preencher_faixa(&mut self, col: u32, r0: u32, r1: u32, val: &Value, pool: &mut StringPool) -> bool {
+        let id_texto = match val {
+            Value::Number(_) => None,
+            Value::Bool(b) => Some(pool.get_or_create(if *b { "VERDADEIRO" } else { "FALSO" })),
+            Value::Text(t) if !t.is_empty() => Some(pool.get_or_create(t)),
+            _ => return false,
+        };
+        if id_texto.is_some_and(|id| id < 0) { return false; }
+        let entry = self.get_or_create_column(col);
+        match (val, id_texto) {
+            (Value::Number(n), _) => {
+                entry.float_col.get_or_insert_with(ChunkedFloatColumn::new).preencher_faixa(r0, r1, *n);
+                if let Some(tc) = &mut entry.text_col { tc.apagar_faixa(r0, r1); }
             }
-        }
-        if let Some(tc) = &mut entry.text_col {
-            if tc.max_row >= 0 {
-                for r in r0.max(tc.min_row)..=r1.min(tc.max_row as u32) { tc.clear(r); }
+            (_, Some(id)) => {
+                entry.text_col.get_or_insert_with(ChunkedInt32Column::new).preencher_faixa(r0, r1, id);
+                if let Some(fc) = &mut entry.float_col { fc.apagar_faixa(r0, r1); }
             }
+            _ => return false,
         }
+        self.tracked_max_row = self.tracked_max_row.max(r1);
+        self.tracked_max_col = self.tracked_max_col.max(col);
+        true
     }
 
     /// As colunas que têm alguma coisa guardada.

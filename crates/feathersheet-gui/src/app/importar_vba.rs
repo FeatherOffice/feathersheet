@@ -152,7 +152,7 @@ impl App {
             }
             Ok(_) => {}
             // .xlsm sem vbaProject.bin: só os dados.
-            Err(e) => feathersheet_core::diario::anotar(format!("[xlsm] sem macros: {e}")),
+            Err(e) => feathersheet_core::diario::anotar(trf!("[xlsm] sem macros: {e}")),
         }
     }
 

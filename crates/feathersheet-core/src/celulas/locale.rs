@@ -60,11 +60,27 @@ impl LocaleConfig {
         }
     }
 
+    /// Espanhol: `1.250,50`, `1.250,50 €`, fórmulas com `;`.
+    pub fn es_es() -> Self {
+        LocaleConfig {
+            code: "es-ES".into(),
+            name: "Español".into(),
+            decimal_separator: ',',
+            thousands_separator: '.',
+            formula_arg_separator: ';',
+            currency_symbol: "€".into(),
+            currency_code: "EUR".into(),
+            currency_before: false,
+            currency_space: true,
+        }
+    }
+
     /// As que já vêm prontas, pelo código; as outras chegam do arquivo de língua.
     pub fn embutida(code: &str) -> Option<Self> {
         match code {
             "pt-BR" | "pt_BR" | "pt" => Some(Self::pt_br()),
             "en-US" | "en_US" | "en" => Some(Self::en_us()),
+            "es-ES" | "es_ES" | "es" => Some(Self::es_es()),
             _ => None,
         }
     }
@@ -151,6 +167,32 @@ fn converter_formula(raw: &str, cfg: &LocaleConfig, apresentar: bool) -> String 
     saida
 }
 
+/// Troca o nome de cada função (identificador seguido de `(`) pelo que
+/// `trocar` devolver; o resto da fórmula fica byte a byte. É o de-para dos
+/// nomes por idioma: os mapas vêm dos arquivos de língua do app, o motor não
+/// conhece idiomas. Texto que não é fórmula volta igual.
+pub fn traduzir_funcoes(raw: &str, trocar: &dyn Fn(&str) -> Option<String>) -> String {
+    use crate::formula::tokenizer::{tokenize_com_decimal, TokenType};
+    if !raw.starts_with('=') { return raw.to_owned(); }
+    let Ok(tokens) = tokenize_com_decimal(raw, decimal_separator()) else { return raw.to_owned() };
+    let chars: Vec<char> = raw.chars().collect();
+    let mut saida = String::with_capacity(raw.len());
+    let mut anterior = 0;
+    for (i, t) in tokens.iter().enumerate() {
+        if t.kind != TokenType::Ident { continue; }
+        if tokens.get(i + 1).map(|p| p.kind) != Some(TokenType::LParen) { continue; }
+        let fim = t.pos + t.text.chars().count();
+        // O texto do token pode vir normalizado: confere com o original.
+        let original: String = chars.get(t.pos..fim).map(|c| c.iter().collect()).unwrap_or_default();
+        let Some(novo) = trocar(&original) else { continue };
+        saida.extend(chars[anterior..t.pos].iter());
+        saida.push_str(&novo);
+        anterior = fim;
+    }
+    saida.extend(chars[anterior..].iter());
+    saida
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
@@ -173,9 +215,25 @@ mod testes {
     }
 
     #[test]
+    fn de_para_troca_so_nomes_de_funcao() {
+        let es = |n: &str| match n.to_uppercase().as_str() {
+            "SOMA" | "SUM" => Some("SUMA".to_string()),
+            "SE" | "IF" => Some("SI".to_string()),
+            _ => None,
+        };
+        assert_eq!(traduzir_funcoes("=SE(A1>0;SOMA(B1:B3);\"SOMA(\")", &es),
+            "=SI(A1>0;SUMA(B1:B3);\"SOMA(\")");
+        // Referência, nome definido e texto fora de fórmula não mudam.
+        assert_eq!(traduzir_funcoes("=SOMA+Sum1*2", &es), "=SOMA+Sum1*2");
+        assert_eq!(traduzir_funcoes("SOMA(1)", &es), "SOMA(1)");
+        assert_eq!(traduzir_funcoes("=sum(1;2)", &es), "=SUMA(1;2)");
+    }
+
+    #[test]
     fn as_embutidas_pelo_codigo() {
         assert_eq!(LocaleConfig::embutida("pt-BR").unwrap().decimal_separator, ',');
         assert_eq!(LocaleConfig::embutida("en").unwrap().formula_arg_separator, ',');
+        assert_eq!(LocaleConfig::embutida("es").unwrap().formula_arg_separator, ';');
         assert!(LocaleConfig::embutida("de-DE").is_none(), "as outras vêm do arquivo de língua");
     }
 

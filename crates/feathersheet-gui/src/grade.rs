@@ -355,6 +355,17 @@ impl canvas::Program<Msg> for Grade<'_> {
                     crate::app::tabelas::total_texto(self.workbook, self.aba, &tabelas_visuais, r, c)
                         .unwrap_or_else(|| self.texto(r,c))
                 };
+                // Imagem dentro da célula (=IMAGEM, "Colocar na célula" do
+                // .xlsx): a figura no lugar do texto, sem distorcer.
+                let val = match (!self.mostrar_formulas).then(|| crate::imagem_celula::imagem(&val)).flatten() {
+                    Some((handle, iw, ih)) => {
+                        let (ix, iy, lw, lh) = crate::imagem_celula::encaixe(x, y, desenhar_w, desenhar_h, iw, ih);
+                        f.draw_image(Rectangle::new(Point::new(ix, iy), Size::new(lw, lh)),
+                            iced::widget::canvas::Image::new(handle));
+                        String::new()
+                    }
+                    None => val,
+                };
                 if !val.is_empty() {
                     // Links importados do XLSX e URLs digitadas no CSV têm
                     // aparência clicável, sem criar estilos por célula.
@@ -534,6 +545,15 @@ impl canvas::Program<Msg> for Grade<'_> {
                 }
                 // Funil real no cabeçalho, sem depender de glifos Unicode.
                 // Contorno = sem filtro; preenchido = filtro aplicado.
+                // Filtro de relatório da dinâmica: o mesmo funil, na célula do item.
+                if let Some((_, filtrado)) = crate::dinamica_visual::filtro_na_grade(&dinamicas_visuais,r,c) {
+                    desenhar_funil(
+                        &mut f,
+                        Point::new(x+desenhar_w-12.0, y+desenhar_h/2.0),
+                        filtrado,
+                        cor_contraste(cor_fundo, self.escuro),
+                    );
+                }
                 if let Some(filtrado) = crate::app::tabelas::icone_filtro(&tabelas_visuais,r,c) {
                     desenhar_funil(
                         &mut f,
@@ -904,6 +924,7 @@ impl canvas::Program<Msg> for Grade<'_> {
         self.desenhar_validacao(&mut f, &colunas_visiveis, &linhas_visiveis, bounds.size(), false);
         self.desenhar_impressao(&mut f, bounds, &colunas_visiveis, &linhas_visiveis);
         self.desenhar_alca(&mut f, bounds.size(), state.alca.as_ref(), &colunas_visiveis, &linhas_visiveis, ativo, bg);
+        self.desenhar_copiada(&mut f, &colunas_visiveis, &linhas_visiveis, ativo);
         if let Some(a) = state.dimensao { desenhar_guia_dimensao(&mut f, bounds, a, ativo, self.zoom); }
         });
         vec![celulas, self.desenhar_barras(renderer, tela, state.barra)]
@@ -1123,6 +1144,18 @@ impl canvas::Program<Msg> for Grade<'_> {
                                     return (event::Status::Captured,
                                         Some(Msg::Dinamica(crate::app::dinamica_ui::Evento::RecolherNaGrade(r,c,caminho))));
                                 }
+                            }
+                        }
+                        // Funil do filtro de relatório da dinâmica: a lista de itens.
+                        if self.workbook.aba(self.aba).is_some_and(|a| crate::dinamica_visual::filtro_na_grade(
+                            &crate::dinamica_visual::com_cache(&a.sheet,a.versao),r,c).is_some())
+                        {
+                            let direita = self.posicao_da_celula(r,c,
+                                Size::new(bounds.width/self.zoom,bounds.height/self.zoom))
+                                .map(|(x,_,w,_)| x+w).unwrap_or(0.0);
+                            if p.x >= direita-24.0 && p.x<=direita {
+                                return (event::Status::Captured,
+                                    Some(Msg::Dinamica(crate::app::dinamica_ui::Evento::FiltroNaGrade(r,c))));
                             }
                         }
                         // Setinha no cabeçalho: abre o painel da própria coluna.

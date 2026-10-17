@@ -20,6 +20,7 @@ use std::sync::Arc;
 
 use crate::celulas::estilo_parcial::EstiloParcial;
 use crate::celulas::refs::{key, MAX_COLS, MAX_ROWS};
+use crate::planilha::column_store::CHUNK_SHIFT;
 use crate::celulas::values::{CellError, ErrorCode, Value};
 use crate::formula::ast::Node;
 use crate::formula::formula_pattern::pattern_for;
@@ -289,6 +290,47 @@ impl Sheet {
         self.data.carregar_coluna_txt(col, &ids, &mascara, linhas);
         self.cresce_limites(primeira, col);
         self.cresce_limites(ultima, col);
+    }
+}
+
+impl Sheet {
+    /// Carga do CSV por colunas: um bloco de 65.536 linhas (`CHUNK_SIZE`) de
+    /// números de uma coluna, entregue pronto (nada é copiado). A aba tem de
+    /// estar vazia nesse bloco. Ao terminar, [`Self::terminar_carga`].
+    pub fn carregar_bloco_numeros(&mut self, col: u32, idx: usize, valores: Box<[f64]>, mascara: Box<[u8]>) {
+        if col >= MAX_COLS || (idx << CHUNK_SHIFT) as u32 >= MAX_ROWS {
+            return;
+        }
+        if let Some((primeira, ultima)) = self.data.carregar_bloco_num(col, idx, valores, mascara) {
+            self.cresce_limites(primeira, col);
+            self.cresce_limites(ultima, col);
+        }
+    }
+
+    /// Como [`Self::carregar_bloco_numeros`], para texto: `ids` aponta para
+    /// `dict` (os textos distintos do bloco), que entra no pool da aba uma
+    /// vez por texto. Texto vazio ou pool cheio deixam a célula sem nada,
+    /// como no `set_cell_value`.
+    pub fn carregar_bloco_textos(&mut self, col: u32, idx: usize, mut ids: Box<[i32]>, mut mascara: Box<[u8]>, dict: &[&str]) {
+        if col >= MAX_COLS || (idx << CHUNK_SHIFT) as u32 >= MAX_ROWS {
+            return;
+        }
+        let no_pool: Vec<i32> = dict.iter()
+            .map(|t| if t.is_empty() { -1 } else { self.pool.get_or_create(t) }).collect();
+        for (r, id) in ids.iter_mut().enumerate() {
+            let bit = 1u8 << (r & 7);
+            if mascara[r >> 3] & bit == 0 {
+                continue;
+            }
+            match no_pool.get(*id as usize).copied() {
+                Some(novo) if novo >= 0 => *id = novo,
+                _ => mascara[r >> 3] &= !bit,
+            }
+        }
+        if let Some((primeira, ultima)) = self.data.carregar_bloco_txt(col, idx, ids, mascara) {
+            self.cresce_limites(primeira, col);
+            self.cresce_limites(ultima, col);
+        }
     }
 }
 

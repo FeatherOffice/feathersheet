@@ -37,6 +37,8 @@ impl Sheet {
         copia.protecao = self.protecao.clone();
         copia.comentarios = self.comentarios.clone();
         copia.row_heights = self.row_heights.clone();
+        copia.linhas_ocultas_desde = self.linhas_ocultas_desde;
+        copia.colunas_ocultas_desde = self.colunas_ocultas_desde;
         copia.col_styles = self.col_styles.clone();
         copia.row_styles = self.row_styles.clone();
         copia.sheet_style = self.sheet_style.clone();

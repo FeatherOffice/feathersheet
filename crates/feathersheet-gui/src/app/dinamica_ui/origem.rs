@@ -127,6 +127,7 @@ mod testes {
         });
         app.fim_selecao = (1,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::OrigemTexto("A1:B3".into()));
         app.evento_dinamica(Evento::OrigemAplicar);
         assert_eq!(app.dinamica.as_ref().unwrap().origem.r1,2);

@@ -93,9 +93,11 @@ pub(super) fn opcoes_tema(app: &App) -> Element<'_, Msg> {
 /// Idioma da interface e das fórmulas (Configurações e Primeiros passos).
 pub(super) fn lista_idioma(app: &App) -> Element<'_, Msg> {
     feather_ui::componentes::lista_suspensa(
-        tr!("Idioma"), &["Português (Brasil)", "English (United States)"],
-        Some(if app.config.idioma == "en-US" { "English (United States)" } else { "Português (Brasil)" }),
-        |v| Msg::Idioma(if v == "English (United States)" { "en-US" } else { "pt-BR" }),
+        tr!("Idioma"), &["Português (Brasil)", "English (United States)", "Español"],
+        Some(match app.config.idioma.as_str() {
+            "en-US" => "English (United States)", "es-ES" => "Español", _ => "Português (Brasil)",
+        }),
+        |v| Msg::Idioma(match v { "English (United States)" => "en-US", "Español" => "es-ES", _ => "pt-BR" }),
         210.0,
     ).into()
 }
@@ -135,8 +137,12 @@ pub(super) fn amostras_acento(app: &App) -> Element<'_, Msg> {
     acentos.into()
 }
 
+/// Índices das seções no menu à esquerda (a ordem de `secoes` em `visualizar`).
+pub(super) const SECAO_MCP: usize = 5;
+pub(super) const SECAO_SOBRE: usize = 6;
+
 pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
-    let secoes = [tr!("Aparência"), tr!("Salvamento"), tr!("Planilha"), "OpenQuery", tr!("Atalhos"), tr!("Sobre")];
+    let secoes = [tr!("Aparência"), tr!("Salvamento"), tr!("Planilha"), "OpenQuery", tr!("Atalhos"), tr!("IA (MCP)"), tr!("Sobre")];
     let menu = feather_ui::configuracoes::menu(
         tr!("Configurações"),
         secoes.iter().enumerate().map(|(i, nome)|
@@ -322,6 +328,7 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
             }
             col.into()
         }
+        SECAO_MCP => secao_mcp(app),
         _ => iced::widget::column![
             text(trf!("FeatherSheet {}", super::atualizacao::versao_atual())).size(17),
             secao_atualizacao(app),
@@ -337,6 +344,66 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
     };
     // Fecha pelo X da barra de título, como Docs e Slide: sem segundo "x" no corpo.
     feather_ui::configuracoes::tela(menu, secoes[app.config_secao], corpo, None)
+}
+
+/// Comando que liga uma IA ao FeatherSheet: o próprio executável com `--mcp`.
+fn comando_mcp() -> (String, String) {
+    let exe = std::env::current_exe().map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "feathersheet".into());
+    let claude_code = format!("claude mcp add feathersheet -- \"{exe}\" --mcp");
+    let json = serde_json::json!({ "mcpServers": { "feathersheet": { "command": exe, "args": ["--mcp"] } } });
+    (claude_code, serde_json::to_string_pretty(&json).unwrap_or_default())
+}
+
+/// Configurações → IA (MCP): ligar o canal ao vivo, somente leitura, como
+/// conectar e o que a IA pode fazer. Nada sai da máquina: o canal é local.
+fn secao_mcp(app: &App) -> Element<'_, Msg> {
+    let (claude_code, json) = comando_mcp();
+    let estado = if !app.config.mcp_ativo {
+        tr!("Desligado").to_owned()
+    } else if super::mcp_vivo::escutando() {
+        trf!("Ligado · {} pedido(s) nesta sessão", super::mcp_vivo::pedidos())
+    } else {
+        app.mcp_estado.clone()
+    };
+    let codigo = |t: String| container(text(t.clone()).size(11).font(iced::Font::MONOSPACE))
+        .padding([8, 10]).width(Length::Fill)
+        .style(|_| container::Style {
+            background: Some(iced::Background::Color(COR_PAINEL_FAIXA())),
+            border: iced::Border { color: COR_BORDA_SUAVE(), width: 1.0, radius: 6.0.into() },
+            ..Default::default()
+        });
+    let mut ferramentas = iced::widget::column![].spacing(3);
+    for f in feathersheet_mcp::esquemas::todas() {
+        let nome = f["name"].as_str().unwrap_or("").to_owned();
+        let le = feathersheet_mcp::permissoes::so_le(&nome, &serde_json::json!({ "acao": "listar" }));
+        let pode = app.config.mcp_ativo && (le || !app.config.mcp_so_leitura);
+        ferramentas = ferramentas.push(row![
+            feather_ui::icones::icone(if pode { "check" } else { "x" }, 13.0),
+            text(nome).size(12).font(iced::Font::MONOSPACE).width(Length::Fixed(170.0)),
+            text(if le { tr!("lê") } else { tr!("escreve ou age na tela") }).size(11).color(COR_TEXTO_MUTED()),
+        ].spacing(8).align_y(Alignment::Center));
+    }
+    iced::widget::column![
+        linha(tr!("Permitir que uma IA use o FeatherSheet"),
+            tr!("Desligado: nenhuma IA alcança a planilha aberta. Ligado: um assistente desta máquina (Claude, por exemplo) lê, resume e edita a planilha da tela; cada chamada que escreve é um Ctrl+Z."),
+            toggler(app.config.mcp_ativo).on_toggle(Msg::McpAtivo).style(estilo_toggle)),
+        linha(tr!("Somente leitura"),
+            tr!("A IA pode ler, resumir, procurar e conferir, mas não escreve, não formata, não salva nem aperta botões."),
+            toggler(app.config.mcp_so_leitura).on_toggle(Msg::McpSoLeitura).style(estilo_toggle)),
+        linha(tr!("Estado"), tr!("O canal só aceita programas desta máquina que conhecem a chave da sessão."),
+            text(estado).size(12)),
+        text(tr!("Conectar ao Claude Code (terminal)")).size(13),
+        row![codigo(claude_code.clone()),
+            opcao(tr!("Copiar"), "copy", false, Msg::CopiarTexto(claude_code))].spacing(8).align_y(Alignment::Center),
+        text(tr!("Conectar a um aplicativo de IA (arquivo de configuração MCP)")).size(13),
+        row![codigo(json.clone()),
+            opcao(tr!("Copiar"), "copy", false, Msg::CopiarTexto(json))].spacing(8).align_y(Alignment::Start),
+        text(tr!("Com o FeatherSheet fechado, o mesmo comando trabalha direto nos arquivos .fshz, .xlsx e .csv.")).size(11).color(COR_TEXTO_MUTED()),
+        text(tr!("O que a IA pode fazer")).size(13),
+        ferramentas,
+        text(tr!("Nada sai do computador: o FeatherSheet não envia a planilha para lugar nenhum. É o seu assistente de IA que decide o que fazer com o que lê.")).size(11).color(COR_TEXTO_MUTED()),
+    ].spacing(10).into()
 }
 
 /// "Procurar atualizações": só consulta o GitHub quando a pessoa clica, e instalar
@@ -436,13 +503,25 @@ mod testes {
     }
 
     #[test]
-    fn menu_nativo_possui_seis_secoes_ativas() {
+    fn menu_nativo_possui_sete_secoes_ativas() {
         let mut app = App::default();
-        for secao in 0..6 {
+        for secao in 0..=SECAO_SOBRE {
             app.config_secao = secao;
             let _: Element<'_, Msg> = visualizar(&app);
         }
     }
+
+    #[test]
+    fn sobre_abre_a_ultima_secao_e_o_mcp_tem_a_sua() {
+        let mut app = App::default();
+        let _ = app.update(Msg::MostrarSobre);
+        assert_eq!(app.config_secao, SECAO_SOBRE);
+        let _ = app.update(Msg::SecaoConfig(SECAO_MCP));
+        assert_eq!(app.config_secao, SECAO_MCP);
+        let _ = app.update(Msg::SecaoConfig(99));
+        assert_eq!(app.config_secao, SECAO_SOBRE);
+    }
+
     #[test]
     fn preferencias_da_grade_atualizam_a_configuracao_sem_editar_workbook() {
         let mut app = App::default();
@@ -544,6 +623,7 @@ mod testes {
     fn idioma_configurado_localiza_edicao_sem_reinterpretar_documento() {
         let mut app = App::default();
         app.config.idioma = "en-US".into();
+        crate::idioma::definir_na_thread("en-US");
         app.update(Msg::Editar("=SUM(1,2,3.5)".into()));
         app.confirmar();
         assert_eq!(app.workbook.valor(0, 0, 0), Value::Number(6.5));
@@ -551,8 +631,10 @@ mod testes {
         app.trocar_selecao(0, 0);
         assert_eq!(app.edicao, "=SUM(1,2,3.5)");
         app.config.idioma = "pt-BR".into();
+        crate::idioma::definir_na_thread("pt-BR");
         app.trocar_selecao(0, 0);
-        assert_eq!(app.edicao, "=SUM(1;2;3.5)");
+        // De-para dos nomes: em português a barra mostra SOMA.
+        assert_eq!(app.edicao, "=SOMA(1;2;3.5)");
         assert_eq!(app.workbook.valor(0, 0, 0), Value::Number(6.5));
     }
 
@@ -577,19 +659,24 @@ static NUCLEOS: [&str; 128] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"
 /// "AMD Ryzen 7 … · até 4,67 GHz · 16 threads (1 fica para a janela; padrão 15)."
 fn descricao_nucleos() -> String {
     use feathersheet_core::paralelismo as p;
-    let nome = p::nome_do_processador().unwrap_or_else(|| "Processador".into());
+    let nome = p::nome_do_processador().unwrap_or_else(|| tr!("Processador").into());
     let ghz = p::frequencia_maxima_ghz()
-        .map(|g| format!(" · até {} GHz", format!("{g:.2}").replace('.', ",")))
+        .map(|g| {
+            let n = format!("{g:.2}");
+            let n = if crate::idioma::lingua() == crate::idioma::Lingua::En { n } else { n.replace('.', ",") };
+            trf!(" · até {n} GHz")
+        })
         .unwrap_or_default();
-    format!("{nome}{ghz} · {} threads (1 fica para a janela e o sistema; padrão {}).",
-        p::total_do_sistema(), p::padrao())
+    let threads = trf!("{} threads (1 fica para a janela e o sistema; padrão {}).",
+        p::total_do_sistema(), p::padrao());
+    format!("{nome}{ghz} · {threads}")
 }
 
 /// "32 GB de RAM instalados. Confere o uso…"
 fn descricao_memoria() -> String {
-    let base = "Confere o uso de RAM entre etapas da leitura. 0 desliga; não é limite rígido.";
+    let base = tr!("Confere o uso de RAM entre etapas da leitura. 0 desliga; não é limite rígido.");
     match super::limite_memoria::ram_total_gb() {
-        Some(gb) => format!("{gb} GB de RAM instalados. {base}"),
+        Some(gb) => trf!("{gb} GB de RAM instalados. {base}"),
         None => base.to_string(),
     }
 }

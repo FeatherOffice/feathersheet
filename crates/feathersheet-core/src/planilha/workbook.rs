@@ -605,31 +605,19 @@ impl Workbook {
     }
 
     /// Troca valores avulsos de uma pasta externa (a outra janela mandou) e
-    /// recalcula quem a lê. `false` quando ela não está carregada.
+    /// recalcula só quem lê essas células. `false` quando nada mudou ou ela
+    /// não está carregada. Ver [`Self::atualizar_externo_em`].
     pub fn atualizar_externo(&mut self, arquivo: &str, aba: &str, celulas: &[(u32, u32, Value)]) -> bool {
-        if !self.externos.atualizar_celulas(arquivo, aba, celulas) {
-            return false;
-        }
-        self.sujar_quem_le_de_fora();
-        true
+        self.atualizar_externo_em(arquivo, aba, celulas, None)
     }
 
-    fn sujar_quem_le_de_fora(&mut self) {
-        for aba in &mut self.abas {
-            if !aba.sheet.tem_formulas_externas() {
-                continue;
-            }
-            aba.sheet.sujar_externas();
-            aba.versao = proxima_versao(aba.versao);
-        }
-    }
-
-    /// Põe (ou troca) os valores de uma pasta externa e recalcula quem a lê:
-    /// as fórmulas que leem de fora estão todas nas `externas` de cada aba.
+    /// Põe (ou troca) os valores de uma pasta externa e recalcula só quem lê
+    /// aquele arquivo (as fórmulas que leem de fora estão nas `externas` de
+    /// cada aba). O caminho e a data guardados ficam como estavam.
     pub fn instalar_externo(&mut self, arquivo: &str, abas: Vec<Sheet>) -> bool {
         let mudou = self.externos.instalar(arquivo, abas);
         if mudou {
-            self.sujar_quem_le_de_fora();
+            self.sujar_quem_le_vinculo(arquivo, None, None);
         }
         mudou
     }
@@ -1077,10 +1065,14 @@ pub(crate) fn proxima_versao(v: u32) -> u32 {
 
 impl Hospedeiro for Workbook {
     fn aba(&self, nome: &str) -> Option<&Sheet> {
-        if nome.starts_with('[') {
+        if let Some(a) = self.abas.iter().find(|a| crate::planilha::sheet::mesmo_nome(&a.sheet.name, nome)) {
+            return Some(&a.sheet);
+        }
+        // `[Vendas.fshz]Dados` ou `/pasta/[Vendas.fshz]Dados`: outro arquivo.
+        if crate::planilha::vinculo::e_externa(nome) {
             return self.externos.aba(nome);
         }
-        self.abas.iter().find(|a| crate::planilha::sheet::mesmo_nome(&a.sheet.name, nome)).map(|a| &a.sheet)
+        None
     }
 
     fn aba_no_endereco(&self, endereco: usize) -> Option<&Sheet> {
@@ -1424,7 +1416,9 @@ pub fn reescrever_aba(formula: &str, de: &str, para: &str) -> String {
     let mut saida = String::with_capacity(formula.len());
     let mut i = 0;
     while i < texto.len() {
-        let fronteira = i == 0 || !letra_de_nome(texto[i - 1]);
+        // Depois de `]` é a aba de outro arquivo (`[Vendas.fshz]Dados!`):
+        // renomear a aba "Dados" daqui não mexe nela.
+        let fronteira = i == 0 || !(letra_de_nome(texto[i - 1]) || texto[i - 1] == ']');
         if fronteira {
             if casa(i, &puro) {
                 saida.push_str(&destino);
@@ -1442,6 +1436,9 @@ pub fn reescrever_aba(formula: &str, de: &str, para: &str) -> String {
     }
     saida
 }
+
+/// Os outros arquivos citados pelas fórmulas (`[Vendas.fshz]Dados!A1`).
+pub mod vinculos;
 
 #[cfg(test)]
 mod tests;

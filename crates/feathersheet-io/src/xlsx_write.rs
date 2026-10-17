@@ -18,6 +18,9 @@
 //! - gráficos e painel congelado não vão (a
 //!   validação de dados vai: ver [`validacoes_xml`]).
 //!   A formatação condicional vai: ver `xlsx_write_condicional`.
+//! - a tabela dinâmica vai como definição de verdade (cache + tabela, o
+//!   Excel atualiza ao abrir), além do resultado nas células: ver
+//!   `xlsx_write_dinamica`.
 //!
 //! Duas diferenças, as duas para não perder o arquivo inteiro por uma
 //! célula: fórmula que o tokenizador recusa vai como está (no TypeScript o
@@ -564,6 +567,9 @@ impl TextosCompartilhados {
 // ============================================================== exportar
 
 const NS: &str = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+/// Última coluna (XFD) e última linha do Excel, contadas a partir de 1.
+const MAX_COLS_XLSX: u32 = 16_384;
+const MAX_ROWS_XLSX: u32 = 1_048_576;
 const NS_REL: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const NS_PKG_REL: &str = "http://schemas.openxmlformats.org/package/2006/relationships";
 const XML_DECL: &str = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
@@ -1303,7 +1309,10 @@ fn aba_xml(
     for &c in topicos.colunas.niveis.keys().chain(topicos.colunas.recolhidas.iter()) {
         larguras.entry(c).or_insert(None);
     }
-    let cols = if larguras.is_empty() {
+    // Colunas ocultas até o fim: um `<col>` só, de N até XFD, no fim da lista.
+    let colunas_desde = sheet.colunas_ocultas_desde.filter(|&n| n < MAX_COLS_XLSX);
+    if let Some(n) = colunas_desde { larguras.retain(|&c, _| c < n); }
+    let cols = if larguras.is_empty() && colunas_desde.is_none() {
         String::new()
     } else {
         let itens: String = larguras
@@ -1319,8 +1328,15 @@ fn aba_xml(
                 col
             })
             .collect();
-        format!("<cols>{itens}</cols>")
+        let resto = colunas_desde.map_or(String::new(), |n| format!(
+            "<col min=\"{}\" max=\"{MAX_COLS_XLSX}\" width=\"{}\" hidden=\"1\"/>", n + 1,
+            to_js_string(arredondar(px_para_largura(sheet.largura_padrao.unwrap_or(LARGURA_PADRAO_PX))))));
+        format!("<cols>{itens}{resto}</cols>")
     };
+    // Linhas ocultas até o fim: `zeroHeight` oculta toda linha não listada,
+    // então as visíveis (0..N) vão todas, mesmo vazias; as de N em diante
+    // que tiverem células saem com `hidden`.
+    let linhas_desde = sheet.linhas_ocultas_desde.filter(|&n| n < MAX_ROWS_XLSX);
 
     // O XML sai num `String` só, sem montar o corpo à parte e copiá-lo no
     // fim: no `spotify_full` o corpo tem 2,7 GB.
@@ -1328,23 +1344,39 @@ fn aba_xml(
     // Sempre declarada: sem ela o Excel assume 64 px por coluna e 20 px por linha
     // (esta é igual: 15 pt), e gráficos/layout saem mais estreitos que no app.
     let formato = format!(
-        "<sheetFormatPr baseColWidth=\"8\" defaultColWidth=\"{}\" defaultRowHeight=\"15\"/>",
-        to_js_string(arredondar(px_para_largura(sheet.largura_padrao.unwrap_or(LARGURA_PADRAO_PX)))));
+        "<sheetFormatPr baseColWidth=\"8\" defaultColWidth=\"{}\" defaultRowHeight=\"15\"{}/>",
+        to_js_string(arredondar(px_para_largura(sheet.largura_padrao.unwrap_or(LARGURA_PADRAO_PX)))),
+        if linhas_desde.is_some() { " zeroHeight=\"1\"" } else { "" });
     let mut xml = format!("{XML_DECL}<worksheet xmlns=\"{NS}\" xmlns:r=\"{NS_REL}\">{formato}{cols}<sheetData>");
     let corpo = &mut xml;
     let mut celulas = String::new();
     let mut i = 0;
     let mut alt = alturas.iter().peekable();
+    // Próxima linha visível ainda não escrita (só com `zeroHeight`).
+    let mut vazia = 0_u32;
+    let escrever_vazias = |corpo: &mut String, vazia: &mut u32, ate: u32| {
+        if let Some(n) = linhas_desde {
+            while *vazia < ate.min(n) {
+                let _ = write!(corpo, "<row r=\"{}\"/>", *vazia + 1);
+                *vazia += 1;
+            }
+        }
+    };
     loop {
         // A próxima linha é a menor entre a das células e a das alturas.
         let linha_celula = chaves.get(i).map(|&k| key_row(k));
         let linha_altura = alt.peek().map(|(&r, _)| r);
         let linha = match (linha_celula, linha_altura) {
-            (None, None) => break,
+            (None, None) => {
+                escrever_vazias(corpo, &mut vazia, u32::MAX);
+                break;
+            }
             (Some(a), Some(b)) => a.min(b),
             (Some(a), None) => a,
             (None, Some(b)) => b,
         };
+        escrever_vazias(corpo, &mut vazia, linha);
+        vazia = vazia.max(linha + 1);
         celulas.clear();
         while let Some(&k) = chaves.get(i) {
             if key_row(k) != linha {
@@ -1356,12 +1388,15 @@ fn aba_xml(
             i += 1;
         }
         let extra = if linha_altura == Some(linha) { alt.next().map(|(_, &h)| h) } else { None };
+        let visivel_obrigatoria = linhas_desde.is_some_and(|n| linha < n);
+        let alem_do_fim = linhas_desde.is_some_and(|n| linha >= n);
         // Linha cujas células não disseram nada e sem altura própria nem tópico não vai.
-        if celulas.is_empty() && extra.is_none() {
+        if celulas.is_empty() && extra.is_none() && !visivel_obrigatoria {
             continue;
         }
         let _ = write!(corpo, "<row r=\"{}\"", linha + 1);
         match extra.flatten() {
+            _ if alem_do_fim => corpo.push_str(" hidden=\"1\""),
             Some(0) => corpo.push_str(" hidden=\"1\""),
             Some(h) => {
                 let _ = write!(corpo, " ht=\"{}\" customHeight=\"1\"", to_js_string(arredondar(h as f64 * PX_PARA_PT)));
@@ -1450,6 +1485,9 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
     let mut contador_graficos = 0usize;
     // Comentários: `xl/commentsN.xml` + `xl/drawings/vmlDrawingN.vml`.
     let mut comentarios: Vec<(usize, (String, String))> = Vec::new();
+    // Tabelas dinâmicas (`xl/pivotCache/…`, `xl/pivotTables/…`): `xlsx_write_dinamica`.
+    let mut dinamicas: Vec<crate::xlsx_write_dinamica::ParteDinamica> = Vec::new();
+    let mut contador_dinamicas = 0usize;
     for i in 0..pasta.len() {
         let (mut xml, mut rels) = aba_xml(pasta, i, &mut estilos, &mut textos);
         let tn = pasta.aba(i).and_then(|a| a.sheet.tn.as_deref());
@@ -1494,6 +1532,21 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
                 None => format!("{XML_DECL}<Relationships xmlns=\"{NS_PKG_REL}\">{relacao}</Relationships>"),
             });
             comentarios.push((i + 1, c));
+        }
+        // Dinâmicas com destino nesta aba: só nas relações (o XML da aba não as cita).
+        let novas = crate::xlsx_write_dinamica::da_aba(pasta, i, &mut contador_dinamicas);
+        if !novas.is_empty() {
+            let relacao: String = novas.iter().map(crate::xlsx_write_dinamica::relacao_da_aba).collect();
+            rels = Some(match rels {
+                Some(mut r) => {
+                    if let Some(fim) = r.rfind("</Relationships>") {
+                        r.insert_str(fim, &relacao);
+                    }
+                    r
+                }
+                None => format!("{XML_DECL}<Relationships xmlns=\"{NS_PKG_REL}\">{relacao}</Relationships>"),
+            });
+            dinamicas.extend(novas);
         }
         abas.push((xml, rels));
     }
@@ -1557,6 +1610,7 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
         .chain(comentarios.iter().map(|(i, _)| {
             format!("<Override PartName=\"/xl/comments{i}.xml\" ContentType=\"{}\"/>", crate::xlsx_write_comentarios::TIPO_COMENTARIOS)
         }))
+        .chain(std::iter::once(crate::xlsx_write_dinamica::tipos_de_conteudo(&dinamicas)))
         .collect();
     let tipo_vml = if comentarios.is_empty() {
         String::new()
@@ -1586,6 +1640,9 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
     let rels_abas: String = (1..=n)
         .map(|i| format!("<Relationship Id=\"rId{i}\" Type=\"{NS_REL}/worksheet\" Target=\"worksheets/sheet{i}.xml\"/>"))
         .collect();
+    // `pivotCaches` vem depois de `definedNames` no CT_Workbook.
+    let caches_dinamicas = crate::xlsx_write_dinamica::caches_do_livro(&dinamicas);
+    let rels_dinamicas = crate::xlsx_write_dinamica::relacoes_do_livro(&dinamicas);
 
     let mut partes: Vec<(String, Vec<u8>)> = vec![
         (
@@ -1605,14 +1662,14 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
         (
             "xl/workbook.xml".into(),
             format!(
-                "{XML_DECL}<workbook xmlns=\"{NS}\" xmlns:r=\"{NS_REL}\"><bookViews><workbookView activeTab=\"{aba_ativa}\" firstSheet=\"{aba_ativa}\"/></bookViews><sheets>{entradas_abas}</sheets>{nomes_definidos}</workbook>"
+                "{XML_DECL}<workbook xmlns=\"{NS}\" xmlns:r=\"{NS_REL}\"><bookViews><workbookView activeTab=\"{aba_ativa}\" firstSheet=\"{aba_ativa}\"/></bookViews><sheets>{entradas_abas}</sheets>{nomes_definidos}{caches_dinamicas}</workbook>"
             )
             .into_bytes(),
         ),
         (
             "xl/_rels/workbook.xml.rels".into(),
             format!(
-                "{XML_DECL}<Relationships xmlns=\"{NS_PKG_REL}\">{rels_abas}<Relationship Id=\"rIdStyles\" Type=\"{NS_REL}/styles\" Target=\"styles.xml\"/><Relationship Id=\"rIdStrings\" Type=\"{NS_REL}/sharedStrings\" Target=\"sharedStrings.xml\"/>{rel_metadata}</Relationships>"
+                "{XML_DECL}<Relationships xmlns=\"{NS_PKG_REL}\">{rels_abas}<Relationship Id=\"rIdStyles\" Type=\"{NS_REL}/styles\" Target=\"styles.xml\"/><Relationship Id=\"rIdStrings\" Type=\"{NS_REL}/sharedStrings\" Target=\"sharedStrings.xml\"/>{rel_metadata}{rels_dinamicas}</Relationships>"
             )
             .into_bytes(),
         ),
@@ -1651,6 +1708,7 @@ pub fn montar_partes(pasta: &Workbook) -> Vec<(String, Vec<u8>)> {
         partes.push((format!("xl/comments{i}.xml"), lista.into_bytes()));
         partes.push((format!("xl/drawings/vmlDrawing{i}.vml"), vml.into_bytes()));
     }
+    partes.extend(crate::xlsx_write_dinamica::arquivos(dinamicas));
     partes
 }
 

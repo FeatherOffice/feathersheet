@@ -73,6 +73,7 @@ impl App {
             Msg::NomeIrPara(nome) => self.ir_para_nome(&nome),
             Msg::NomesEvento(evento) => self.evento_nomes(evento),
             Msg::Dinamica(evento) => self.evento_dinamica(evento),
+            Msg::Vinculos(evento) => self.evento_vinculos(evento),
             Msg::CondicionalAbrir => {
                 self.bordas_menu_aberto = false;
                 self.tabelas_menu_aberto = false;
@@ -338,7 +339,7 @@ impl App {
                 }
                 Task::none()
             }
-            Msg::MostrarSobre => { self.config_secao = 5; self.alternar(Auxiliar::Configuracoes) }
+            Msg::MostrarSobre => { self.config_secao = configuracoes_ui::SECAO_SOBRE; self.alternar(Auxiliar::Configuracoes) }
             Msg::AlternarMostrarFormulas => {
                 // Equivale a toggleShowFormulas no TypeScript. Não modifica
                 // Workbook, flags de arquivo alterado nem histórico de desfazer.
@@ -417,9 +418,8 @@ impl App {
             }
             Msg::Mover(dr,dc) => {
                 if !self.confirmar() { return Task::none(); }
-                self.trocar_selecao(
-                    (self.linha as i64 + dr as i64).clamp(0, (MAX_ROWS-1) as i64) as u32,
-                    (self.coluna as i64 + dc as i64).clamp(0, (MAX_COLS-1) as i64) as u32);
+                let (linha, coluna) = self.passo_visivel((self.linha, self.coluna), dr as i64, dc as i64);
+                self.trocar_selecao(linha, coluna);
                 Task::none()
             }
             Msg::LinhaPagina(n) => {
@@ -954,6 +954,19 @@ impl App {
                 Task::none()
             }
             Msg::CapturarTela => {
+                // FEATHERSHEET_CAPTURAR_ABRIR=arquivo: da tela inicial, abre como o
+                // "Abrir…" depois do diálogo e fotografa no meio da leitura.
+                if let Some(arquivo) = std::env::var_os("FEATHERSHEET_CAPTURAR_ABRIR") {
+                    if self.passo_captura == 0 {
+                        self.passo_captura = 1;
+                        return self.update(Msg::ArquivoEscolhido(Some(PathBuf::from(arquivo))));
+                    }
+                    self.passo_captura = 2;
+                    return match self.janelas.principal {
+                        Some(id) => window::screenshot(id).map(Msg::TelaCapturada),
+                        None => Task::none(),
+                    };
+                }
                 // Arquivo aberto pela linha de comando: espera terminar de carregar.
                 if self.carregando { return Task::none(); }
                 match self.passo_captura {
@@ -1018,6 +1031,14 @@ impl App {
                         // FEATHERSHEET_CAPTURAR_OBJETOS=1 (ou "menu", "painel"): formas de exemplo, a estrela selecionada.
                         if let Ok(modo) = std::env::var("FEATHERSHEET_CAPTURAR_OBJETOS") {
                             self.preparar_captura_objetos(&modo);
+                        }
+                        // FEATHERSHEET_CAPTURAR_MENU_ABA=1: botão direito na primeira aba.
+                        if std::env::var_os("FEATHERSHEET_CAPTURAR_MENU_ABA").is_some() {
+                            let _ = self.update(Msg::AbrirContexto(Contexto::Aba(0), 0.0, 0.0));
+                        }
+                        // FEATHERSHEET_CAPTURAR_BARRA=1 abre "Personalizar barra de status".
+                        if std::env::var_os("FEATHERSHEET_CAPTURAR_BARRA").is_some() {
+                            self.barra_status_menu = true;
                         }
                         // FEATHERSHEET_CAPTURAR_FAIXA=formulas abre essa aba da faixa.
                         if let Ok(chave) = std::env::var("FEATHERSHEET_CAPTURAR_FAIXA") {
@@ -1132,7 +1153,7 @@ impl App {
                             return self.preparar_captura_busca_macros();
                         }
                         // FEATHERSHEET_CAPTURAR_JANELA=primeiros:<passo 1–5>, novidades[:<versão 1–3>],
-                        // monitor (F12) ou formatar:<aba 1–6> (Formatar células).
+                        // monitor (F12), config:<seção 1–7> ou formatar:<aba 1–6> (Formatar células).
                         if let Ok(janela) = std::env::var("FEATHERSHEET_CAPTURAR_JANELA") {
                             let (nome, numero) = janela.split_once(':').map_or((janela.as_str(), 1), |(n, i)| (n, i.parse().unwrap_or(1)));
                             match nome {
@@ -1155,7 +1176,26 @@ impl App {
                                     self.novidades_versao = numero.max(1) - 1;
                                     return self.alternar(Auxiliar::Novidades);
                                 }
+                                // Módulos em pastas e o código de evento da Planilha1 aberto.
+                                "pastas_macros" => {
+                                    let m = |n: &str, c: &str| feather_macros::Macro { name: n.into(), code: c.into(), auto: false };
+                                    self.macro_catalogo = feather_macros::Catalogo { macros: vec![
+                                        m("macros_auxiliares/macro_1", "log(1);"),
+                                        m("macros_auxiliares/macro_2", "log(2);"),
+                                        m("macro_para_preencher planilha/macro_3", "log(3);"),
+                                        m("Relatorio", "log('r');"),
+                                        m("Eventos/Planilha1/aoMudar", "// Destaca o que mudou\nlog(valores.intervalo);\n"),
+                                    ] };
+                                    self.sincronizar_eventos();
+                                    self.evento_macro_visual(macros::EventoVisual::Documento("planilha:Planilha1".into()));
+                                    return self.alternar(Auxiliar::Macros);
+                                }
                                 "monitor" => return self.alternar(Auxiliar::Monitor),
+                                // config:<seção 1–7> (6 = IA (MCP), 7 = Sobre).
+                                "config" => {
+                                    self.config_secao = (numero.max(1) - 1).min(configuracoes_ui::SECAO_SOBRE);
+                                    return self.alternar(Auxiliar::Configuracoes);
+                                }
                                 "formatar" => {
                                     use super::formatar_celulas::Aba;
                                     let aba = [Aba::Numero, Aba::Alinhamento, Aba::Fonte, Aba::Borda,
@@ -1205,6 +1245,8 @@ impl App {
                                 Ok(j) if j.starts_with("primeiros") => self.janelas.id(Auxiliar::PrimeirosPassos),
                                 Ok(j) if j.starts_with("novidades") => self.janelas.id(Auxiliar::Novidades),
                                 Ok("monitor") => self.janelas.id(Auxiliar::Monitor),
+                                Ok(j) if j.starts_with("config") => self.janelas.id(Auxiliar::Configuracoes),
+                                Ok("pastas_macros") => self.janelas.id(Auxiliar::Macros),
                                 Ok(j) if j.starts_with("formatar") => self.janelas.id(Auxiliar::FormatarCelulas),
                                 _ => None,
                             }
@@ -1232,7 +1274,7 @@ impl App {
                     let movidos = self.workbook.consolidar_calculos(500_000);
                     if movidos > 0 {
                         self.monitor.registrar(feather_ui::monitor::Nivel::Info, tr!("Motor"),
-                            &format!("[motor] {movidos} resultados de fórmula guardados nas colunas"));
+                            &trf!("[motor] {movidos} resultados de fórmula guardados nas colunas"));
                     }
                 }
                 // Garante ativação mesmo quando a primeira seleção ocorreu
@@ -1244,6 +1286,7 @@ impl App {
                     self.aviso_abas = None;
                 }
                 self.monitor.amostrar();
+                if !self.carregando { self.atualizar_dinamicas_sozinhas(); }
                 let recuperar = self.pulso_recuperacao();
                 self.avisar_fora_do_salvamento_automatico();
                 // Apenas documentos FSHZ existentes, após inatividade e sem editor ativo.
@@ -1282,6 +1325,14 @@ impl App {
                 recuperar
             }
             Msg::MonitorEvento(evento) => self.monitor.atualizar(evento),
+            Msg::AjudaAbrirSecao(secao) => {
+                self.ajuda_estado.abrir(ajuda::modelo(), secao, None);
+                // Já aberta: só traz para a frente (alternar a fecharia).
+                match self.janelas.id(Auxiliar::Ajuda) {
+                    Some(id) => window::gain_focus(id),
+                    None => self.alternar(Auxiliar::Ajuda),
+                }
+            }
             Msg::AjudaSecao(secao) => {
                 self.ajuda_estado.atualizar(
                     feather_ui::ajuda::Evento::IrSecao(secao), ajuda::modelo()
@@ -1306,7 +1357,7 @@ impl App {
             }
             Msg::AuxAberta => Task::none(),
             Msg::AuxFechada(id) => {
-                if self.janelas.principal == Some(id) { mcp_vivo::encerrar(); iced::exit() }
+                if self.janelas.principal == Some(id) { mcp_vivo::encerrar(); vinculos::encerrar(); iced::exit() }
                 else {
                     if self.janelas.tipo(id) == Some(Auxiliar::FormatarCelulas) { self.formato_celula = None; }
                     if self.janelas.tipo(id) == Some(Auxiliar::DividirTexto) {
@@ -1385,7 +1436,7 @@ impl App {
             Msg::Faixa => { self.config.faixa_recolhida = !self.config.faixa_recolhida;
                 self.config.gravar(); Task::none() }
             Msg::SecaoConfig(c) => {
-                self.config_secao = c.min(5);
+                self.config_secao = c.min(configuracoes_ui::SECAO_SOBRE);
                 self.atalho_captura = None;
                 Task::none()
             }
@@ -1419,7 +1470,7 @@ impl App {
                 Task::none()
             }
             Msg::Idioma(codigo) => {
-                if matches!(codigo, "pt-BR" | "en-US") {
+                if matches!(codigo, "pt-BR" | "en-US" | "es-ES") {
                     self.confirmar();
                     self.config.idioma = codigo.to_owned();
                     feathersheet_core::set_locale_config(self.regionalizacao());
@@ -1496,6 +1547,10 @@ impl App {
                 if self.edicao_menu.take().is_some() { return Task::none(); }
                 if self.tabela_popup_totais {
                     self.tabela_popup_totais = false;
+                    return Task::none();
+                }
+                if self.barra_status_menu {
+                    self.barra_status_menu = false;
                     return Task::none();
                 }
                 if self.tabela_popup_filtro {

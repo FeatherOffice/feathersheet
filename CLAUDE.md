@@ -2,6 +2,28 @@
 
 > **Decisão atual (12/10/2026):** não desenvolver nem manter o frontend TypeScript/Tauri. A interface oficial é Rust/Iced; uma interface web futura utilizará os motores Rust via WebAssembly. A UI TS histórica está em `descarte/feathersheet/legacy-frontend/src/`. Entradas antigas neste documento servem como referência de migração, não como estado vigente.
 
+## v0.1.0 lançada — 17/10/2026
+
+- **Dependências só por tag:** feather-io v0.1.1, feather-charts v0.3.1,
+  feather-ui v0.2.9 (mais feather-draw/feather-shapes). Nenhum `[patch]` nem
+  caminho `../../../`: o repositório compila sozinho (o job do macOS depende
+  disso). Para mexer numa biblioteca junto, `[patch]` local provisório e
+  trocar pela tag nova antes de lançar.
+- **Medir velocidade:** perfil `medir` na GUI (release sem LTO, incremental:
+  ~1,5 min por mudança contra ~6 do release). Bancada da dinâmica:
+  `FEATHERSHEET_PESADO=…_1M.fshz FEATHERSHEET_ABA=1 FEATHERSHEET_CAMPOS="2,3;6"
+  cargo test --profile medir --bin feathersheet medir_etapas_da_troca -- --ignored --nocapture`
+  (`FEATHERSHEET_COMPACTO=1` mede o caminho da árvore de grupos).
+- **Dinâmica:** o caminho rápido (`pivot::montar_dinamica_com_chaves`) agrupa
+  por códigos e devolve as chaves; `montar_com_extras` monta `caminhos` nos
+  dois caminhos; Detalhes usa o atalho guardado (`avancado::caminhos_guardados`)
+  e grava a aba por coluna. Nasce vazia; origem > 100 mil linhas adia a conta
+  para a barra mostrar "Atualizando…". F12 anota o tempo de cada ação.
+- **Colar até o fim:** valor simples em ≥ 100 mil linhas vai em blocos
+  (`Sheet::preencher_faixa_vazia`, Ctrl+Z por `Passo::Divisao`); fórmula,
+  data, estilo, validação e bloco de várias linhas ainda param na última
+  linha com dados.
+
 ## Verificação antes do commit geral — 07/10/2026
 
 As alterações existentes de macros foram preservadas no commit geral pedido
@@ -165,6 +187,18 @@ planilha), confirmações em modal próprio (nada de `confirm()` do navegador).
 Inventário completo, item a item: **`docs/planejamento/ROADMAP.md`**.
 
 ## Fila de trabalho
+
+### Referência entre arquivos abertos (v0.1.0, 16/10/2026) — feita e testada com duas janelas
+
+`=[Vendas.fshz]Dados!A1`, `=SOMA([Vendas.fshz]Dados!A1:A10)` e
+`='/home/x/[Vendas.fshz]Dados'!A1`. Motor em `planilha/vinculo.rs` e
+`planilha/workbook/vinculos.rs` (mapa de valores externos na `Workbook`,
+recálculo só de quem lê a célula que mudou); valores guardados no `.fshz`
+(`ex`, `feathersheet-io/src/externos_guardados.rs`, contrato no `FORMATO.md`
+da suíte); canal entre janelas, faixa "Valores de […] de …" e Editar links
+em `feathersheet-gui/src/app/vinculos*`. **Para depois:** autocompletar o
+nome do arquivo na fórmula; "clicar na outra janela para apontar" a
+referência; ler/gravar o vínculo no `.xlsx` (`xl/externalLinks/`, `[1]Aba!A1`).
 
 ### Conversor de macro VBA → JavaScript (pedido do usuário, 07/10/2026) — motor pronto, falta a interface
 
@@ -837,8 +871,7 @@ texto `FTINTA`), gravado por `Sheet::alterar_tinta` (um Ctrl+Z). Campo novo na a
 - *Conferido aqui:* o XWayland desta máquina expõe `xwayland-tablet stylus` com
   `Abs Pressure 0..65535` e aceita a seleção dos eventos crus. Windows: só `cargo check
   --target x86_64-pc-windows-gnu` do `feather-ui` (sem rodar).
-- *Provisório:* o `Cargo.toml` da GUI tem no fim um `[patch]` apontando o `feather-ui` para a
-  pasta irmã (0.2.6, não publicado). Tirar quando a tag `v0.2.6` existir.
+- *Histórico:* o `[patch]` provisório do `feather-ui` saiu; desde a v0.1.0 tudo vem por tag.
 - *Roteiro de teste com a mesa:*
   1. Clique da caneta no app inteiro: `FEATHERSHEET_CANETA_DIAG=1 cargo run --release`
      (manifesto da GUI). O terminal deve mostrar `[janela] Janela pelo XWayland (preferência

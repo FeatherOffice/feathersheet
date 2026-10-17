@@ -123,6 +123,21 @@ fn match_sheet_prefix(chars: &[char], at: usize) -> Option<SheetPrefix> {
         return None;
     }
 
+    // `[Vendas.fshz]Dados!` — aba de outro arquivo sem aspas: o nome vai
+    // inteiro, senão inserir linha na aba local "Dados" deslocaria a
+    // referência ao outro arquivo.
+    if chars[at] == '[' {
+        let fecha = (at + 1..chars.len()).find(|&k| chars[k] == ']' || chars[k] == '[').filter(|&k| chars[k] == ']')?;
+        let mut i = fecha + 1;
+        while i < chars.len() && (is_name_char(chars[i]) || chars[i].is_ascii_digit() || chars[i] == '.') {
+            i += 1;
+        }
+        if fecha > at + 1 && i > fecha + 1 && i < chars.len() && chars[i] == '!' {
+            return Some(SheetPrefix { name: chars[at..i].iter().collect(), len: i + 1 - at });
+        }
+        return None;
+    }
+
     if chars[at] == '\'' {
         let mut i = at + 1;
         let mut name = String::new();
@@ -250,6 +265,8 @@ pub fn adjust_for_structure(raw: &str, options: StructureAdjustOptions) -> Strin
     // em Produtos ajustava só A1 de `Produtos!A1:A9`.
     use crate::formula::formula_pattern::{pattern_of, pedacos, Pedaco};
     let mut abas = Vec::new();
+    // `faixas[i]`: a referência `i` é a primeira ponta de `i:i+1`.
+    let mut faixas: Vec<bool> = Vec::new();
     let mut anterior = None;
     let mut separador = false;
     for pedaco in pedacos(&pattern_of(raw, 0, 0)) {
@@ -259,36 +276,73 @@ pub fn adjust_for_structure(raw: &str, options: StructureAdjustOptions) -> Strin
                 let aba = r.sheet.or_else(|| if separador { anterior.clone() } else { None });
                 anterior = aba.clone();
                 abas.push(aba);
+                if separador {
+                    if let Some(ultima) = faixas.last_mut() {
+                        *ultima = true;
+                    }
+                }
+                faixas.push(false);
                 separador = false;
             }
         }
     }
+    // As referências na ordem em que o `map_references` as visita.
+    let mut refs: Vec<ParsedRef> = Vec::new();
+    let _ = map_references(raw, |r| {
+        let texto = format_ref(&r);
+        refs.push(r);
+        texto
+    });
+    let eixo = |r: &ParsedRef| if options.axis == Axis::Row { r.row } else { r.col };
+    let afetada = |i: usize| {
+        let aba = abas.get(i).and_then(|s| s.as_deref());
+        same(aba.or(refs[i].sheet.as_deref()))
+    };
+    let fim = options.at + options.count;
+    // O índice novo de uma referência sozinha (`None` = #REF!).
+    let sozinha = |indice: i32| -> Option<i32> {
+        if options.removing {
+            if indice >= options.at && indice < fim {
+                None
+            } else if indice >= fim {
+                Some(indice - options.count)
+            } else {
+                Some(indice)
+            }
+        } else if indice >= options.at {
+            Some(indice + options.count)
+        } else {
+            Some(indice)
+        }
+    };
+    let mut novos: Vec<Option<i32>> = refs.iter().map(|r| sozinha(eixo(r))).collect();
+    // Excluir parte de um intervalo encolhe o intervalo, como no Excel
+    // (`$I$2:$I$2000` sem a linha 2 fica `$I$2:$I$1999`); só o intervalo
+    // inteiro excluído vira #REF!.
+    if options.removing && faixas.len() == refs.len() {
+        for i in 0..refs.len().saturating_sub(1) {
+            if !(faixas[i] && afetada(i) && afetada(i + 1)) {
+                continue;
+            }
+            let (a, b) = (eixo(&refs[i]), eixo(&refs[i + 1]));
+            if a > b || (a >= options.at && b < fim) {
+                continue;
+            }
+            novos[i] = Some(if a >= fim { a - options.count } else if a >= options.at { options.at } else { a });
+            novos[i + 1] = Some(if b >= fim { b - options.count } else if b >= options.at { options.at - 1 } else { b });
+        }
+    }
     let mut indice = 0;
     map_references(raw, |ref_cell| {
-        let aba = abas.get(indice).and_then(|s| s.as_deref());
+        let i = indice;
         indice += 1;
+        let aba = abas.get(i).and_then(|s| s.as_deref());
         if !same(aba.or(ref_cell.sheet.as_deref())) {
             return format_ref(&ref_cell);
         }
-
-        let index = if options.axis == Axis::Row {
-            ref_cell.row
-        } else {
-            ref_cell.col
+        let Some(next) = novos.get(i).copied().unwrap_or_else(|| sozinha(eixo(&ref_cell))) else {
+            return "#REF!".to_string();
         };
-
-        let mut next = index;
-        if options.removing {
-            if index >= options.at && index < options.at + options.count {
-                return "#REF!".to_string();
-            }
-            if index >= options.at + options.count {
-                next = index - options.count;
-            }
-        } else if index >= options.at {
-            next = index + options.count;
-        }
-
         if options.axis == Axis::Row {
             format_ref(&ParsedRef { row: next, ..ref_cell })
         } else {
@@ -320,6 +374,24 @@ mod tests {
             row: 4,
         };
         assert_eq!(format_ref(&r_lock), "Plan1!$B$5");
+    }
+
+    /// A aba de outro arquivo vai inteira na referência reescrita (arrastar a
+    /// fórmula desloca a referência e mantém o arquivo).
+    #[test]
+    fn referencia_a_outro_arquivo_mantem_o_arquivo_ao_deslocar() {
+        let deslocar = |raw: &str| map_references(raw, |mut r| {
+            r.row += 1;
+            format_ref(&r)
+        });
+        assert_eq!(deslocar("=[Vendas.fshz]Dados!A1*2"), "=[Vendas.fshz]Dados!A2*2");
+        assert_eq!(deslocar("='/home/x/[Vendas.fshz]Dados'!B3"), "='/home/x/[Vendas.fshz]Dados'!B4");
+        let mut abas = Vec::new();
+        map_references("=[Vendas.fshz]Dados!A1+Dados!A1", |r| {
+            abas.push(r.sheet.clone());
+            format_ref(&r)
+        });
+        assert_eq!(abas, vec![Some("[Vendas.fshz]Dados".to_string()), Some("Dados".to_string())]);
     }
 
     #[test]
@@ -402,4 +474,37 @@ mod tests {
         );
         assert_eq!(res, "=A1 + B6");
     }
+
+    fn excluir_linhas(formula: &str, at: i32, count: i32) -> String {
+        adjust_for_structure(formula, StructureAdjustOptions {
+            axis: Axis::Row, at, count, removing: true, sheet: "Dados", own_sheet: "Resumo",
+        })
+    }
+
+    #[test]
+    fn excluir_a_primeira_linha_do_intervalo_encolhe_o_intervalo() {
+        // O caso da "Planilha Pesada": a linha 2 (índice 1) sai.
+        assert_eq!(
+            excluir_linhas("=SOMASES(Dados!$I$2:$I$2000;Dados!$C$2:$C$2000;A1)", 1, 1),
+            "=SOMASES(Dados!$I$2:$I$1999;Dados!$C$2:$C$1999;A1)"
+        );
+        // Meio do intervalo e a última ponta.
+        assert_eq!(excluir_linhas("=SOMA(Dados!A2:A5)", 2, 2), "=SOMA(Dados!A2:A3)");
+        assert_eq!(excluir_linhas("=SOMA(Dados!A2:A5)", 4, 1), "=SOMA(Dados!A2:A4)");
+        // Começo e fim atravessados pela exclusão.
+        assert_eq!(excluir_linhas("=SOMA(Dados!A2:A5)", 0, 3), "=SOMA(Dados!A1:A2)");
+        // O intervalo inteiro excluído: #REF!.
+        assert_eq!(excluir_linhas("=SOMA(Dados!A3:A4)", 2, 2), "=SOMA(#REF!:#REF!)");
+        // Outra aba não muda; referência sozinha excluída continua #REF!.
+        assert_eq!(excluir_linhas("=Outra!A2:A5+Dados!B3", 2, 1), "=Outra!A2:A5+#REF!");
+    }
+
+    #[test]
+    fn excluir_colunas_tambem_encolhe_o_intervalo() {
+        let r = adjust_for_structure("=SOMA(B1:E1)", StructureAdjustOptions {
+            axis: Axis::Col, at: 1, count: 1, removing: true, sheet: "Aba1", own_sheet: "Aba1",
+        });
+        assert_eq!(r, "=SOMA(B1:D1)");
+    }
 }
+

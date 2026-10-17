@@ -8,7 +8,7 @@ use iced::widget::column;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Fase { Origem, Campos }
 
-const LARGURA_PAINEL: f32 = 340.0;
+const LARGURA_PAINEL: f32 = 370.0;
 
 fn item<'a>(nome: &'static str, rotulo: String, tam: f32) -> Element<'a, Msg> {
     row![icone(nome, 14.0), text(rotulo).size(tam)].spacing(6).align_y(Alignment::Center).into()
@@ -27,7 +27,10 @@ impl App {
             | Evento::Campo(_) | Evento::Remover(..) | Evento::RemoverFiltro(_)
             | Evento::ArrastoSoltar | Evento::MoverPara(..) | Evento::Reordenar(..)
             | Evento::FiltroTudo | Evento::FiltroCancelar | Evento::LayoutEscolher(_)
-            | Evento::AgruparEscolher(_) | Evento::TemaEscolher(_))
+            | Evento::AgruparEscolher(_) | Evento::TemaEscolher(_)
+            | Evento::OperacaoEscolher(..) | Evento::MostrarComo(..) | Evento::Ordenar(..)
+            | Evento::AgruparCampo(..) | Evento::FaixaTexto(..) | Evento::TotaisGerais { .. }
+            | Evento::AtualizarSozinha(_))
     }
 
     /// Recalcula a dinâmica aberta no painel sem fechá-lo.
@@ -137,7 +140,9 @@ impl App {
             campos = campos.push(text(tr!("Nenhum campo com esse nome")).size(11).color(COR_TEXTO_MUTED()));
         }
         let lista = iced::widget::mouse_area(
-            container(scrollable(campos).height(Length::Fixed(196.0)))
+            // Margem à direita: o ícone de filtro ficava atrás da barra de rolagem.
+            container(scrollable(container(campos).padding(iced::Padding { right: 12.0, ..Default::default() }))
+                .height(Length::Fixed(196.0)))
                 .padding(4).width(Length::Fill)
                 .style(|_| container::Style {
                     background: Some(iced::Background::Color(COR_PAINEL())),
@@ -156,25 +161,43 @@ impl App {
                     .size(11).color(COR_TEXTO_MUTED()));
             }
             let total = itens.len();
+            // Onde o campo arrastado vai entrar: uma linha azul.
+            let marca = || -> Element<'a, Msg> {
+                container(Space::new(Length::Fill, Length::Fixed(2.0))).style(|_| container::Style {
+                    background: Some(iced::Background::Color(COR_AZUL_ACENTO())),
+                    ..Default::default()
+                }).into()
+            };
+            let sob_item = if arrastando { e.ui.sob_item.filter(|(a, _)| *a == area) } else { None };
             for (i, (coluna, texto)) in itens.into_iter().enumerate() {
+                if sob_item == Some((area, i)) { col = col.push(marca()); }
                 let menu_aberto = e.ui.menu_item == Some((area, i));
                 let chip = row![
-                    iced::widget::mouse_area(container(text(texto).size(11.5)).padding([4, 6]).width(Length::Fill))
+                    // Uma linha só: "Soma de Acumulado" quebrava em duas.
+                    iced::widget::mouse_area(container(text(texto).size(11.5)
+                        .wrapping(iced::widget::text::Wrapping::None))
+                        .padding([4, 6]).width(Length::Fill).clip(true))
                         .on_press(Msg::Dinamica(Evento::ArrastoInicio(coluna, Some((area, i)))))
                         .interaction(iced::mouse::Interaction::Grab),
                     button(icone("chevron-down", 12.0)).padding([3, 4])
                         .style(estilo_botao_pequeno(menu_aberto))
                         .on_press(Msg::Dinamica(Evento::MenuItem(Some((area, i))))),
                 ].spacing(0).align_y(Alignment::Center);
-                col = col.push(container(chip).style(|_| container::Style {
+                let caixa_chip = container(chip).style(|_| container::Style {
                     background: Some(iced::Background::Color(COR_PAINEL())),
                     border: iced::Border { color: COR_BORDA_SUAVE(), width: 1.0, radius: 6.0.into() },
                     ..Default::default()
-                }));
-                if menu_aberto {
-                    col = col.push(self.menu_do_item(e, area, i, total));
-                }
+                });
+                // Só durante o arrasto: passar o mouse à toa não gera mensagem.
+                let campo: Element<'a, Msg> = if arrastando {
+                    iced::widget::mouse_area(caixa_chip)
+                        .on_enter(Msg::Dinamica(Evento::ArrastoSobreItem(Some((area, i)))))
+                        .on_exit(Msg::Dinamica(Evento::ArrastoSobreItem(None)))
+                        .into()
+                } else { caixa_chip.into() };
+                col = col.push(campo);
             }
+            if arrastando && total > 0 && e.ui.sob == Some(area) && sob_item.is_none() { col = col.push(marca()); }
             let caixa = container(scrollable(col).height(Length::Fixed(112.0)))
                 .padding(6).width(Length::Fill)
                 .style(move |_| container::Style {
@@ -215,8 +238,27 @@ impl App {
             lista,
             text(tr!("Arraste os campos entre as áreas")).size(11).color(COR_TEXTO_MUTED()),
             grade,
+            // O menu ▾ de um campo sai embaixo das áreas: dentro da caixa
+            // (112 px, com rolagem) ele ficava cortado.
+            match e.ui.menu_item {
+                Some((area, i)) => {
+                    let total = match area {
+                        AreaDinamica::Linhas => e.linhas.len(),
+                        AreaDinamica::Colunas => e.colunas.len(),
+                        AreaDinamica::Valores => e.valores.len(),
+                        AreaDinamica::Filtros => e.filtros.len(),
+                        AreaDinamica::Lista => 0,
+                    };
+                    self.menu_do_item(e, area, i, total)
+                }
+                None => Space::with_height(0).into(),
+            },
+            match e.ui.config_campo {
+                Some((area, i)) => self.view_config_campo(e, area, i),
+                None => Space::with_height(0).into(),
+            },
             iced::widget::horizontal_rule(1),
-            button(item(if e.avancado { "chevron-down" } else { "chevron-right" }, tr!("Opções").into(), 12.5))
+            button(item(if e.avancado { "chevron-down" } else { "chevron-right" }, tr!("Origem e campos calculados").into(), 12.5))
                 .style(estilo_botao_pequeno(false)).padding([4, 2])
                 .on_press(Msg::Dinamica(Evento::AlternarAvancado)),
             opcoes,
@@ -234,8 +276,12 @@ impl App {
         let topo = 43.0 + 52.0 + if self.config.faixa_recolhida { 0.0 }
             else { super::super::faixa_nativa::ALTURA_FAIXA_NATIVA };
         let altura = (self.tamanho_principal.height - topo - 40.0).max(260.0);
-        container(painel).padding(12).width(Length::Fixed(LARGURA_PAINEL))
-            .height(Length::Fixed(altura)).style(estilo_painel_faixa).into()
+        // O botão direito no painel fica no painel: sem isto atravessava
+        // e abria o menu da célula da grade embaixo.
+        iced::widget::mouse_area(container(painel).padding(12).width(Length::Fixed(LARGURA_PAINEL))
+            .height(Length::Fixed(altura)).style(estilo_painel_faixa))
+            .on_right_press(Msg::Dinamica(Evento::MenuItem(None)))
+            .into()
     }
 
     /// O menu ▾ de um campo numa área: reordenar, mudar de área, configurar, remover.
@@ -261,10 +307,18 @@ impl App {
         match area {
             AreaDinamica::Valores => {
                 let atual = e.valores.get(i).map(|v| nome_operacao(v.op)).unwrap_or("");
-                menu = menu.push(opcao("sum", trf!("Resumir por: {atual}"),
-                    Some(Msg::Dinamica(Evento::OperacaoValor(i)))));
+                // Abre as configurações com a lista de contas (Soma, Média,
+                // Desvio padrão, Moda...): antes alternava às cegas.
+                menu = menu.push(opcao("sum", trf!("Resumir por: {atual}…"),
+                    Some(Msg::Dinamica(Evento::ConfigurarCampo(Some((area, i)))))));
                 menu = menu.push(opcao("plus", tr!("Duplicar com outra conta").into(),
                     Some(Msg::Dinamica(Evento::DuplicarValor(i)))));
+                menu = menu.push(opcao("percentage", tr!("Mostrar valores como…").into(),
+                    Some(Msg::Dinamica(Evento::ConfigurarCampo(Some((area, i)))))));
+            }
+            AreaDinamica::Linhas | AreaDinamica::Colunas => {
+                menu = menu.push(opcao("sort-ascending", tr!("Classificar e agrupar…").into(),
+                    Some(Msg::Dinamica(Evento::ConfigurarCampo(Some((area, i)))))));
             }
             AreaDinamica::Filtros => if let Some(col) = e.coluna_em(area, i) {
                 menu = menu.push(opcao("filter", tr!("Escolher itens…").into(),
@@ -324,10 +378,13 @@ impl App {
                     .on_press(Msg::Dinamica(Evento::FiltroOk)),
             ].spacing(8),
         ].spacing(9);
-        container(cartao).padding(12).width(Length::Fixed(260.0)).style(estilo_popup_menu).into()
+        iced::widget::mouse_area(container(cartao).padding(12).width(Length::Fixed(260.0)).style(estilo_popup_menu))
+            .on_right_press(Msg::Dinamica(Evento::MenuItem(None)))
+            .into()
     }
     pub(in crate::app) fn sobrepor_dinamica<'a>(&'a self, base: Element<'a, Msg>) -> Element<'a, Msg> {
-        let Some(e) = &self.dinamica else { return base; };
+        // Sem o painel de campos aberto, os cartões das segmentações.
+        let Some(e) = &self.dinamica else { return self.sobrepor_segmentacoes(base); };
         if e.fase == Fase::Origem {
             let fora = iced::widget::mouse_area(Space::new(Length::Fill, Length::Fill))
                 .on_press(Msg::Dinamica(Evento::Fechar));

@@ -60,6 +60,7 @@ pub fn da_workbook(workbook: &Workbook, ativa: u32) -> PastaBruta {
         es: workbook.estilos_celula.as_deref().and_then(|t| serde_json::from_str(t).ok()),
         pr: crate::para_workbook::propriedades_para_json(&workbook.propriedades),
         mc: workbook.macros.as_deref().and_then(|t| serde_json::from_str(t).ok()),
+        ex: crate::externos_guardados::para_json(&workbook.externos_para_gravar()),
         sheets,
     }
 }
@@ -178,6 +179,8 @@ fn montar_aba_bruta(sheet: &Sheet) -> AbaBruta {
         tp: topicos_para_json(&sheet.topicos),
         pt: sheet.protecao.as_ref().map(protecao_para_json),
         cm: (!sheet.comentarios.is_empty()).then(|| comentarios_para_json(&sheet.comentarios)),
+        lo: sheet.linhas_ocultas_desde,
+        co: sheet.colunas_ocultas_desde,
         w,
         h,
         g: parse_json_opt(&sheet.g),
@@ -417,6 +420,31 @@ mod testes {
         assert_eq!(aba.row_heights.get(&9), Some(&0));
         assert_eq!(aba.col_widths.get(&3), Some(&0));
         assert_eq!(aba.get_raw(8, 3), "123");
+    }
+
+    #[test]
+    fn ocultas_ate_o_fim_sobrevivem_fshz_e_xlsx() {
+        use feathersheet_core::{MAX_COLS, MAX_ROWS};
+        let mut wb = Workbook::new();
+        wb.escrever_celula(0, 2, 0, "visível".into());
+        wb.escrever_celula(0, 40, 0, "escondida".into());
+        wb.editar(0, |s| {
+            s.alterar_visibilidade_dimensoes(false, true, 29, MAX_ROWS - 1).unwrap();
+            s.alterar_visibilidade_dimensoes(true, true, 3, MAX_COLS - 1).unwrap();
+        });
+        let lida = crate::fshz_read::ler_fshz(&pasta_gravar_bytes(&wb, 0).unwrap()).unwrap();
+        let restaurada = crate::para_workbook::para_workbook(&lida);
+        let aba = &restaurada.aba(0).unwrap().sheet;
+        assert_eq!((aba.linhas_ocultas_desde, aba.colunas_ocultas_desde), (Some(29), Some(3)));
+        assert_eq!(aba.get_raw(40, 0), "escondida");
+
+        let xlsx = crate::xlsx_write::gerar_xlsx(&wb).expect("grava xlsx");
+        let (de_volta, _) = crate::xlsx_read::ler_xlsx_workbook(xlsx).expect("lê xlsx");
+        let aba = &de_volta.aba(0).unwrap().sheet;
+        assert_eq!((aba.linhas_ocultas_desde, aba.colunas_ocultas_desde), (Some(29), Some(3)));
+        assert!(!aba.linha_oculta(10) && aba.linha_oculta(40) && aba.linha_oculta(1_048_575));
+        assert!(aba.col_widths.is_empty(), "sem uma largura por coluna oculta");
+        assert_eq!(aba.get_raw(40, 0), "escondida");
     }
 
     #[test]

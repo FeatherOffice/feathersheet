@@ -58,6 +58,8 @@ struct Vista<'a> {
     pool: &'a StringPool,
     cells: &'a HashMap<u64, CellData>,
     row_heights: &'a HashMap<u32, u32>,
+    /// `Sheet::linhas_ocultas_desde`: ocultas até o fim da aba.
+    linhas_ocultas_desde: Option<u32>,
     topicos: &'a crate::planilha::sheet::topicos::EixoTopicos,
     /// Colunas com fórmula avulsa: o valor delas mora no `RefCell` da aba.
     colunas_avulsas: HashSet<u32>,
@@ -76,6 +78,7 @@ impl<'a> Vista<'a> {
             pool: &sheet.pool,
             cells: &sheet.cells,
             row_heights: &sheet.row_heights,
+            linhas_ocultas_desde: sheet.linhas_ocultas_desde,
             topicos: &sheet.topicos.linhas,
             colunas_avulsas: colunas_avulsas_de(sheet),
             derramadas: sheet.areas_derramadas(),
@@ -315,7 +318,10 @@ impl EvalContext for Contexto<'_, '_> {
     }
 
     fn linha_oculta(&self, row: u32, sheet: Option<&str>) -> bool {
-        self.indice(sheet).is_some_and(|a| self.abas[a].row_heights.get(&row) == Some(&0))
+        self.indice(sheet).is_some_and(|a| {
+            let v = &self.abas[a];
+            v.linhas_ocultas_desde.is_some_and(|n| row >= n) || v.row_heights.get(&row) == Some(&0)
+        })
     }
 
     fn celula_com_subtotal(&self, row: u32, col: u32, sheet: Option<&str>) -> bool {
@@ -620,21 +626,21 @@ pub(crate) fn calcular(abas: &mut [AbaViva], funcoes: &HashSet<String>) -> usize
                 }
             }
         }
-        crate::diario::anotar(format!(
+        crate::anotar!(
             "calcular em paralelo: nível com {colunas} coluna(s) em {} ms ({})",
             inicio_nivel.elapsed().as_millis(),
             tempo_por_coluna.iter()
                 .map(|((a, c), d)| format!("{}!{}: {} ms",
                     abas[*a].sheet.name, crate::celulas::refs::col_name(*c), d.as_millis()))
-                .collect::<Vec<_>>().join(", ")));
+                .collect::<Vec<_>>().join(", "));
     }
     let antes_de_devolver = std::time::Instant::now();
     crate::paralelismo::devolver_memoria_ao_sistema();
-    crate::diario::anotar(format!("calcular em paralelo: devolver memória ao sistema em {} ms",
-        antes_de_devolver.elapsed().as_millis()));
-    crate::diario::anotar(format!(
+    crate::anotar!("calcular em paralelo: devolver memória ao sistema em {} ms",
+        antes_de_devolver.elapsed().as_millis());
+    crate::anotar!(
         "calcular em paralelo: {total} célula(s), {n_niveis} nível(is), {threads} thread(s), \
          {fora} ficaram para o cálculo sob demanda · {} ms",
-        inicio.elapsed().as_millis()));
+        inicio.elapsed().as_millis());
     total
 }

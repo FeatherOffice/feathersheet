@@ -26,9 +26,9 @@ instalador do Windows substituem a versão anterior.
 
 ---
 
-## Novidades da v0.0.5
+## Novidades da v0.1.0
 
-![Janela "O que há de novo" da versão 0.0.5: interface em inglês, aba Layout da Página, Formatar células refeito, .xlsx 3,6× mais rápido, somar e contar por cor e dica do mouse por tipo de gráfico](docs/imagens/novidades-0.0.5.png)
+![Janela "O que há de novo" da versão 0.1.0: tabela dinâmica muito mais rápida, referência entre arquivos, colar em 100 milhões de linhas, CSV e .xlsx mais rápidos, interface em espanhol, mostrar valores como, IA pelo MCP e eventos no Alt+F11](docs/imagens/novidades-0.1.0.png)
 
 A mesma janela abre sozinha na primeira vez depois de atualizar (e fica no
 menu Ajuda, em *O que há de novo*).
@@ -38,12 +38,13 @@ menu Ajuda, em *O que há de novo*).
 | Área | Destaques |
 |---|---|
 | **Fórmulas** | 457 das 520 funções do Excel, com nomes em português ou inglês conforme o idioma da interface; avaliar fórmula passo a passo; matrizes dinâmicas, `LAMBDA`, voláteis |
-| **Arquivos grandes** | até 100 milhões de linhas; abre `.parquet` e `.csv` grande; cálculo paralelo com invalidação seletiva; rodapé com soma e contagem instantâneas |
+| **Arquivos grandes** | até 100 milhões de linhas; abre `.parquet` e `.csv` grande; cálculo paralelo com invalidação seletiva; rodapé com soma e contagem instantâneas; colar um valor nas 100 milhões de linhas de uma coluna em 0,3 s |
 | **Excel** | abre e grava `.xlsx` com cores do tema, formas, imagens, degradês e gráficos na posição certa; lê `.xlsm` e converte as macros VBA para JavaScript |
 | **Gráficos** | 25 tipos (combinado, cascata, radar, Gantt, mapa de calor…), dica do mouse e legenda clicável; gráficos editáveis com o painel *Formatar gráfico* (temas, cor por ponto, eixos, rótulos), pelo motor comum [`feather-charts`](https://github.com/FeatherOffice/feather-charts) |
-| **Dados** | tabelas, tabela dinâmica, formatação condicional, validação, agrupar/subtotal, proteger planilha, Texto para colunas |
+| **Dados** | tabelas, tabela dinâmica (mostrar valores como, gráfico dinâmico, segmentação, detalhes no duplo clique), formatação condicional, validação, agrupar/subtotal, proteger planilha, Texto para colunas |
+| **Vínculos** | referência a outro arquivo (`=[Vendas.fshz]Dados!A1`) que fica viva com os dois abertos; aponte clicando na outra janela |
 | **Macros** | editor Alt+F11 com macros em JavaScript (interpretador Boa, local) guardadas dentro do próprio arquivo |
-| **IA local** | servidor MCP (`feathersheet-mcp`) para uma IA ler, escrever e conferir planilhas por stdio |
+| **IA local** | servidor MCP (`feathersheet --mcp`) para uma IA ler, escrever, ordenar, filtrar e conferir planilhas por stdio; liga e desliga em Configurações |
 | **Desenho** | caneta com pressão (mesa digitalizadora) sobre a planilha |
 
 ### Gráficos
@@ -70,15 +71,44 @@ uma planilha de vendas grande:
 O arquivo não traz os resultados guardados (`fullCalcOnLoad`): tudo é
 calculado ao abrir.
 
-| AMD Ryzen 7 5700G, 16 threads, 32 GB | v0.0.4 | v0.0.5 |
-|---|---|---|
-| Ler o `.xlsx` | 27,8 s | **7,4 s** |
-| Calcular as 7 milhões de fórmulas | 6,3 s | **2,4 s** |
-| Até a planilha pronta | ~34 s | **9,7 s** |
+| AMD Ryzen 7 5700G, 16 threads, 32 GB | v0.0.4 | v0.0.5 | v0.1.0 |
+|---|---|---|---|
+| Ler o `.xlsx` | 27,8 s | 7,4 s | **5,8 s** |
+| Calcular as 7 milhões de fórmulas | 6,3 s | 2,4 s | **2,4 s** |
+| Até a planilha pronta | ~34 s | 9,7 s | **8,2 s** |
 
-A coluna da v0.0.4 vem do console do app (F12); a da v0.0.5, da bancada
-`medir_abrir_calcular` (o mesmo código de
-abrir e calcular, sem a janela).
+A coluna da v0.0.4 vem do console do app (F12); as outras, da bancada
+`medir_abrir_calcular` (o mesmo código de abrir e calcular, sem a janela;
+mediana de 3 rodadas). Na v0.1.0 a fórmula repetida linha a linha
+(`E2*F2`, `E3*F3`…) é traduzida do Excel uma vez só; num computador de
+2 núcleos, ler esse `.xlsx` caiu de 33,7 s para 8,4 s.
+
+**O mesmo arquivo salvo como `.fshz`**, o formato do FeatherSheet:
+
+| v0.1.0, mesma máquina | `.xlsx` | `.fshz` |
+|---|---|---|
+| Tamanho do arquivo | 93,6 MB | **26,4 MB** |
+| Ler o arquivo | 5,8 s | **0,5 s** |
+| Calcular ao abrir | 2,4 s (7.000.799 fórmulas) | **0,6 s** (799 fórmulas) |
+| Até a planilha pronta | 8,2 s | **1,1 s** |
+
+O `.fshz` guarda as colunas já separadas por tipo e os resultados das
+fórmulas: ao abrir, só os 799 resumos que somam o milhão de linhas
+(`SOMASES`, `CONT.SES`) são refeitos. O `.xlsx` deste teste não traz
+resultado nenhum, então tudo é calculado de novo.
+
+**Tabela dinâmica e colagem na aba Dados** (1 milhão de linhas, v0.1.0,
+tempos do console F12):
+
+| Operação | Tempo |
+|---|---|
+| Criar a dinâmica (nasce vazia, como no Excel) | instantâneo |
+| Trocar um campo (1 campo em Linhas + 1 em Valores) | 130–205 ms |
+| Trocar um campo (2 campos em Linhas + 1 em Valores)¹ | ~350 ms |
+| Duplo clique num valor com 124 mil linhas de origem (Detalhes) | 353 ms |
+| Colar um valor em A2:A100000000 (desfazer: 0,07 s) | 0,33 s |
+
+¹ Da bancada `medir_etapas_da_troca` (o mesmo código, sem a janela); as outras linhas, do F12.
 
 Para comparar, o **Microsoft Excel** abrindo o mesmo arquivo num notebook
 com Intel Core Ultra 7 155H e 64 GB levou **1 min 24,9 s** para carregar e
@@ -131,24 +161,13 @@ Bibliotecas comuns da suíte usadas aqui:
 
 ## Compilar
 
-As bibliotecas da suíte entram por caminho: clone-as lado a lado na mesma pasta.
+As bibliotecas da suíte vêm do GitHub por tag, pelo próprio Cargo: basta
+clonar este repositório.
 
 ```sh
-mkdir FeatherOffice && cd FeatherOffice
-for r in feathersheet feather-io feather-ui feather-charts feather-shapes; do
-  git clone https://github.com/FeatherOffice/$r
-done
+git clone https://github.com/FeatherOffice/feathersheet
 cd feathersheet/crates/feathersheet-gui
 cargo run --release
-```
-
-```text
-FeatherOffice/
-├── feathersheet/      ← este repositório
-├── feather-io/        ← arquivos, tabelas, imagens e macros
-├── feather-ui/        ← tema, ícones e componentes
-├── feather-charts/    ← gráficos
-└── feather-shapes/    ← formas e ícones
 ```
 
 No Linux, o Iced precisa das bibliotecas de janela do sistema (`libxkbcommon`,

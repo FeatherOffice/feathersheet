@@ -37,9 +37,7 @@ const MENUS: [&str; 8] = [
 fn mensagem_visual<'a>(nome: &str) -> Element<'a, Msg> {
     container(column![
         text(nome.to_owned()).size(14),
-        text(tr!("Estrutura visual migrada do editor TypeScript.")).size(12),
-        text(tr!("Os comandos dessa área serão conectados ao motor comum em outra etapa."))
-            .size(11),
+        text(tr!("Em breve.")).size(12),
     ].spacing(8))
         .padding(20).width(Length::Fill).height(Length::Fill)
         .center_x(Length::Fill).center_y(Length::Fill)
@@ -47,7 +45,35 @@ fn mensagem_visual<'a>(nome: &str) -> Element<'a, Msg> {
 }
 fn event(e: EventoVisual) -> Option<Msg> { Some(Msg::MacroVisual(e)) }
 
-fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
+/// Módulos agrupados por pasta (`pasta/sub/nome`): pastas primeiro, em
+/// ordem alfabética, depois os módulos soltos na ordem do catálogo.
+fn modulos_da_pasta<'a>(
+    app: &'a App, mut itens: iced::widget::Column<'a, Msg>, nomes: &[&str], prefixo: &str, recuo: f32,
+) -> iced::widget::Column<'a, Msg> {
+    let mut pastas: Vec<&str> = nomes.iter()
+        .filter_map(|n| n.strip_prefix(prefixo)?.split_once('/').map(|(p, _)| p))
+        .collect();
+    pastas.sort_unstable_by_key(|p| p.to_lowercase());
+    pastas.dedup();
+    for pasta in pastas {
+        itens = itens.push(item_arvore(pasta, "folder", recuo, None, false));
+        itens = modulos_da_pasta(app, itens, nomes, &format!("{prefixo}{pasta}/"), recuo + 16.0);
+    }
+    for nome in nomes.iter().filter(|n| n.strip_prefix(prefixo).is_some_and(|r| !r.contains('/'))) {
+        let modulo = app.macro_catalogo.obter(nome);
+        let auto = modulo.is_some_and(|m| m.auto);
+        let id = format!("modulo:{nome}");
+        let rotulo = format!("{}{}", &nome[prefixo.len()..], if auto { tr!(" (automática)") } else { "" });
+        itens = itens.push(item_arvore(
+            &rotulo, if auto { "bolt" } else { "file-code" }, recuo,
+            event(EventoVisual::Documento(id.clone())),
+            app.macro_visual.documento == id,
+        ));
+    }
+    itens
+}
+
+fn arvore<'a>(app: &'a App, altura: Length) -> Element<'a, Msg> {
     let escuro = app.config.escuro;
     let mut itens = column![
         item_arvore(
@@ -59,8 +85,10 @@ fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
     ].spacing(1).padding(4);
     for nome in app.workbook.nomes().iter().take(48) {
         let id = format!("planilha:{nome}");
+        // Raio: a aba tem código de evento ligado.
+        let com_evento = app.eventos_vba.iter().any(|e| e.aba.eq_ignore_ascii_case(nome));
         itens = itens.push(item_arvore(
-            nome, "table", 21.0,
+            nome, if com_evento { "bolt" } else { "table" }, 21.0,
             event(EventoVisual::Documento(id.clone())),
             app.macro_visual.documento == id,
         ));
@@ -71,43 +99,30 @@ fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
         app.macro_visual.documento == "pasta",
     ));
     itens = itens.push(grupo_arvore(tr!("Módulos"), "file-code", escuro));
-    let modulo_atual = format!("modulo:{}", app.macro_nome);
-    if app.macro_catalogo.macros.is_empty() {
+    let nomes: Vec<&str> = app.macro_catalogo.macros.iter().take(400)
+        .map(|m| m.name.as_str())
+        .filter(|n| !n.starts_with(super::organizacao::PASTA_EVENTOS)).collect();
+    itens = modulos_da_pasta(app, itens, &nomes, "", 21.0);
+    let rascunho = !app.macro_nome.starts_with(super::organizacao::PASTA_EVENTOS)
+        && app.macro_catalogo.obter(&app.macro_nome).is_none();
+    if rascunho {
+        let modulo_atual = format!("modulo:{}", app.macro_nome);
         itens = itens.push(item_arvore(
             &trf!("{} (rascunho)", app.macro_nome), "file-code", 21.0,
             event(EventoVisual::Documento(modulo_atual.clone())),
             app.macro_visual.documento == modulo_atual,
         ));
-    } else {
-        for modulo in app.macro_catalogo.macros.iter().take(60) {
-            let id = format!("modulo:{}", modulo.name);
-            let rotulo = format!("{}{}", modulo.name,
-                if modulo.auto { tr!(" (automática)") } else { "" });
-            itens = itens.push(item_arvore(
-                &rotulo, if modulo.auto { "bolt" } else { "file-code" }, 21.0,
-                event(EventoVisual::Documento(id.clone())),
-                app.macro_visual.documento == id,
-            ));
-        }
-        if app.macro_catalogo.obter(&app.macro_nome).is_none() {
-            itens = itens.push(item_arvore(
-                &trf!("{} (rascunho)", app.macro_nome), "file-code", 21.0,
-                event(EventoVisual::Documento(modulo_atual.clone())),
-                app.macro_visual.documento == modulo_atual,
-            ));
-        }
     }
-    itens = itens.push(grupo_arvore(tr!("Componentes"), "forms", escuro));
-    itens = itens.push(item_arvore(
-        tr!("Componente1 (prévia)"), "forms", 21.0,
-        event(EventoVisual::Documento("componente:previsao".into())),
-        app.macro_visual.documento == "componente:previsao",
-    ));
     let cabecalho = row![
         text(tr!("Explorador de projeto")).size(13),
         Space::with_width(Length::Fill),
         botao_icone_simples("search", Some(Msg::MacroVisual(EventoVisual::Codigo(
             EventoCodigo::FocarProjeto)))),
+        iced::widget::tooltip(
+            botao_icone_simples("folder", Some(Msg::MacroVisual(EventoVisual::NovaPasta))),
+            container(text(tr!("Nova pasta")).size(11)).padding([4, 8]).style(feather_ui::tema::estilo_dica),
+            iced::widget::tooltip::Position::Bottom,
+        ),
         botao_icone_simples("plus", Some(Msg::MacroNovoModulo)),
     ].spacing(2).align_y(Alignment::Center);
     // Com a busca preenchida, a árvore dá lugar aos módulos/funções achados.
@@ -121,18 +136,19 @@ fn arvore<'a>(app: &'a App) -> Element<'a, Msg> {
         codigo_view::busca_projeto(app),
         scrollable(lista).height(Length::Fill),
     ].spacing(3).padding(4))
-        .style(estilo_area(escuro)).height(Length::FillPortion(3))
+        .style(estilo_area(escuro)).height(altura)
         .width(Length::Fill).into()
 }
 
-fn propriedades<'a>(app: &'a App) -> Element<'a, Msg> {
+fn propriedades<'a>(app: &'a App, altura: Length) -> Element<'a, Msg> {
     let escuro = app.config.escuro;
     let v = &app.macro_visual;
     let tipo = if v.documento.starts_with("modulo:") { tr!("Módulo JavaScript") }
         else if v.documento.starts_with("planilha:") { tr!("Planilha") }
         else if v.documento.starts_with("componente:") { tr!("Formulário") }
         else { tr!("Pasta de trabalho") };
-    let nome = v.documento.split_once(':').map_or("Esta pasta de trabalho", |(_, n)| n);
+    let nome = if v.documento.starts_with("modulo:") { app.macro_nome.as_str() }
+        else { v.documento.split_once(':').map_or("Esta pasta de trabalho", |(_, n)| n) };
     let linhas = app.macro_codigo.text().lines().count();
     let tem_auto = app.macro_catalogo.obter(nome).is_some_and(|m| m.auto);
     let mut pares = column![].spacing(1).padding(5);
@@ -147,11 +163,20 @@ fn propriedades<'a>(app: &'a App) -> Element<'a, Msg> {
         (tr!("Linguagem"), if tipo == "Módulo JavaScript" { "JavaScript" } else { "—" }.to_owned()),
     ];
     for (chave, valor) in dados {
+        // (Nome) vira campo durante o Renomear; "pasta/nome" move para a pasta.
+        let valor: Element<'a, Msg> = match (chave, v.renomeando.as_deref()) {
+            ("(Nome)", Some(atual)) => text_input(tr!("pasta/nome"), atual)
+                .id(text_input::Id::new("macro-renomear"))
+                .on_input(|t| Msg::MacroVisual(EventoVisual::RenomearTexto(t)))
+                .on_submit(Msg::MacroVisual(EventoVisual::RenomearConfirmar))
+                .size(11).padding([5, 6]).into(),
+            _ => container(text(valor).size(11)).padding([7, 8]).width(Length::Fill)
+                .style(estilo_celula_propriedade(escuro, false)).into(),
+        };
         pares = pares.push(row![
             container(text(chave).size(11)).width(Length::FillPortion(5)).padding([7, 8])
                 .style(estilo_celula_propriedade(escuro, true)),
-            container(text(valor).size(11)).width(Length::FillPortion(6)).padding([7, 8])
-                .style(estilo_celula_propriedade(escuro, false)),
+            container(valor).width(Length::FillPortion(6)),
         ].spacing(0));
     }
     let barras = row![
@@ -170,20 +195,46 @@ fn propriedades<'a>(app: &'a App) -> Element<'a, Msg> {
         barras,
         scrollable(pares).height(Length::Fill),
         row![
-            botao_icone(tr!("Renomear"), "edit", None, false),
+            botao_icone(tr!("Renomear"), "edit", (v.documento.starts_with("modulo:")
+                && v.renomeando.is_none()).then_some(Msg::MacroVisual(EventoVisual::RenomearInicio)), false),
             botao_icone(tr!("Excluir"), "trash", if v.documento.starts_with("modulo:") {
                 Some(Msg::MacroExcluirModulo)
             } else { None }, false),
         ].spacing(5).padding([6, 7]),
     ].spacing(3).padding(4))
     .style(estilo_area(escuro)).width(Length::Fill)
-    .height(Length::FillPortion(2)).into()
+    .height(altura).into()
 }
 
-fn painel_lateral<'a>(app: &'a App) -> Element<'a, Msg> {
-    let mut conteudo = column![].spacing(8).height(Length::Fill);
-    if app.macro_visual.explorador { conteudo = conteudo.push(arvore(app)); }
-    if app.macro_visual.propriedades { conteudo = conteudo.push(propriedades(app)); }
+/// Faixa de 8 px entre duas áreas; arrastar muda a altura (cursor ↕).
+fn divisoria<'a>(d: Divisoria) -> Element<'a, Msg> {
+    iced::widget::mouse_area(Space::new(Length::Fill, Length::Fixed(8.0)))
+        .interaction(iced::mouse::Interaction::ResizingVertically)
+        .on_press(Msg::MacroVisual(EventoVisual::DivisoriaInicio(d)))
+        .into()
+}
+
+fn painel_lateral<'a>(app: &'a App, altura_janela: f32) -> Element<'a, Msg> {
+    let v = &app.macro_visual;
+    let conteudo: Element<'a, Msg> = match (v.explorador, v.propriedades) {
+        (true, true) => {
+            // Altura aproximada da lateral (janela menos barras e console),
+            // só para os limites: cada lado fica com pelo menos 110 px.
+            let lateral = altura_janela - 220.0
+                - if v.console { v.desenhado_console.get() + 8.0 } else { 0.0 };
+            let maximo = (lateral - 8.0 - 110.0).max(110.0);
+            let explorador = v.altura_explorador
+                .unwrap_or((lateral - 8.0) * 0.6).clamp(110.0, maximo);
+            v.desenhado_explorador.set(explorador);
+            column![
+                arvore(app, Length::Fixed(explorador)),
+                divisoria(Divisoria::Lateral),
+                propriedades(app, Length::Fill),
+            ].height(Length::Fill).into()
+        }
+        (true, false) => arvore(app, Length::Fill),
+        _ => propriedades(app, Length::Fill),
+    };
     container(conteudo).width(Length::Fixed(280.0)).height(Length::Fill).into()
 }
 
@@ -204,18 +255,6 @@ fn abas_documento<'a>(app: &'a App) -> Element<'a, Msg> {
         &nome_atual, icone_atual,
         event(EventoVisual::Documento(atual.clone())), true,
     ));
-    if !atual.starts_with("modulo:") {
-        abas = abas.push(botao_aba(
-            &app.macro_nome, "file-code",
-            event(EventoVisual::Documento(format!("modulo:{}", app.macro_nome))), false,
-        ));
-    }
-    if atual != "componente:previsao" {
-        abas = abas.push(botao_aba(
-            tr!("Formulário (prévia)"), "forms",
-            event(EventoVisual::Documento("componente:previsao".into())), false,
-        ));
-    }
     abas = abas.push(botao_icone_simples("plus", Some(Msg::MacroNovoModulo)));
     container(scrollable(abas).direction(scrollable::Direction::Horizontal(
         scrollable::Scrollbar::new(),
@@ -228,19 +267,37 @@ fn edicao_codigo<'a>(app: &'a App) -> Element<'a, Msg> {
     codigo_view::edicao_codigo(app)
 }
 
+/// Código de eventos de uma planilha: o evento escolhido em cima e o
+/// mesmo editor dos módulos embaixo (guardar com Ctrl+S liga o evento).
+fn codigo_evento_planilha<'a>(app: &'a App) -> Element<'a, Msg> {
+    let escuro = app.config.escuro;
+    let mut eventos = row![
+        text(tr!("CÓDIGO DE EVENTOS")).size(11).color(cor_secundaria(escuro)),
+        Space::with_width(Length::Fixed(10.0)),
+    ].spacing(4).align_y(Alignment::Center);
+    for (chave, rotulo) in super::organizacao::EVENTOS_PLANILHA {
+        let ligado = app.macro_catalogo.obter(&super::organizacao::nome_evento(
+            app.macro_visual.documento.trim_start_matches("planilha:"), chave)).is_some();
+        eventos = eventos.push(botao_icone(tr!(rotulo), if ligado { "bolt" } else { "code" },
+            event(EventoVisual::EventoPlanilha(chave)), app.macro_visual.evento_planilha == chave));
+    }
+    column![
+        container(eventos).padding([4, 8]).width(Length::Fill).style(estilo_cabecalho(escuro)),
+        edicao_codigo(app),
+    ].spacing(5).height(Length::Fill).into()
+}
+
 fn evento_planilha<'a>(app: &'a App) -> Element<'a, Msg> {
-    let codigo = app.macro_visual.documento.starts_with("planilha:");
-    let seletor = if codigo { "SelectionChange" }
-        else { "Open / BeforeClose" };
+    let seletor = "Open / BeforeClose";
     container(column![
-        titulo(tr!("CÓDIGO DE EVENTOS  ·  ESTRUTURA TS"), app.config.escuro),
+        titulo(tr!("CÓDIGO DE EVENTOS"), app.config.escuro),
         row![
             botao_campo("(Geral)"),
             botao_campo(seletor),
             Space::with_width(Length::Fill),
             botao_icone(tr!("Eventos"), "bolt", None, false),
         ].padding(7),
-        mensagem_visual(tr!("Eventos da planilha e da pasta")),
+        mensagem_visual(tr!("Eventos da pasta de trabalho")),
     ]).width(Length::Fill).height(Length::Fill)
         .style(estilo_area(app.config.escuro)).into()
 }
@@ -315,19 +372,30 @@ fn centro<'a>(app: &'a App) -> Element<'a, Msg> {
         aba_componente(app)
     } else if app.macro_visual.documento.starts_with("modulo:") {
         edicao_codigo(app)
+    } else if app.macro_visual.documento.starts_with("planilha:") {
+        codigo_evento_planilha(app)
     } else {
         evento_planilha(app)
     };
-    column![abas_documento(app), c].spacing(5)
+    // 2 px no topo: a barra de abas alinha com o cabeçalho do Explorador.
+    column![abas_documento(app), c].spacing(5).padding(iced::Padding { top: 2., ..Default::default() })
         .width(Length::Fill).height(Length::Fill).into()
 }
 
 /// Montagem central do VBE: menus → toolbar → explorador/propriedades + editor
 /// → janelas de depuração → barra de status. Nenhum HTML ou iframe é usado.
 pub(super) fn janela<'a>(app: &'a App) -> Element<'a, Msg> {
+    let altura_janela = || {
+        let h = app.macro_visual.codigo.janela.height;
+        if h > 0.0 { h } else { 760.0 }
+    };
+    janela_com(app, altura_janela())
+}
+
+fn janela_com<'a>(app: &'a App, altura_janela: f32) -> Element<'a, Msg> {
     let mut corpo = row![].spacing(8).height(Length::Fill);
     if app.macro_visual.explorador || app.macro_visual.propriedades {
-        corpo = corpo.push(painel_lateral(app));
+        corpo = corpo.push(painel_lateral(app, altura_janela));
     }
     corpo = corpo.push(centro(app));
     let mut estrutura = column![
@@ -336,12 +404,27 @@ pub(super) fn janela<'a>(app: &'a App) -> Element<'a, Msg> {
         corpo,
     ].spacing(7).height(Length::Fill).width(Length::Fill);
     if app.macro_visual.console {
-        estrutura = estrutura.push(terminal(app));
+        // Código com pelo menos ~220 px; o console, 90 px.
+        let padrao = if app.macro_visual.painel == PAINEL_HISTORICO { 290.0 } else { 164.0 };
+        let maximo = (altura_janela - 330.0).max(90.0);
+        let altura = app.macro_visual.altura_console.unwrap_or(padrao).clamp(90.0, maximo);
+        app.macro_visual.desenhado_console.set(altura);
+        estrutura = estrutura.push(
+            iced::widget::column![divisoria(Divisoria::Console), terminal(app, altura)]
+        );
     }
     estrutura = estrutura.push(rodape(app));
     let base = container(estrutura).padding(8)
         .style(estilo_fundo_editor(app.config.escuro))
         .height(Length::Fill).width(Length::Fill);
+    // Só durante o arraste o movimento do mouse vira mensagem; o invólucro
+    // fica sempre, para a árvore não mudar (e o código não perder a rolagem).
+    let mut base = iced::widget::mouse_area(base);
+    if app.macro_visual.arrasto.is_some() {
+        base = base.interaction(iced::mouse::Interaction::ResizingVertically)
+            .on_move(|p| Msg::MacroVisual(EventoVisual::DivisoriaMover(p.y)))
+            .on_release(Msg::MacroVisual(EventoVisual::DivisoriaFim));
+    }
     if let Some(id) = app.macro_visual.menu {
         // Flutua sobre a toolbar/editor. Não insere nova linha no layout:
         // eliminamos o espaço vazio que aparecia abaixo do menu.
@@ -398,7 +481,7 @@ mod testes {
             let _: Element<'_, Msg> = menus(&app);
             let _: Element<'_, Msg> = ferramentas(&app);
             let _: Element<'_, Msg> = abas_documento(&app);
-            let _: Element<'_, Msg> = terminal(&app);
+            let _: Element<'_, Msg> = terminal(&app, 164.0);
             let _: Element<'_, Msg> = rodape(&app);
             let _: Element<'_, Msg> = janela(&app);
         }
@@ -463,6 +546,30 @@ mod testes {
                     "Ícone {nome} não encontrado para {rotulo}");
             }
         }
+    }
+
+    #[test]
+    fn divisorias_mudam_as_alturas_dentro_dos_limites() {
+        let mut app = App::default();
+        let _ = janela(&app);
+        let explorador = app.macro_visual.desenhado_explorador.get();
+        let console = app.macro_visual.desenhado_console.get();
+        assert!(explorador >= 110.0 && console >= 90.0);
+        // Explorador: arrastar 40 px para baixo aumenta 40 px.
+        app.evento_macro_visual(EventoVisual::DivisoriaInicio(Divisoria::Lateral));
+        app.evento_macro_visual(EventoVisual::DivisoriaMover(300.0));
+        app.evento_macro_visual(EventoVisual::DivisoriaMover(340.0));
+        app.evento_macro_visual(EventoVisual::DivisoriaFim);
+        assert_eq!(app.macro_visual.altura_explorador, Some(explorador + 40.0));
+        assert!(app.macro_visual.arrasto.is_none());
+        // Console: arrastar para cima aumenta; muito longe para no limite.
+        app.evento_macro_visual(EventoVisual::DivisoriaInicio(Divisoria::Console));
+        app.evento_macro_visual(EventoVisual::DivisoriaMover(600.0));
+        app.evento_macro_visual(EventoVisual::DivisoriaMover(570.0));
+        assert_eq!(app.macro_visual.altura_console, Some(console + 30.0));
+        app.evento_macro_visual(EventoVisual::DivisoriaMover(-5000.0));
+        let _ = janela(&app);
+        assert!(app.macro_visual.desenhado_console.get() <= 760.0 - 330.0);
     }
 
     #[test]

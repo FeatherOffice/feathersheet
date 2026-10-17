@@ -1,12 +1,17 @@
 // Nos testes, `app.update(...)` devolve uma `Task` que só o runtime do Iced
 // executaria: ignorá-la é o esperado, e o aviso escondia os avisos de verdade.
 #![cfg_attr(test, allow(unused_must_use))]
+// No Windows, o executável de release é um programa de janela: sem isto o
+// sistema abre um console (cmd) junto com o app. `--mcp` continua falando
+// pela entrada e saída que quem o chama (o cliente de IA) entrega por pipe.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 // Primeiro: as macros tr!/trf! valem para todos os módulos abaixo.
 #[macro_use]
 mod idioma;
 mod app;
 mod configuracao;
 mod grade;
+mod imagem_celula;
 mod caixas;
 mod dinamica_visual;
 mod condicional;
@@ -80,6 +85,12 @@ fn preparar_modo_de_apresentacao() {
 }
 
 fn main() -> iced::Result {
+    // `feathersheet --mcp`: servidor MCP por stdio, sem janela (quem instalou
+    // só o aplicativo liga uma IA por aqui; ver Configurações → IA (MCP)).
+    if std::env::args().skip(1).any(|a| a == "--mcp") {
+        feathersheet_mcp::rodar_stdio();
+        return Ok(());
+    }
     preparar_modo_de_apresentacao();
     preparar_backend_da_caneta();
     escopo_app::entrar_no_escopo_do_app();

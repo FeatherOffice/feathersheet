@@ -501,3 +501,32 @@ fn media_movel_como_o_typescript() {
     assert_eq!(compute_moving_average(&[1.0, 2.0, 3.0, 4.0], 2), vec![None, Some(1.5), Some(2.5), Some(3.5)]);
     assert_eq!(compute_moving_average(&[1.0, 2.0], 3), vec![None, None]);
 }
+
+/// Pedido de 16/10: série de texto só conta. "Contar" conta as linhas da
+/// categoria; "Contar distintos" conta os valores diferentes (vazio fora).
+#[test]
+fn serie_de_texto_conta_e_conta_distintos() {
+    let mut p = Plan::nova();
+    p.txt(0, 0, "Região");
+    p.txt(0, 1, "Cliente");
+    for (i, (regiao, cliente)) in [("Sul", "Ana"), ("Sul", "Bia"), ("Sul", "Ana"), ("Norte", "Caio"), ("Sul", "")]
+        .into_iter()
+        .enumerate()
+    {
+        p.txt(i as u32 + 1, 0, regiao);
+        if !cliente.is_empty() {
+            p.txt(i as u32 + 1, 1, cliente);
+        }
+    }
+    let mut c = ChartConfig { aggregate: true, ..config((0, 0, 5, 1)) };
+    c.aggregate_by_series = BTreeMap::from([(0, AggregateFn::CountDistinct)]);
+    let d = p.dados(&c);
+    assert_eq!(d.categories, ["Sul", "Norte"]);
+    assert_eq!(d.series[0].values, [2.0, 1.0]);
+    assert_eq!(d.series[0].name, "Contagem distinta de Cliente");
+    c.aggregate_by_series = BTreeMap::from([(0, AggregateFn::Count)]);
+    assert_eq!(p.dados(&c).series[0].values, [4.0, 1.0]);
+    // O nome gravado no arquivo.
+    assert_eq!(serde_json::to_value(AggregateFn::CountDistinct).unwrap(), "countDistinct");
+    assert!(AggregateFn::CountDistinct.serve_para_texto() && !AggregateFn::Sum.serve_para_texto());
+}

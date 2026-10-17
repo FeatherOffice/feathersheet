@@ -41,6 +41,8 @@ mod despacho_teclado;
 #[cfg(test)]
 mod testes;
 #[cfg(test)]
+mod medir_colar_grande;
+#[cfg(test)]
 mod rolagem_zoom;
 mod explicacao_erro;
 mod duplicados_ui;
@@ -84,6 +86,7 @@ mod faixa_nativa;
 mod faixa_nativa_grupos;
 mod faixa_responsiva;
 mod status_selecao;
+mod barra_status;
 mod atualizacao;
 mod menu_colagem;
 mod assistente_divisao;
@@ -131,6 +134,8 @@ mod openquery_ui;
 pub use openquery_ui::Evento as EventoOpenQuery;
 pub use formulas_ui::Seta as SetaRastreio;
 pub(crate) mod dinamica_ui;
+/// Referência viva entre arquivos abertos (`=[Vendas.fshz]Dados!A1`).
+pub(crate) mod vinculos;
 use crate::condicional;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,7 +146,7 @@ pub enum Auxiliar { Configuracoes, Ajuda, Monitor, Macros, FormatarCelulas, Divi
 pub enum DirecaoPreenchimento { Baixo, Direita, Cima, Esquerda, AteOFim }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AbaFaixa { Inicio, Inserir, Desenhar, Layout, Formulas, Dados, Revisao, Exibir, Macros, Ferramentas, Tabela, EditarForma }
+pub enum AbaFaixa { Inicio, Inserir, Desenhar, Layout, Formulas, Dados, Revisao, Exibir, Macros, Ferramentas, Tabela, EditarForma, Dinamica }
 
 impl AbaFaixa {
     /// Chaves fixas da antiga Ribbon TypeScript (ribbon.ts, ABA_KEY),
@@ -159,7 +164,7 @@ impl AbaFaixa {
             Self::Macros => Some("macros"),
             Self::Ferramentas => Some("ferramentas"),
             // Abas contextuais não são preferência global.
-            Self::Tabela | Self::EditarForma => None,
+            Self::Tabela | Self::EditarForma | Self::Dinamica => None,
         }
     }
 
@@ -322,6 +327,16 @@ pub enum Msg {
     Dinamica(dinamica_ui::Evento),
     TabelaAbrir, TabelaNome(String), TabelaCabecalho(bool),
     TabelaConfirmar, TabelaCancelar, TabelaAcao(tabelas::Acao),
+    /// Arquivo escolhido no diálogo Abrir (a leitura começa depois).
+    ArquivoEscolhido(Option<PathBuf>),
+    /// Configurações → IA (MCP): ligar o canal e somente leitura.
+    McpAtivo(bool), McpSoLeitura(bool),
+    /// Referências a outros arquivos: canal entre janelas, faixa e Editar links.
+    Vinculos(vinculos::Evento),
+    /// Copia um texto da tela (comando de conexão do MCP…).
+    CopiarTexto(String),
+    /// Personalizar barra de status (botão direito no rodapé).
+    BarraStatus(barra_status::Evento),
     AlternarMenuTabelas, AlternarMenuEstilos, FecharMenusEstilos, LogoPadrao,
     TabelaCriarPeloMenu, TabelaEstiloEscolher(&'static str), EstiloCelulaAplicar(&'static str),
     JanelaRedimensionada(window::Id, Size),
@@ -446,6 +461,8 @@ pub enum Msg {
     PonteiroSobreAbas(f32), AlternarPaletaAba, VoltarMenuAba, PintarAba(Option<&'static str>),
     Configuracoes, Ajuda, Monitor, AuxAberta, AuxFechada(window::Id),
     AjudaSecao(usize),
+    /// Abre a Ajuda F1 numa seção pelo id ("macros", "atalhos"…).
+    AjudaAbrirSecao(&'static str),
     AjudaEvento(feather_ui::ajuda::Evento),
     /// Ajuda ▸ Primeiros passos e o assistente da primeira abertura.
     PrimeirosPassosAbrir,
@@ -489,7 +506,7 @@ pub enum Msg {
     AtingirMeta(atingir_meta::Evento),
     TabelaDados(tabela_dados::Evento),
     Cenarios(cenarios_ui::Evento),
-    Ordenar(bool), OrdenarPagina(bool), CabecalhoDados(bool), RemoverDuplicados, Duplicados(EventoDuplicados), Impressao(EventoImpressao), ApararEspacos, AutoSoma,
+    Ordenar(bool), OrdenarPagina(bool), CabecalhoDados(bool), RemoverDuplicados, Duplicados(EventoDuplicados), Impressao(EventoImpressao), ApararEspacos, AutoSoma, AutoConta(&'static str),
     DividirTextoOutro(String), DividirTextoAplicar,
     AbrirAssistenteDivisao, AssistenteDivisao(EventoAssistenteDivisao),
     OpenQuery(EventoOpenQuery),
@@ -633,6 +650,10 @@ pub struct App {
     tabela_popup_filtro: bool,
     /// Lista de cálculos da seta da célula da linha de totais.
     tabela_popup_totais: bool,
+    /// Menu "Personalizar barra de status" aberto.
+    barra_status_menu: bool,
+    /// Última frase do MCP ao vivo (Configurações → IA (MCP)).
+    mcp_estado: String,
     tabela_popup_x: f32,
     /// Y do clique no cabeçalho, relativo ao viewport da grade.
     tabela_popup_y: f32,
@@ -879,6 +900,9 @@ pub struct App {
     botao_macro_selecionado: Option<(u32, String)>,
     arraste_botao_macro: Option<botoes_macro::Arraste>,
     area_copiada: Option<AreaCopiada>,
+    /// Área do último Ctrl+C (aba, retângulo): a grade marca com tracejado,
+    /// como no Excel, até Esc, outra cópia ou uma edição (17/10/2026).
+    marca_copia: Option<(usize, Rect)>,
     colar_menu_aberto: bool,
     edicao_menu: Option<&'static str>,
     edicao_popup_x: f32,
@@ -912,11 +936,21 @@ pub struct App {
     /// Depois de exportar .xlsx: funções usadas que o Excel não tem.
     aviso_xlsx: Option<Vec<String>>,
     ctrl_pressionado: bool,
+    /// Versão da aba de origem na última conta de cada dinâmica com
+    /// "Atualizar sozinha" (pelo id da dinâmica).
+    versoes_origem_dinamicas: std::collections::HashMap<String, u32>,
+    /// Origens citadas pelas fórmulas e quem assina este arquivo (vinculos.rs).
+    vinculos: vinculos::Estado,
+    /// Segmentações de dados das dinâmicas: escolha do campo e cartões.
+    segmentacao: dinamica_ui::Segmentacoes,
 }
 
 impl Default for App {
     fn default() -> Self {
         Self {
+            versoes_origem_dinamicas: Default::default(),
+            vinculos: Default::default(),
+            segmentacao: Default::default(),
             graficos: graficos::Estado::default(),
             dinamica: None,
             tabela_area: None,
@@ -946,7 +980,7 @@ impl Default for App {
             tabela_filtro_original: None,
             tabela_filtro_editado: false,
             tabela_popup_filtro: false,
-            tabela_popup_totais: false,
+            tabela_popup_totais: false, barra_status_menu: false, mcp_estado: String::new(),
             tabela_popup_x: 0.0,
             tabela_popup_y: 0.0,
             tabela_filtro_pagina: 0,
@@ -1055,6 +1089,7 @@ impl Default for App {
             botao_macro_selecionado: None,
             arraste_botao_macro: None,
             area_copiada: None,
+            marca_copia: None,
             colar_menu_aberto: false,
             edicao_menu: None,
             edicao_popup_x: 1120.0,
@@ -1135,8 +1170,11 @@ impl App {
         }));
         app.janelas.principal = Some(id);
         definir_janela_principal(id);
-        if let Some(aviso) = mcp_vivo::iniciar() {
-            app.monitor.registrar(Nivel::Info, "MCP", &aviso);
+        // MCP ao vivo só se a pessoa ligou nas Configurações (desligado de fábrica).
+        mcp_vivo::somente_leitura(app.config.mcp_so_leitura);
+        if app.config.mcp_ativo {
+            app.mcp_estado = mcp_vivo::ligar(true);
+            app.monitor.registrar(Nivel::Info, "MCP", &app.mcp_estado);
         }
         // Primeira vez ou recém-atualizado: Primeiros passos / O que há de
         // novo abrem por cima, depois da janela principal.
@@ -1244,10 +1282,19 @@ impl App {
     pub fn update(&mut self, msg: Msg) -> Task<Msg> {
         // Toda mensagem pode mudar o que a grade mostra, menos as desta lista: o pulso
         // da soma do rodapé roda centenas de vezes numa seleção grande e só mexe no
-        // rodapé. Na dúvida, fica fora da lista (redesenha como antes).
-        if !matches!(msg, Msg::ResumoPulso) {
+        // rodapé. O tique dos vínculos só publica e confere origens (o que muda
+        // valor chega em outra mensagem). Na dúvida, fica fora da lista
+        // (redesenha como antes).
+        if !matches!(msg, Msg::ResumoPulso | Msg::Vinculos(vinculos::Evento::Pulso)) {
             self.cache_grade.desenho.clear();
         }
+        // Enter com o foco no campo fx (sem editar) depois de apontar para
+        // outra janela: confirma lá, como a tecla Enter na grade.
+        if self.profundidade_update == 0 && matches!(msg, Msg::EnviarEditor) && self.tecla_para_quem_aponta(true) {
+            self.status = tr!("Fórmula da outra janela confirmada.").into();
+            return Task::none();
+        }
+        let selecao_antes = (self.folha, self.linha, self.coluna, self.fim_selecao);
         // Só a chamada de fora compara o antes e o depois para os eventos do VBA.
         let antes = if self.profundidade_update == 0 { self.antes_dos_eventos() } else { None };
         let na_mao = if self.profundidade_update == 0 { Some(self.objeto_na_mao()) } else { None };
@@ -1263,6 +1310,7 @@ impl App {
             }
         }
         if let Some(antes) = antes { self.disparar_eventos(antes); }
+        if self.profundidade_update == 0 { self.cuidar_apontar(selecao_antes); }
         // O rodapé decide aqui se vai somar em lotes: decidido só no desenho,
         // o pulso de 16 ms só nascia no tique seguinte do monitor (até 1 s).
         if self.profundidade_update == 0 { self.sincronizar_resumo(); }
@@ -1301,8 +1349,14 @@ impl App {
             | Msg::OcultarDimensoes(_) | Msg::ReexibirDimensoes(_)
             | Msg::MesclarModo(_) | Msg::AjustarAltura | Msg::Dimensao(_)
             | Msg::LimparTudo | Msg::AlterarRecuo(_) | Msg::AplicarPincel | Msg::LimparHiperlinks);
+        let paineis_antes = (self.graficos.aberto, self.dinamica.is_some());
         // Aba protegida: o portão recusa ou desfaz o que não pode (protecao_ui).
         let tarefa = self.processar_protegido(msg);
+        // Um painel lateral por vez: o que acabou de abrir fecha o outro.
+        if self.graficos.aberto && self.dinamica.is_some() {
+            if !paineis_antes.1 { self.graficos.aberto = false; }
+            else if !paineis_antes.0 { self.dinamica = None; }
+        }
         // Pasta nova ou aberta nasce automática no motor; vale a preferência.
         self.aplicar_modo_calculo();
         if !self.inspecoes.is_empty() { self.limpar_inspecoes(); }
@@ -1320,7 +1374,9 @@ impl App {
         if mudou_status {
             self.aviso_abas = Some((self.status.clone(), Instant::now()));
             // Um atalho pode despachar update novamente; o evento interno já registra.
-            if self.monitor.console.revisao() == revisao {
+            // O resultado de abrir entra sempre: as métricas do motor que o
+            // Aberto recolhe sobem a revisão e escondiam o erro do arquivo.
+            if self.monitor.console.revisao() == revisao || arquivo_fim {
                 let nivel = if arquivo_erro { Nivel::Erro }
                     else { Nivel::da_mensagem(&self.status) };
                 self.monitor.registrar(nivel, if arquivo_fim { tr!("Arquivo") } else { tr!("Aplicativo") }, &self.status);
@@ -1339,6 +1395,7 @@ impl App {
     pub fn subscription(&self) -> Subscription<Msg> {
         Subscription::batch([
             mcp_vivo::assinatura(),
+            vinculos::assinatura(self),
             // Caneta: toques lidos pelo XInput2 e contagem dos cliques do Iced.
             self.assinatura_caneta(),
             // Libera a thread da UI após cada lote, inclusive com 1M+ linhas.

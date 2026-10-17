@@ -604,6 +604,7 @@ impl App {
             },
             AbaFaixa::Ferramentas => &[230., 235., 246., 312.],
             AbaFaixa::EditarForma => self.larguras_editar_forma(),
+            AbaFaixa::Dinamica => if self.dinamica_na_faixa() { &[330., 300., 140., 260., 130., 240.] } else { &[300.] },
         }
     }
 
@@ -896,7 +897,7 @@ mod testes {
         for aba in [
             AbaFaixa::Inicio, AbaFaixa::Inserir, AbaFaixa::Formulas,
             AbaFaixa::Dados, AbaFaixa::Revisao, AbaFaixa::Exibir, AbaFaixa::Macros,
-            AbaFaixa::Tabela, AbaFaixa::Ferramentas, AbaFaixa::EditarForma,
+            AbaFaixa::Tabela, AbaFaixa::Ferramentas, AbaFaixa::EditarForma, AbaFaixa::Dinamica,
         ] {
             app.faixa_ativa = aba;
             let total = app.montar_grupos_faixa().len();

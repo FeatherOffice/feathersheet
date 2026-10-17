@@ -11,6 +11,7 @@ use serde_json::Value;
 use std::sync::OnceLock;
 const JSON_PT: &str = include_str!("../../../../src/idiomas/pt-BR.json");
 const JSON_EN: &str = include_str!("../../../../src/idiomas/en-US.json");
+const JSON_ES: &str = include_str!("../../../../src/idiomas/es-ES.json");
 const TOPICOS: &[&str] = &[
     "comecar", "formulas", "preencher", "abas", "formatar", "tabelas",
     "graficos", "dados", "macros", "arquivos", "config",
@@ -40,12 +41,13 @@ fn topicos_funcoes(json: &Value, idioma: &str) -> Vec<Topico> {
         for nome in *nomes {
             if let Some(ajuda) = help_for(nome) {
                 let apelidos = aliases_of(nome);
-                let principal = if idioma.starts_with("pt") {
-                    apelidos.first().copied().unwrap_or(nome)
-                } else { nome };
+                let lingua = crate::idioma::Lingua::de_codigo(idioma);
+                // O nome do de-para do idioma (SOMA, SUM, SUMA).
+                let principal = crate::idioma::funcoes_de(lingua).nomes.get(*nome).map(String::as_str)
+                    .unwrap_or_else(|| if idioma.starts_with("pt") { apelidos.first().copied().unwrap_or(nome) } else { nome });
                 let (args, doc) = crate::idioma::ajuda_funcao_em(nome, idioma)
                     .unwrap_or_else(|| (ajuda.args.iter().map(|a| (*a).to_owned()).collect(), ajuda.doc.to_owned()));
-                let sep = if idioma.starts_with("pt") { "; " } else { ", " };
+                let sep = if idioma.starts_with("en") { ", " } else { "; " };
                 linhas.push(Linha::Exemplo(format!("{}({})", principal, args.join(sep))));
                 linhas.push(Linha::Texto(doc));
                 // Português + nome internacional permanecem encontráveis.
@@ -60,8 +62,9 @@ fn topicos_funcoes(json: &Value, idioma: &str) -> Vec<Topico> {
         Topico {
             id:(*categoria).to_owned(),
             titulo:json["funcoes"]["categorias"][*categoria].as_str()
-                .or_else(|| idioma.starts_with("en").then(||
-                    crate::idioma::funcoes_en().categorias.get(*categoria).map(String::as_str)).flatten())
+                .or_else(|| (!idioma.starts_with("pt")).then(||
+                    crate::idioma::funcoes_de(crate::idioma::Lingua::de_codigo(idioma))
+                        .categorias.get(*categoria).map(String::as_str)).flatten())
                 .unwrap_or(categoria).into(),
             linhas,
         }
@@ -76,7 +79,8 @@ fn secao(json: &Value, id: &str, topicos: Vec<Topico>) -> Secao {
     }
 }
 fn construir(idioma:&str) -> Catalogo {
-    let origem = if idioma.starts_with("en") { JSON_EN } else { JSON_PT };
+    let origem = if idioma.starts_with("en") { JSON_EN }
+        else if idioma.starts_with("es") { JSON_ES } else { JSON_PT };
     let json:Value=serde_json::from_str(origem).expect("Ajuda de planilha inválida");
     Catalogo {
         titulo:tr(&json["ajuda"],"rotulos","titulo"),
@@ -94,7 +98,7 @@ fn construir(idioma:&str) -> Catalogo {
     }
 }
 /// Idioma da Ajuda: segue Configurações → Idioma (ver [`definir_idioma`]).
-static EM_INGLES: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static IDIOMA_AJUDA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 /// Chamado na abertura e ao trocar o idioma nas Configurações.
 pub fn definir_idioma(idioma: &str) {
@@ -102,16 +106,19 @@ pub fn definir_idioma(idioma: &str) {
     crate::idioma::definir(idioma);
     // Global do processo: nos testes (paralelos) a Ajuda fica sempre em pt-BR.
     if cfg!(test) { return; }
-    EM_INGLES.store(idioma.starts_with("en"), std::sync::atomic::Ordering::Relaxed);
+    let i = match crate::idioma::Lingua::de_codigo(idioma) {
+        crate::idioma::Lingua::Pt => 0, crate::idioma::Lingua::En => 1, crate::idioma::Lingua::Es => 2,
+    };
+    IDIOMA_AJUDA.store(i, std::sync::atomic::Ordering::Relaxed);
 }
-
 pub fn modelo() -> &'static Catalogo {
     static PT:OnceLock<Catalogo>=OnceLock::new();
     static EN:OnceLock<Catalogo>=OnceLock::new();
-    if EM_INGLES.load(std::sync::atomic::Ordering::Relaxed) {
-        EN.get_or_init(|| construir("en-US"))
-    } else {
-        PT.get_or_init(|| construir("pt-BR"))
+    static ES:OnceLock<Catalogo>=OnceLock::new();
+    match IDIOMA_AJUDA.load(std::sync::atomic::Ordering::Relaxed) {
+        1 => EN.get_or_init(|| construir("en-US")),
+        2 => ES.get_or_init(|| construir("es-ES")),
+        _ => PT.get_or_init(|| construir("pt-BR")),
     }
 }
 /// F1 dentro de fórmula: busca a assinatura da função ativa; não altera célula.
@@ -154,7 +161,7 @@ pub fn primeiro_exemplo(estado: &Estado) -> Option<String> {
 mod tests {
     use super::*;
     #[test] fn ambos_os_idiomas_carregam_guia_completo() {
-        for idioma in ["pt-BR","en-US"] {
+        for idioma in ["pt-BR","en-US","es-ES"] {
             let c=construir(idioma);
             assert_eq!(c.secoes.len(),4);
             assert_eq!(c.secoes[2].topicos.len(),15);
@@ -189,7 +196,7 @@ mod tests {
         use feather_ui::ajuda::Evento;
         // Cada exemplo (sintaxe de função ou código de macro) vira a mensagem de copiar
         // com o mesmo texto exibido, nos dois idiomas.
-        for idioma in ["pt-BR","en-US"] {
+        for idioma in ["pt-BR","en-US","es-ES"] {
             let cat=construir(idioma);
             let exemplos:Vec<&String>=cat.secoes.iter().flat_map(|s|&s.topicos)
                 .flat_map(|t|&t.linhas).filter_map(|l|match l {Linha::Exemplo(x)=>Some(x),_=>None}).collect();

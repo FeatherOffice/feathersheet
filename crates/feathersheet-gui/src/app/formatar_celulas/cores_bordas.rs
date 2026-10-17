@@ -146,7 +146,7 @@ impl App {
                 iced::widget::svg::Handle::from_memory(svg.into_bytes())
             ).width(Length::Fixed(34.)).height(Length::Fixed(18.));
             estilo_linhas=estilo_linhas.push(
-                button(iced::widget::column![img,text(tr!(nome)).size(11)]
+                button(iced::widget::column![img,text(crate::app::menu_bordas::nome_estilo_linha(nome)).size(11)]
                     .spacing(1).align_x(Alignment::Center))
                     .padding([4,8]).style(estilo_botao_pequeno(selected))
                     .on_press(Msg::FormatoCelula(Evento::Borda(nome)))

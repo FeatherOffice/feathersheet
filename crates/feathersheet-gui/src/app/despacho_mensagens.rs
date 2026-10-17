@@ -121,6 +121,24 @@ impl App {
                 Task::none()
             }
             Msg::TabelaAcao(acao) => self.acao_tabela(acao),
+            Msg::BarraStatus(evento) => self.evento_barra_status(evento),
+            Msg::McpAtivo(ativo) => {
+                self.config.mcp_ativo = ativo;
+                self.config.gravar();
+                self.mcp_estado = mcp_vivo::ligar(ativo);
+                self.monitor.registrar(Nivel::Info, "MCP", &self.mcp_estado);
+                Task::none()
+            }
+            Msg::McpSoLeitura(sim) => {
+                self.config.mcp_so_leitura = sim;
+                self.config.gravar();
+                mcp_vivo::somente_leitura(sim);
+                Task::none()
+            }
+            Msg::CopiarTexto(texto) => {
+                self.status = tr!("Copiado para a área de transferência.").into();
+                iced::clipboard::write(texto)
+            }
             Msg::TabelaNome(nome) => { self.tabela_nome = nome; Task::none() }
             Msg::TabelaCabecalho(v) => { self.tabela_cabecalho = v; Task::none() }
             Msg::TabelaCancelar => {
@@ -296,7 +314,14 @@ impl App {
                 self.selecionar_item_menu_macro(id, indice),
             // Busca, Localizar/Substituir e desfazer do código (macros/codigo.rs).
             Msg::MacroVisual(EventoVisual::Codigo(e)) => self.evento_codigo_macro(e),
-            Msg::MacroVisual(e) => { self.evento_macro_visual(e); Task::none() },
+            Msg::MacroVisual(e) => {
+                let estava = self.macro_visual.renomeando.is_some();
+                self.evento_macro_visual(e);
+                // Renomear (ou Nova pasta) acabou de abrir o campo: cursor nele.
+                if !estava && self.macro_visual.renomeando.is_some() {
+                    iced::widget::text_input::focus(iced::widget::text_input::Id::new("macro-renomear"))
+                } else { Task::none() }
+            },
             Msg::MacroEditar(acao) => self.editar_codigo_macro(acao),
             Msg::MacroNome(nome) => {
                 self.macro_nome = nome;
@@ -687,7 +712,8 @@ impl App {
                 self.edicao_menu = None;
                 self.update(*msg)
             }
-            Msg::AutoSoma => { self.edicao_menu = None; self.autosoma(); Task::none() },
+            Msg::AutoSoma => { self.edicao_menu = None; self.autosoma("SOMA"); Task::none() },
+            Msg::AutoConta(funcao) => { self.edicao_menu = None; self.autosoma(funcao); Task::none() },
             Msg::Preencher(direcao) => {
                 self.preencher_selecao(direcao);
                 Task::none()
@@ -739,6 +765,14 @@ impl App {
             Msg::DestinoTemporario(None) => {
                 self.status = tr!("Recuperação cancelada; planilha preservada.").into();
                 Task::none()
+            }
+            Msg::ArquivoEscolhido(None) => self.update(Msg::Aberto(Ok(None))),
+            Msg::ArquivoEscolhido(Some(path)) => {
+                // Sai da tela inicial já: o rodapé mostra o progresso da leitura.
+                self.em_tela_inicio = false;
+                self.carregando = true;
+                self.status = trf!("Abrindo {}", path.display());
+                Self::tarefa_abrir_recente(path, self.config.separador_csv())
             }
             Msg::Aberto(resultado) => {
                 self.carregando = false;
@@ -847,6 +881,9 @@ impl App {
                     if self.editando_nome_aba { return tarefa; }
                 }
                 if !self.confirmar() { return Task::none(); }
+                // Num valor de tabela dinâmica o duplo clique mostra os
+                // detalhes (as linhas da origem), como no Excel.
+                if self.detalhar_dinamica(r, c) { return Task::none(); }
                 self.trocar_selecao_por_clique(r, c);
                 self.editor_formula.ativo = true;
                 self.editor_formula.origem = Some((self.folha, self.linha, self.coluna));
@@ -1223,12 +1260,17 @@ impl App {
                 Task::none()
             }
             Msg::Copiar => match self.copiar_selecao() {
-                Some(dados) => iced::clipboard::write(dados),
+                Some(dados) => {
+                    self.marca_copia = Some((self.folha, self.area_selecionada().normalized()));
+                    iced::clipboard::write(dados)
+                }
                 None => Task::none(),
             },
             Msg::Recortar => {
                 match self.copiar_selecao() {
                     Some(dados) => {
+                        // A origem é limpa agora: não fica marca tracejada.
+                        self.marca_copia = None;
                         // Recortar remove também o estilo direto da origem.
                         let area = self.area_selecionada();
                         self.workbook.editar(self.folha, |sheet| sheet.clear(&area));

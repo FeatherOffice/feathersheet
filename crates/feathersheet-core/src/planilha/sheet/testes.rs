@@ -35,7 +35,29 @@ fn resumo_selecao_conta_numeros_textos_formula_e_ignora_erros_e_linhas_ocultas()
     assert_eq!(a.media(),Some(7.5));
     assert_eq!(a.min,5.);
     assert_eq!(a.max,10.);
+    assert_eq!(a.erros,1);
     assert_eq!(s.contar_selecao(&Rect::new(0,0,0,1),None).count,2);
+}
+#[test]
+fn desvio_padrao_do_resumo_igual_em_lotes_e_sem_perder_precisao() {
+    // DESVPAD(2;4;4;4;5;5;7;9) = 2,138…; somado em lotes dá o mesmo.
+    let valores=[2.,4.,4.,4.,5.,5.,7.,9.];
+    let mut inteiro=ContagemSelecao::default();
+    for v in valores { inteiro.registrar(&Value::Number(v)); }
+    let (mut a,mut b)=(ContagemSelecao::default(),ContagemSelecao::default());
+    for v in &valores[..3] { a.registrar(&Value::Number(*v)); }
+    for v in &valores[3..] { b.registrar(&Value::Number(*v)); }
+    a.somar_lote(&b);
+    let esperado=(32f64/7.).sqrt();
+    assert!((inteiro.desvio_padrao().unwrap()-esperado).abs()<1e-12);
+    assert!((a.desvio_padrao().unwrap()-esperado).abs()<1e-12);
+    // Números grandes e parecidos: soma dos quadrados perderia tudo.
+    let mut g=ContagemSelecao::default();
+    for v in [1e9+4.,1e9+7.,1e9+13.,1e9+16.] { g.registrar(&Value::Number(v)); }
+    assert!((g.desvio_padrao().unwrap()-30f64.sqrt()).abs()<1e-6);
+    let mut um=ContagemSelecao::default();
+    um.registrar(&Value::Number(1.));
+    assert_eq!(um.desvio_padrao(),None);
 }
 #[test]
 fn resumo_da_coluna_inteira_recorta_ate_dados_usados() {
@@ -395,4 +417,93 @@ fn alterar_graficos_um_passo_e_juntar_digitacao() {
     assert!(sheet.undo());
     assert!(sheet.undo());
     assert_eq!(sheet.g, None);
+}
+
+#[test]
+fn ocultar_ate_o_fim_guarda_um_numero_e_desfaz() {
+    use crate::celulas::refs::{MAX_COLS, MAX_ROWS};
+    let mut s = Sheet::new("Aba1");
+    s.set_cell_raw(40, 0, "7".into(), None);
+    // Da linha 30 (índice 29) até a última: sem laço, sem mapa.
+    assert_eq!(s.alterar_visibilidade_dimensoes(false, true, 29, MAX_ROWS - 1), Ok((MAX_ROWS - 29) as usize));
+    assert_eq!(s.linhas_ocultas_desde, Some(29));
+    assert!(s.row_heights.is_empty());
+    assert!(s.linha_oculta(29) && s.linha_oculta(MAX_ROWS - 1) && !s.linha_oculta(28));
+    assert_eq!(s.get_raw(40, 0), "7", "ocultar não apaga célula");
+    // Repetir não empilha outro passo; um Ctrl+Z volta tudo.
+    assert_eq!(s.alterar_visibilidade_dimensoes(false, true, 29, MAX_ROWS - 1), Ok(0));
+    assert!(s.undo());
+    assert_eq!(s.linhas_ocultas_desde, None);
+    assert!(s.redo());
+    assert_eq!(s.linhas_ocultas_desde, Some(29));
+    // Reexibir selecionando a linha de cima e a primeira oculta traz tudo.
+    s.alterar_visibilidade_dimensoes(false, false, 28, 29).unwrap();
+    assert_eq!(s.linhas_ocultas_desde, None);
+    assert!(s.undo());
+    assert_eq!(s.linhas_ocultas_desde, Some(29));
+    // Inserir acima empurra; excluir acima puxa; excluir por cima do início encosta.
+    s.insert_rows(0, 2);
+    assert_eq!(s.linhas_ocultas_desde, Some(31));
+    s.delete_rows(0, 5);
+    assert_eq!(s.linhas_ocultas_desde, Some(26));
+    s.delete_rows(20, 10);
+    assert_eq!(s.linhas_ocultas_desde, Some(20));
+    // Ocultar tudo desde a primeira é recusado.
+    assert!(s.alterar_visibilidade_dimensoes(false, true, 0, MAX_ROWS - 1).is_err());
+    // Colunas: o mesmo, até a última.
+    s.alterar_visibilidade_dimensoes(true, true, 5, MAX_COLS - 1).unwrap();
+    assert_eq!(s.colunas_ocultas_desde, Some(5));
+    assert!(s.coluna_oculta(MAX_COLS - 1) && !s.coluna_oculta(4));
+}
+
+#[test]
+fn formula_herda_o_formato_de_data_da_celula_citada() {
+    let mut s = Sheet::new("Aba1");
+    s.set_cell(0, 0, "16/10/2026");
+    s.set_cell(0, 1, "=A1+2");
+    let f = |s: &Sheet, c| crate::celulas::estilo_parcial::formato(s.estilo_mesclado(0, c).as_ref());
+    assert_eq!(f(&s, 0).as_deref(), Some("date"));
+    assert_eq!(f(&s, 1).as_deref(), Some("date"), "=A1+2 continua data");
+    assert_eq!(s.get_value(0, 1), Value::Number(match s.get_value(0, 0) { Value::Number(n) => n + 2.0, _ => panic!() }));
+    // Função que muda a natureza do valor não herda.
+    s.set_cell(0, 2, "=ANO(A1)");
+    assert_eq!(f(&s, 2), None);
+    // Referência a texto sem formato: nada muda.
+    s.set_cell(1, 0, "abc");
+    s.set_cell(1, 1, "=A2&\"x\"");
+    assert_eq!(crate::celulas::estilo_parcial::formato(s.estilo_mesclado(1, 1).as_ref()), None);
+}
+
+/// Colar A1 em A2:A100000000 (17/10/2026): a faixa vazia é preenchida
+/// bloco a bloco, num Ctrl+Z só, e quem lê a coluna enxerga.
+#[test]
+fn preencher_faixa_vazia_atravessa_blocos_e_desfaz_num_passo() {
+    let mut s = Sheet::new("Plan1");
+    s.set_cell(0, 0, "7");
+    s.set_cell(0, 1, "=SOMA(A:A)");
+    assert_eq!(s.get_value(0, 1), Value::Number(7.0));
+    assert!(s.faixa_vazia(0, 1, 300_000));
+    assert!(s.preencher_faixa_vazia(0, 1, 300_000, "7"));
+    for r in [1, 65_535, 65_536, 131_072, 300_000] {
+        assert_eq!(s.get_value(r, 0), Value::Number(7.0), "linha {r}");
+    }
+    assert_eq!(s.get_value(300_001, 0), Value::Empty);
+    assert_eq!(s.max_row, 300_000);
+    assert_eq!(s.get_value(0, 1), Value::Number(7.0 * 300_001.0), "a soma vê a coluna nova");
+    assert!(!s.faixa_vazia(0, 1, 10), "agora tem dado");
+    // Texto também; fórmula e data ficam para o caminho de sempre.
+    assert!(s.preencher_faixa_vazia(2, 5, 70_000, "abc"));
+    assert_eq!(s.get_raw(70_000, 2), "abc");
+    assert!(!s.preencher_faixa_vazia(3, 0, 10, "=A1"));
+    assert!(!s.preencher_faixa_vazia(3, 0, 10, "16/10/2026"));
+    // Um Ctrl+Z por colagem.
+    assert!(s.undo());
+    assert_eq!(s.get_raw(70_000, 2), "");
+    assert!(s.undo());
+    assert_eq!(s.get_value(65_536, 0), Value::Empty);
+    assert_eq!(s.get_value(0, 0), Value::Number(7.0), "A1 continua");
+    assert_eq!(s.get_value(0, 1), Value::Number(7.0));
+    assert_eq!(s.max_row, 0, "a última linha usada volta");
+    assert!(s.redo());
+    assert_eq!(s.get_value(300_000, 0), Value::Number(7.0));
 }

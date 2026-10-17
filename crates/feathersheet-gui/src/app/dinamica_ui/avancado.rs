@@ -42,12 +42,9 @@ pub(super) fn opcoes_de_json(meta: &Json) -> (Layout, bool, bool, Vec<String>, V
 }
 
 pub(super) fn configuracao_avancada(e: &Estado) -> Result<DinamicaConfig, String> {
-    if e.linhas.is_empty() && e.colunas.is_empty() {
-        return Err(tr!("Escolha ao menos um campo em Linhas ou Colunas.").into());
-    }
-    if e.valores.is_empty() {
-        return Err(tr!("Escolha ao menos uma medida em Valores.").into());
-    }
+    // Área vazia vale, como no Excel: só Valores dá o total; só Linhas,
+    // os rótulos; nada, o aviso de [`calcular`]. Antes, tirar o último
+    // campo dava erro e a grade ficava com o resultado antigo.
     let max = (e.origem.c1 as usize).checked_add(e.calculados.len())
         .ok_or(tr!("Quantidade de colunas fora dos limites."))?;
     if max >= MAX_COLS as usize {
@@ -68,7 +65,12 @@ pub(super) fn configuracao_avancada(e: &Estado) -> Result<DinamicaConfig, String
 
 /// Nenhuma leitura faz uma cópia densa do intervalo; somente as EXPRESSÕES
 /// dos campos virtuais são compiladas uma vez, antes de varrer as linhas.
-pub(super) fn calcular(app: &App, e: &Estado) -> Result<Resultado, String> {
+/// Monta a leitura da origem (com os campos calculados) e passa ao `f`.
+fn com_leitor<R>(
+    app: &App,
+    e: &Estado,
+    f: impl FnOnce(&dyn Fn(usize, usize) -> Value, &DinamicaConfig) -> R,
+) -> Result<R, String> {
     let config = configuracao_avancada(e)?;
     let nomes_reais = &e.nomes[..e.nomes.len().saturating_sub(e.calculados.len())];
     let exprs: Vec<Expr> = e.calculados.iter()
@@ -90,28 +92,162 @@ pub(super) fn calcular(app: &App, e: &Estado) -> Result<Resultado, String> {
         });
         Value::Number(numero)
     };
-    Ok(dinamica_layout::montar_com_extras(
-        (e.origem.r1 - e.origem.r0 + 1) as usize,
-        leitor,
-        &config,
-        &opcoes(e),
-        &extras_vigentes(e),
-    ))
+    Ok(f(&leitor, &config))
 }
 
-/// Os extras lidos do arquivo valem para os campos com que vieram: mudou
-/// um campo de lugar, as opções por campo/medida caem (sobram os totais
-/// gerais), para não aplicar "% do total" à medida errada.
+pub(super) fn calcular(app: &App, e: &Estado) -> Result<Resultado, String> {
+    let vazia = e.linhas.is_empty() && e.colunas.is_empty() && e.valores.is_empty();
+    // Sem campo nenhum só sai o aviso: nem varre a origem.
+    let total = if vazia { 1 } else { (e.origem.r1 - e.origem.r0 + 1) as usize };
+    let mut resultado = com_leitor(app, e, |leitor, config| {
+        dinamica_layout::montar_com_extras(total, leitor, config, &opcoes(e), &extras_vigentes(e))
+    })?;
+    guardar_caminhos(app, e, &resultado);
+    // Sem campo nenhum: um aviso no lugar da tabela (mesma altura, para o
+    // mapa de linhas continuar valendo).
+    if vazia {
+        let mut linhas: Vec<Vec<Value>> = vec![vec![Value::Text(String::new())]; resultado.matriz.height()];
+        if let Some(primeira) = linhas.first_mut() {
+            primeira[0] = Value::Text(tr!("Tabela dinâmica: escolha os campos no painel").into());
+        }
+        resultado.matriz = feathersheet_core::celulas::values::Matrix::new(linhas);
+    }
+    Ok(resultado)
+}
+
+/// Caminho de Linhas e chave de Colunas de cada linha/coluna do resultado.
+type Caminhos = std::rc::Rc<(Vec<Option<String>>, Vec<Option<String>>)>;
+
+thread_local! {
+    /// Os caminhos dos últimos cálculos, pela impressão digital da
+    /// configuração: o duplo clique (Detalhes) não monta a dinâmica de novo
+    /// (11 s numa origem de 1 milhão de linhas, 16/10/2026).
+    static CAMINHOS: std::cell::RefCell<std::collections::VecDeque<(String, Caminhos)>> = Default::default();
+}
+
+/// Tudo o que muda as linhas e colunas do resultado, mais a versão da origem.
+pub(super) fn impressao_digital(app: &App, e: &Estado) -> String {
+    let mut filtros: Vec<(usize, bool, Vec<&String>)> = e.filtros.iter().map(|f| {
+        let mut v: Vec<&String> = f.valores.iter().collect();
+        v.sort();
+        (f.coluna, f.excluir, v)
+    }).collect();
+    filtros.sort();
+    let mut recolhidos = e.recolhidos.clone();
+    recolhidos.sort();
+    let versao = app.workbook.aba(e.folha_origem).map_or(0, |a| a.versao);
+    format!("{}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{}|{}|{:?}|{:?}|{versao}",
+        e.folha_origem, e.origem, e.linhas, e.colunas, e.valores, filtros, extras_vigentes(e),
+        e.agrupar_data, e.layout, e.subtotais, e.repetir_rotulos, recolhidos, e.calculados)
+}
+
+/// Também depois de gravar o resultado: a gravação na aba de destino sobe a
+/// versão da origem quando ela tem fórmulas que leem outras abas, e a chave
+/// de antes não acertava mais (Detalhes recalculava tudo, 11 s).
+pub(super) fn guardar_caminhos(app: &App, e: &Estado, r: &Resultado) {
+    if r.caminhos.is_empty() { return; }
+    renovar_caminhos(app, e, std::rc::Rc::new((r.caminhos.clone(), r.chaves_colunas.clone())));
+}
+
+/// Guarda `dados` sob a chave de agora (a versão da origem pode ter subido
+/// só porque gravamos noutra aba, como a aba de Detalhes).
+pub(super) fn renovar_caminhos(app: &App, e: &Estado, dados: Caminhos) {
+    let chave = impressao_digital(app, e);
+    CAMINHOS.with(|c| {
+        let mut c = c.borrow_mut();
+        c.retain(|(k, _)| *k != chave);
+        c.push_back((chave, dados));
+        while c.len() > 4 { c.pop_front(); }
+    });
+}
+
+/// Os caminhos do último cálculo desta mesma configuração, se houver.
+pub(super) fn caminhos_guardados(app: &App, e: &Estado) -> Option<Caminhos> {
+    let chave = impressao_digital(app, e);
+    CAMINHOS.with(|c| c.borrow().iter().find(|(k, _)| *k == chave).map(|(_, d)| d.clone()))
+}
+
+/// As linhas da origem de um caminho já conhecido (uma passada só).
+pub(super) fn linhas_do_caminho(app: &App, e: &Estado, caminho: &str, ck: &str) -> Result<Vec<usize>, String> {
+    let total = (e.origem.r1 - e.origem.r0 + 1) as usize;
+    com_leitor(app, e, |leitor, config| {
+        dinamica_layout::linhas_do_caminho(total, leitor, config, &opcoes(e), &extras_vigentes(e), caminho, ck)
+    })
+}
+
+/// As linhas da origem (relativas: 1 = a primeira abaixo do cabeçalho) da
+/// célula (`linha`, `coluna`) do resultado, e o resultado pela árvore de
+/// grupos para conferir com a planilha. `Ok(None)` fora dos valores.
+pub(super) fn detalhar(app: &App, e: &Estado, linha: usize, coluna: usize)
+    -> Result<Option<(Resultado, Vec<usize>)>, String> {
+    let total = (e.origem.r1 - e.origem.r0 + 1) as usize;
+    com_leitor(app, e, |leitor, config| {
+        dinamica_layout::linhas_da_celula(total, leitor, config, &opcoes(e), &extras_vigentes(e), linha, coluna)
+    })
+}
+
+/// Os extras valem para os campos com que foram lidos ou escolhidos. Se os
+/// campos mudaram, cada opção segue o seu campo pela coluna, como no Excel:
+/// a medida que saiu leva o seu "Mostrar valores como", o campo que saiu
+/// leva a ordem e o agrupamento, e um "% de" cujo campo base saiu volta a
+/// "Sem cálculo" (nunca vale para a medida ou o campo errado).
 pub(super) fn extras_vigentes(e: &Estado) -> Extras {
+    use feathersheet_core::dinamica::exibicao::{CampoBase, CampoExtra, Eixo, MostrarComo, Ordenacao};
     let medidas: Vec<usize> = e.valores.iter().map(|m| m.coluna).collect();
     let (linhas, colunas, valores) = &e.extras_campos;
     if *linhas == e.linhas && *colunas == e.colunas && *valores == medidas {
         return e.extras.clone();
     }
+    // Medida antiga → posição nova (a mesma coluna pode estar duas vezes).
+    let mut nova_da_medida: Vec<Option<usize>> = vec![None; valores.len()];
+    for (k, c) in medidas.iter().enumerate() {
+        if let Some(j) = (0..valores.len()).find(|&j| nova_da_medida[j].is_none() && valores[j] == *c) {
+            nova_da_medida[j] = Some(k);
+        }
+    }
+    let base = |b: CampoBase| -> Option<CampoBase> {
+        let col = *(if b.eixo == Eixo::Linhas { linhas } else { colunas }).get(b.posicao)?;
+        e.linhas.iter().position(|&c| c == col).map(|posicao| CampoBase { eixo: Eixo::Linhas, posicao })
+            .or_else(|| e.colunas.iter().position(|&c| c == col).map(|posicao| CampoBase { eixo: Eixo::Colunas, posicao }))
+    };
+    let seguir = |m: &MostrarComo| -> Option<MostrarComo> {
+        use MostrarComo::*;
+        Some(match m.clone() {
+            PercDe { campo, item } => PercDe { campo: base(campo)?, item },
+            DiferencaDe { campo, item } => DiferencaDe { campo: base(campo)?, item },
+            PercDiferencaDe { campo, item } => PercDiferencaDe { campo: base(campo)?, item },
+            TotalAcumuladoEm { campo } => TotalAcumuladoEm { campo: base(campo)? },
+            PercTotalAcumuladoEm { campo } => PercTotalAcumuladoEm { campo: base(campo)? },
+            ClassificarMenorMaior { campo } => ClassificarMenorMaior { campo: base(campo)? },
+            ClassificarMaiorMenor { campo } => ClassificarMaiorMenor { campo: base(campo)? },
+            outro => outro,
+        })
+    };
+    let mut mostrar = vec![MostrarComo::Normal; medidas.len()];
+    for (j, nova) in nova_da_medida.iter().enumerate() {
+        if let (Some(k), Some(m)) = (nova, e.extras.valores.get(j)) {
+            mostrar[*k] = seguir(m).unwrap_or_default();
+        }
+    }
+    let por_coluna = |antes: &[usize], agora: &[usize], lista: &[CampoExtra]| -> Vec<CampoExtra> {
+        agora.iter().map(|c| {
+            let mut extra = antes.iter().position(|x| x == c)
+                .and_then(|p| lista.get(p).copied()).unwrap_or_default();
+            if let Ordenacao::PorValor { medida, crescente } = extra.ordenacao {
+                extra.ordenacao = match nova_da_medida.get(medida).copied().flatten() {
+                    Some(medida) => Ordenacao::PorValor { medida, crescente },
+                    None => Ordenacao::Padrao,
+                };
+            }
+            extra
+        }).collect()
+    };
     Extras {
+        valores: mostrar,
+        linhas: por_coluna(linhas, &e.linhas, &e.extras.linhas),
+        colunas: por_coluna(colunas, &e.colunas, &e.extras.colunas),
         totais_gerais_linhas: e.extras.totais_gerais_linhas,
         totais_gerais_colunas: e.extras.totais_gerais_colunas,
-        ..Extras::default()
     }
 }
 
@@ -184,6 +320,9 @@ pub(super) fn gravar_opcoes(meta: &mut Json, e: &Estado, mapa: Json) {
         json!({"nome":c.nome, "formula":c.formula})
     }).collect::<Vec<_>>());
     meta["mapa"] = mapa;
+    meta["atualizarSozinha"] = json!(e.atualizar_sozinha);
+    meta["segmentacoes"] = json!(e.segmentacoes.iter()
+        .map(|(c, sel)| json!({"col": c, "sel": sel})).collect::<Vec<_>>());
 }
 
 /// Ordenação estável, eliminando duplicatas, com um teto de EXIBIÇÃO:
@@ -257,6 +396,7 @@ mod testes {
         });
         app.fim_selecao=(1,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::NomeCalculado("SomaAB".into()));
         app.evento_dinamica(Evento::FormulaCalculado("A + B".into()));
         app.evento_dinamica(Evento::AdicionarCalculado);

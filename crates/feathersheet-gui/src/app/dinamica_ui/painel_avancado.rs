@@ -1,7 +1,7 @@
 //! Controles avançados da tabela dinâmica nativa (filtros, layout e calculados).
 use super::*;
-use iced::widget::{column, pick_list};
-use feathersheet_core::dinamica::{campo_calculado, dinamica_layout::Layout};
+use iced::widget::column;
+use feathersheet_core::dinamica::campo_calculado;
 
 impl App {
     pub(super) fn adicionar_campo_calculado(&mut self) {
@@ -56,46 +56,10 @@ impl App {
         e.valores_filtro.clear();
     }
 
-    /// Opções recolhíveis do painel: uma por linha, rótulo à esquerda e
-    /// controle à direita (antes eram uma fileira só que estourava a largura).
+    /// O que fica recolhido no painel: a origem dos dados e os campos
+    /// calculados. Layout, totais, agrupar, cores e recolher foram para a
+    /// aba "Tabela Dinâmica" da faixa (17/10/2026).
     pub(super) fn controles_avancados<'a>(&'a self, e: &'a Estado) -> Element<'a, Msg> {
-        let linha = |rotulo: &'static str, controle: Element<'a, Msg>| -> Element<'a, Msg> {
-            row![text(rotulo).size(12).width(Length::Fill), controle]
-                .spacing(8).align_y(Alignment::Center).into()
-        };
-        let segmento = |rotulo: &'static str, ativo: bool, msg: Msg| -> Element<'a, Msg> {
-            button(text(rotulo).size(11.5)).padding([4, 9])
-                .style(estilo_botao_pequeno(ativo)).on_press(msg).into()
-        };
-        let tabular = e.layout == Layout::Tabular;
-        const AGRUPAR: [Option<AgruparData>; 4] =
-            [None, Some(AgruparData::Mes), Some(AgruparData::Trimestre), Some(AgruparData::Ano)];
-        let rotulos_agrupar: Vec<&'static str> = AGRUPAR.iter().map(|m| rotulo_agrupamento(*m)).collect();
-        let mut grupos = column![].spacing(2);
-        for caminho in &e.grupos {
-            let fechado = e.recolhidos.contains(caminho);
-            grupos = grupos.push(button(row![
-                feather_ui::icones::icone(if fechado { "chevron-right" } else { "chevron-down" }, 12.0),
-                text(caminho.split(feathersheet_core::dinamica::dinamica_layout::SEPARADOR)
-                    .collect::<Vec<_>>().join(" / ")).size(11),
-            ].spacing(5).align_y(Alignment::Center))
-                .width(Length::Fill).style(estilo_botao_pequeno(fechado))
-                .on_press(Msg::Dinamica(Evento::Recolher(caminho.clone()))));
-        }
-        let painel_grupos: Element<'a, Msg> = if e.grupos.is_empty() {
-            text(tr!("Os grupos aparecem depois que a tabela tiver linhas agrupadas."))
-                .size(11).color(COR_TEXTO_MUTED()).into()
-        } else {
-            column![
-                row![
-                    button(text(tr!("Recolher tudo")).size(11)).style(estilo_botao_secundario)
-                        .on_press(Msg::Dinamica(Evento::RecolherTodos(true))),
-                    button(text(tr!("Expandir tudo")).size(11)).style(estilo_botao_secundario)
-                        .on_press(Msg::Dinamica(Evento::RecolherTodos(false))),
-                ].spacing(6),
-                scrollable(grupos).height(Length::Fixed(90.0)),
-            ].spacing(6).into()
-        };
         let mut calculados = column![].spacing(3);
         for (i, calculado) in e.calculados.iter().enumerate() {
             calculados = calculados.push(row![
@@ -111,22 +75,6 @@ impl App {
         } else { Space::with_height(0).into() };
         let titulo = |t: &'static str| text(t).size(10.5).color(COR_TEXTO_MUTED());
         column![
-            titulo("LAYOUT"),
-            linha(tr!("Formato do relatório"), row![
-                segmento(tr!("Compacto"), !tabular, Msg::Dinamica(Evento::LayoutEscolher(false))),
-                segmento(tr!("Tabular"), tabular, Msg::Dinamica(Evento::LayoutEscolher(true))),
-            ].spacing(4).into()),
-            linha(tr!("Repetir rótulos"), toggler(e.repetir_rotulos)
-                .on_toggle(|_| Msg::Dinamica(Evento::RepetirRotulos)).style(estilo_toggle).into()),
-            linha(tr!("Subtotais"), toggler(e.subtotais)
-                .on_toggle(|_| Msg::Dinamica(Evento::Subtotais)).style(estilo_toggle).into()),
-            linha(tr!("Agrupar datas"), pick_list(rotulos_agrupar, Some(rotulo_agrupamento(e.agrupar_data)),
-                |escolha| Msg::Dinamica(Evento::AgruparEscolher(
-                    AGRUPAR.into_iter().find(|m| rotulo_agrupamento(*m) == escolha).flatten())))
-                .text_size(11.5).padding([4, 8]).into()),
-            linha(tr!("Cores"), pick_list(TEMAS_DINAMICA, TEMAS_DINAMICA.iter().copied().find(|t| *t == e.tema),
-                |t| Msg::Dinamica(Evento::TemaEscolher(t)))
-                .text_size(11.5).padding([4, 8]).into()),
             titulo(tr!("ORIGEM DOS DADOS")),
             row![
                 text_input("A1:D100", &e.origem_texto)
@@ -135,8 +83,6 @@ impl App {
                 button(text(tr!("Aplicar")).size(11.5)).style(estilo_botao_secundario)
                     .on_press(Msg::Dinamica(Evento::OrigemAplicar)),
             ].spacing(6).align_y(Alignment::Center),
-            titulo("GRUPOS"),
-            painel_grupos,
             titulo(tr!("CAMPOS CALCULADOS")),
             calculados,
             text_input(tr!("Nome do campo"), &e.novo_nome)
@@ -169,6 +115,7 @@ mod testes {
         });
         app.fim_selecao = (2,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::FormulaCalculado("Preço * Qtd".into()));
         app.evento_dinamica(Evento::PreviaCalculado);
         assert_eq!(app.dinamica.as_ref().unwrap().previa_calculado,Some(vec![20.,60.]));
@@ -185,6 +132,7 @@ mod testes {
         });
         app.fim_selecao = (1,2);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::NomeCalculado("Receita".into()));
         app.evento_dinamica(Evento::FormulaCalculado("[Preço] * Quantidade".into()));
         app.evento_dinamica(Evento::AdicionarCalculado);

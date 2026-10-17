@@ -3,6 +3,18 @@ use super::*;
 
 impl App {
     pub(super) fn processar_teclado(&mut self, id: window::Id, key: keyboard::Key, mods: keyboard::Modifiers) -> Task<Msg> {
+                // Enter/Esc depois de apontar uma célula para a fórmula de outra
+                // janela: confirmam ou cancelam lá (como no Excel).
+                if self.janelas.principal == Some(id) {
+                    if let keyboard::Key::Named(tecla @ (keyboard::key::Named::Enter | keyboard::key::Named::Escape)) = &key {
+                        let enter = *tecla == keyboard::key::Named::Enter;
+                        if self.tecla_para_quem_aponta(enter) {
+                            self.status = if enter { tr!("Fórmula da outra janela confirmada.") }
+                                else { tr!("Fórmula da outra janela cancelada.") }.into();
+                            return Task::none();
+                        }
+                    }
+                }
                 self.imagens_importadas.shift.set(mods.shift());
                 if self.pendente.is_some() && self.janelas.principal == Some(id) {
                     return if key == keyboard::Key::Named(keyboard::key::Named::Escape) {
@@ -206,6 +218,12 @@ impl App {
                 if self.contexto.is_some() && key == keyboard::Key::Named(keyboard::key::Named::Escape) {
                     return self.update(Msg::FecharContexto);
                 }
+                // Esc na grade tira a marca tracejada do Ctrl+C.
+                if !self.menu_aberto && self.marca_copia.is_some()
+                    && key == keyboard::Key::Named(keyboard::key::Named::Escape) {
+                    self.marca_copia = None;
+                    return Task::none();
+                }
                 if self.menu_aberto && !mods.control() && !mods.alt() {
                     if self.menu_pagina != menu_principal::Pagina::Comandos {
                         return match key {
@@ -328,7 +346,17 @@ impl App {
                             }
                             return Task::none();
                         }
-                        if key==keyboard::Key::Named(Named::Tab) { return self.update(Msg::EnviarEditor); }
+                    }
+                    // Tab confirma e anda para a direita (Shift+Tab, para a
+                    // esquerda), como no Excel; antes descia como o Enter.
+                    // Com a lista de funções aberta, aceita a sugestão.
+                    if key==keyboard::Key::Named(Named::Tab) {
+                        if !self.editor_formula.sugestoes(&self.edicao,self.config.idioma=="en-US").is_empty() {
+                            return self.update(Msg::AceitarSugestao(self.editor_formula.sugestao));
+                        }
+                        if !self.confirmar() { return Task::none(); }
+                        let navegacao=self.update(Msg::Mover(0,if mods.shift() {-1} else {1}));
+                        return Task::batch([navegacao,crate::campo_fx::desfocar()]);
                     }
                     // Campo fx: teclas Home/End atualizam o índice usado pelo
                     // assistente, mantendo o controle visual do Iced.

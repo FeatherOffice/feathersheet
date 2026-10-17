@@ -2,7 +2,7 @@
 use super::*;
 use iced::widget::column;
 
-pub(super) fn terminal<'a>(app: &'a App) -> Element<'a, Msg> {
+pub(super) fn terminal<'a>(app: &'a App, altura: f32) -> Element<'a, Msg> {
     let escuro = app.config.escuro;
     let mut abas = row![].spacing(4);
     for (i, (nome, icone)) in [
@@ -67,8 +67,8 @@ pub(super) fn terminal<'a>(app: &'a App) -> Element<'a, Msg> {
         container(abas).padding([5, 8]).style(estilo_cabecalho(escuro)),
         body,
     ].spacing(4).padding(4))
-        // O histórico precisa de mais linhas à vista que a Janela Imediata.
-        .height(Length::Fixed(if historico { 290.0 } else { 164.0 })).width(Length::Fill)
+        // Altura da divisória (o histórico começa mais alto: editor_visual.rs).
+        .height(Length::Fixed(altura)).width(Length::Fill)
         .style(estilo_area(escuro)).into()
 }
 
@@ -83,7 +83,8 @@ pub(super) fn rodape<'a>(app: &'a App) -> Element<'a, Msg> {
     let escuro = app.config.escuro;
     let nome = &app.macro_visual.documento;
     let total = app.macro_codigo.text().lines().count().max(1);
-    let documento = nome.strip_prefix("modulo:").unwrap_or(nome);
+    let documento = if nome.starts_with("planilha:") { app.macro_nome.as_str() }
+        else { nome.strip_prefix("modulo:").unwrap_or(nome) };
     container(row![
         text(tr!("FeatherOffice  /  Editor de macros")).size(10).color(cor_secundaria(escuro)),
         Space::with_width(Length::Fill),

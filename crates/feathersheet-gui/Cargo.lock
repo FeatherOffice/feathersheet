@@ -1688,17 +1688,8 @@ dependencies = [
 
 [[package]]
 name = "feather-charts"
-version = "0.3.0"
-dependencies = [
- "feather-draw",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "feather-charts"
-version = "0.3.0"
-source = "git+https://github.com/FeatherOffice/feather-charts?tag=v0.3.0#3ce4edc7469dc6122eeafbc20f7b3a7743ec44ad"
+version = "0.3.1"
+source = "git+https://github.com/FeatherOffice/feather-charts?tag=v0.3.1#a1c638e160d7b42214baaad1a0db3560970a895b"
 dependencies = [
  "feather-draw",
  "serde",
@@ -1712,16 +1703,18 @@ source = "git+https://github.com/FeatherOffice/feather-draw?tag=v0.1.1#17404b4da
 
 [[package]]
 name = "feather-image"
-version = "0.1.0"
+version = "0.1.1"
+source = "git+https://github.com/FeatherOffice/feather-io?tag=v0.1.1#38403a58160cb7a0c303e073a7e3c27dacd95276"
 dependencies = [
  "image 0.25.10",
 ]
 
 [[package]]
 name = "feather-io"
-version = "0.1.0"
+version = "0.1.1"
+source = "git+https://github.com/FeatherOffice/feather-io?tag=v0.1.1#38403a58160cb7a0c303e073a7e3c27dacd95276"
 dependencies = [
- "feather-charts 0.3.0",
+ "feather-charts",
  "feather-draw",
  "feather-image",
  "feather-tables",
@@ -1731,7 +1724,8 @@ dependencies = [
 
 [[package]]
 name = "feather-macros"
-version = "0.1.0"
+version = "0.1.1"
+source = "git+https://github.com/FeatherOffice/feather-io?tag=v0.1.1#38403a58160cb7a0c303e073a7e3c27dacd95276"
 dependencies = [
  "boa_engine",
  "boa_gc",
@@ -1750,12 +1744,13 @@ dependencies = [
 
 [[package]]
 name = "feather-tables"
-version = "0.1.0"
+version = "0.1.1"
+source = "git+https://github.com/FeatherOffice/feather-io?tag=v0.1.1#38403a58160cb7a0c303e073a7e3c27dacd95276"
 
 [[package]]
 name = "feather-ui"
-version = "0.2.7"
-source = "git+https://github.com/FeatherOffice/feather-ui?tag=v0.2.7#710ef4896807503ac282a22eb774e9037481cba7"
+version = "0.2.9"
+source = "git+https://github.com/FeatherOffice/feather-ui?tag=v0.2.9#62487e4d3519faca72d2e80f729dd35d5297c97e"
 dependencies = [
  "iced",
  "windows-sys 0.59.0",
@@ -1771,11 +1766,11 @@ dependencies = [
 
 [[package]]
 name = "feathersheet-gui"
-version = "0.0.5"
+version = "0.1.0"
 dependencies = [
  "arboard",
  "base64 0.22.1",
- "feather-charts 0.3.0 (git+https://github.com/FeatherOffice/feather-charts?tag=v0.3.0)",
+ "feather-charts",
  "feather-draw",
  "feather-image",
  "feather-macros",
@@ -1798,6 +1793,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sys-locale",
  "tokio",
  "unicode-normalization",
  "zip",
@@ -1808,7 +1804,7 @@ name = "feathersheet-io"
 version = "0.0.2"
 dependencies = [
  "arrow",
- "feather-charts 0.3.0 (git+https://github.com/FeatherOffice/feather-charts?tag=v0.3.0)",
+ "feather-charts",
  "feather-draw",
  "feather-io",
  "feathersheet-core",

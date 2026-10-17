@@ -96,22 +96,23 @@ fn cor_iced(c: feather_draw::Cor) -> iced::Color {
 }
 
 impl App {
-    /// O gráfico salvo `id` da aba ativa e a aba de onde vêm os dados.
-    fn grafico_salvo(&self, id: &str) -> Option<(serde_json::Value, &feathersheet_core::Sheet, u32)> {
+    /// O gráfico salvo `id` da aba ativa, a aba de onde vêm os dados e o
+    /// índice dela.
+    fn grafico_salvo(&self, id: &str) -> Option<(serde_json::Value, &feathersheet_core::Sheet, usize)> {
         let aba = self.workbook.aba(self.folha)?;
         let lista = feathersheet_io::graficos_salvos::listar(&aba.sheet).ok()?;
         let v = lista.into_iter().find(|v| v["id"].as_str() == Some(id))?;
         let indice = v["sourceSheet"].as_str().and_then(|n| self.workbook.indice_por_nome(n)).unwrap_or(self.folha);
         let dados = self.workbook.aba(indice).map_or(&aba.sheet, |a| &a.sheet);
-        Some((v, dados, self.workbook.versao(indice)))
+        Some((v, dados, indice))
     }
 
     /// Mapa e dados do gráfico `id`, do cache quando nada mudou.
     fn desenho_para_mouse(&mut self, id: &str) -> Option<&Desenhado> {
-        let (v, dados, versao) = self.grafico_salvo(id)?;
-        let chave = format!("{versao}|{v}");
+        let (v, dados, indice) = self.grafico_salvo(id)?;
+        let chave = format!("{}|{v}", self.workbook.versao(indice));
         if self.graficos.interacao.cache.as_ref().map(|c| &c.chave) != Some(&chave) {
-            let desenho = desenhar_grafico_salvo(dados, &v)?;
+            let desenho = desenhar_grafico_salvo(dados, &v, self.fonte_dados(indice))?;
             self.graficos.interacao.cache = Some(Cache { chave, desenho });
         }
         self.graficos.interacao.cache.as_ref().map(|c| &c.desenho)

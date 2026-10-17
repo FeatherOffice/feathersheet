@@ -9,6 +9,7 @@ pub(super) fn comando(key: &Key, mods: Modifiers) -> Option<Msg> {
     let combo = feather_ui::atalhos::combo_de(key, mods)?;
     match combo.as_str() {
         "F5" | "Ctrl+Enter" => Some(Msg::MacroExecutar),
+        "F1" => Some(Msg::AjudaAbrirSecao("macros")),
         "Ctrl+S" => Some(Msg::MacroGuardarModulo),
         "Ctrl+Shift+S" => Some(Msg::MacroSalvar),
         "Ctrl+O" => Some(Msg::MacroAbrir),

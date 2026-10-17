@@ -45,19 +45,40 @@ pub fn gerar(
     area: AreaImpressao,
     config: &ConfigPagina,
 ) -> Result<Vec<u8>, String> {
+    gerar_varias(wb, folha, &[area], config)
+}
+
+/// As páginas de uma área: o que mede e como quebra.
+struct Plano {
+    colunas: Eixo,
+    linhas: Eixo,
+    mesclas: Vec<Rect>,
+    larg_cab_linha: f32,
+    alt_cab_coluna: f32,
+    escala: f32,
+    faixas_col: Vec<std::ops::Range<usize>>,
+    faixas_lin: Vec<std::ops::Range<usize>>,
+}
+
+fn plano_da_area(wb: &Workbook, folha: usize, area: AreaImpressao, config: &ConfigPagina) -> Result<Plano, String> {
     let aba = wb.aba(folha).ok_or_else(|| format!("aba {folha} não existe"))?;
     let sheet = &aba.sheet;
     let (r0, r1) = (area.linha0.min(area.linha1), area.linha0.max(area.linha1));
     let (c0, c1) = (area.coluna0.min(area.coluna1), area.coluna0.max(area.coluna1));
 
-    // Eixos visíveis (tamanho 0 = oculto).
-    let colunas: Eixo = (c0..=c1)
+    // Eixos visíveis (tamanho 0 = oculto). Ocultas "até o fim" cortam o
+    // intervalo antes de percorrer: a área pode ir até a última linha.
+    let c_fim = sheet.colunas_ocultas_desde.map_or(c1, |n| c1.min(n.saturating_sub(1)));
+    let r_fim = sheet.linhas_ocultas_desde.map_or(r1, |n| r1.min(n.saturating_sub(1)));
+    let colunas: Eixo = (c0..=c_fim)
+        .filter(|&c| !sheet.coluna_oculta(c))
         .filter_map(|c| {
             let w = sheet.col_widths.get(&c).map(|v| *v as f32).unwrap_or(LARGURA_PADRAO_PX);
             (w > 0.0).then_some((c, w * PX))
         })
         .collect();
-    let linhas: Eixo = (r0..=r1)
+    let linhas: Eixo = (r0..=r_fim)
+        .filter(|&r| !sheet.linha_oculta(r))
         .filter_map(|r| {
             let h = sheet.row_heights.get(&r).map(|v| *v as f32).unwrap_or(ALTURA_PADRAO_PX);
             (h > 0.0).then_some((r, h * PX))
@@ -83,17 +104,7 @@ pub fn gerar(
     };
     let alt_cab_coluna = if cabecalhos { ALTURA_CAB_COLUNA } else { 0.0 };
 
-    // Papel, margens e área útil.
-    let (pl, pa) = {
-        let (l, a) = config.papel.tamanho_pt();
-        match config.orientacao {
-            feathersheet_core::planilha::impressao::Orientacao::Retrato => (l, a),
-            feathersheet_core::planilha::impressao::Orientacao::Paisagem => (a, l),
-        }
-    };
-    let Margens { esquerda_mm, topo_mm, .. } = config.margens;
-    let mm = 72.0 / 25.4;
-    let (margem_x, margem_y) = (esquerda_mm * mm, topo_mm * mm);
+    // Área útil da folha.
     let (util_l, util_a) = config.area_util_pt();
     let util_a = util_a - ALTURA_CABECALHO - ALTURA_RODAPE;
     if util_l <= 1.0 || util_a <= 1.0 {
@@ -115,7 +126,38 @@ pub fn gerar(
     // Quebra em páginas: descer, depois direita.
     let faixas_col = quebrar(&colunas, (util_l / escala - larg_cab_linha).max(1.0));
     let faixas_lin = quebrar(&linhas, (util_a / escala - alt_cab_coluna).max(1.0));
-    let total_paginas = faixas_col.len() * faixas_lin.len();
+
+    Ok(Plano { colunas, linhas, mesclas, larg_cab_linha, alt_cab_coluna, escala, faixas_col, faixas_lin })
+}
+
+/// Gera o PDF de várias áreas da aba `folha` (as áreas de impressão do
+/// Excel): cada área começa numa página nova, na ordem, e a numeração das
+/// páginas segue de uma para a outra.
+pub fn gerar_varias(
+    wb: &Workbook,
+    folha: usize,
+    areas: &[AreaImpressao],
+    config: &ConfigPagina,
+) -> Result<Vec<u8>, String> {
+    let aba = wb.aba(folha).ok_or_else(|| format!("aba {folha} não existe"))?;
+    let sheet = &aba.sheet;
+    if areas.is_empty() {
+        return Err("nenhuma área para imprimir".into());
+    }
+    let planos: Vec<Plano> = areas.iter().map(|a| plano_da_area(wb, folha, *a, config)).collect::<Result<_, _>>()?;
+    let (pl, pa) = {
+        let (l, a) = config.papel.tamanho_pt();
+        match config.orientacao {
+            feathersheet_core::planilha::impressao::Orientacao::Retrato => (l, a),
+            feathersheet_core::planilha::impressao::Orientacao::Paisagem => (a, l),
+        }
+    };
+    let Margens { esquerda_mm, topo_mm, .. } = config.margens;
+    let mm = 72.0 / 25.4;
+    let (margem_x, margem_y) = (esquerda_mm * mm, topo_mm * mm);
+    let (util_l, util_a) = config.area_util_pt();
+    let util_a = util_a - ALTURA_CABECALHO - ALTURA_RODAPE;
+    let total_paginas: usize = planos.iter().map(|p| p.faixas_col.len() * p.faixas_lin.len()).sum();
 
     let nome = if sheet.name.is_empty() { "Sem título" } else { sheet.name.as_str() };
     let data = data_hoje();
@@ -123,25 +165,27 @@ pub fn gerar(
     doc.substituir_nao_suportados(true);
 
     let mut n = 0usize;
-    for fc in &faixas_col {
-        for fl in &faixas_lin {
-            n += 1;
-            let p = doc.adicionar_pagina(pl, pa);
-            let ctx = Ctx {
-                wb,
-                folha,
-                config,
-                escala,
-                ox: margem_x,
-                oy: margem_y + ALTURA_CABECALHO,
-                larg_cab: larg_cab_linha,
-                alt_cab: alt_cab_coluna,
-                mesclas: &mesclas,
-            };
-            cabecalho_pagina(p, config, nome, &data, margem_x, margem_y, util_l);
-            desenhar_tabela(p, &ctx, &colunas[fc.clone()], &linhas[fl.clone()], util_l, util_a);
-            let ry = margem_y + ALTURA_CABECALHO + util_a + 10.0;
-            rodape_pagina(p, config, n, total_paginas, margem_x, ry, util_l);
+    for plano in &planos {
+        for fc in &plano.faixas_col {
+            for fl in &plano.faixas_lin {
+                n += 1;
+                let p = doc.adicionar_pagina(pl, pa);
+                let ctx = Ctx {
+                    wb,
+                    folha,
+                    config,
+                    escala: plano.escala,
+                    ox: margem_x,
+                    oy: margem_y + ALTURA_CABECALHO,
+                    larg_cab: plano.larg_cab_linha,
+                    alt_cab: plano.alt_cab_coluna,
+                    mesclas: &plano.mesclas,
+                };
+                cabecalho_pagina(p, config, nome, &data, margem_x, margem_y, util_l);
+                desenhar_tabela(p, &ctx, &plano.colunas[fc.clone()], &plano.linhas[fl.clone()], util_l, util_a);
+                let ry = margem_y + ALTURA_CABECALHO + util_a + 10.0;
+                rodape_pagina(p, config, n, total_paginas, margem_x, ry, util_l);
+            }
         }
     }
     doc.finalizar().map_err(|e| format!("{e:?}"))
@@ -482,6 +526,19 @@ mod testes {
         wb.aba_mut(0).unwrap().sheet.row_heights.insert(1, 0);
         assert!(gerar(&wb, 0, area(2, 1), &ConfigPagina::default()).is_ok());
         assert!(gerar(&wb, 9, area(2, 1), &ConfigPagina::default()).is_err());
+    }
+
+    #[test]
+    fn ocultas_ate_o_fim_ficam_fora() {
+        let mut wb = pasta(50);
+        wb.aba_mut(0).unwrap().sheet.linhas_ocultas_desde = Some(10);
+        wb.aba_mut(0).unwrap().sheet.colunas_ocultas_desde = Some(1);
+        let plano = plano_da_area(&wb, 0, area(49, 1), &ConfigPagina::default()).unwrap();
+        assert_eq!(plano.linhas.len(), 10);
+        assert_eq!(plano.colunas.len(), 1);
+        // Tudo oculto: c0 já passa do corte.
+        wb.aba_mut(0).unwrap().sheet.linhas_ocultas_desde = Some(0);
+        assert!(gerar(&wb, 0, area(49, 1), &ConfigPagina::default()).is_ok());
     }
 
     #[test]

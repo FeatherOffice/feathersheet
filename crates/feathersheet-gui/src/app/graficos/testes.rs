@@ -336,6 +336,27 @@ use super::editor::svg_do_grafico_salvo;
     }
 
     #[test]
+    fn grafico_novo_nasce_na_parte_visivel_da_folha() {
+        let mut app = App::default();
+        let _ = app.update(Msg::Colar("Categoria\tValor\na\t1\nb\t2".into()));
+        app.linha = 0;
+        app.coluna = 0;
+        app.fim_selecao = (0, 0);
+        // Rolado para longe dos dados, como numa planilha de 900 mil linhas.
+        app.linha_inicio = 900_000;
+        app.coluna_inicio = 3;
+        let _ = app.evento_grafico(Evento::Abrir);
+        let _ = app.evento_grafico(Evento::Tipo(TipoUi::Colunas));
+        let posicao = feathersheet_io::graficos_salvos::listar(
+            &app.workbook.aba(0).unwrap().sheet
+        ).unwrap()[0]["position"].clone();
+        let rolagem = posicionamento::scroll_em_pixels(
+            &app.workbook.aba(0).unwrap().sheet, app.linha_inicio, app.coluna_inicio);
+        let quadro = Quadro::da_posicao(&posicao).unwrap();
+        assert_eq!(posicionamento::origem_tela(quadro, rolagem, 1.0), (80., 80.));
+    }
+
+    #[test]
     fn alca_noroeste_move_borda_sem_arrastar_todo_o_grafico() {
         let mut app = App::default();
         let _ = app.update(Msg::Colar("Categoria\tValor\na\t1\nb\t2".into()));
@@ -438,10 +459,51 @@ use super::editor::svg_do_grafico_salvo;
         a.graficos.tipo = TipoUi::Pizza;
         a.atualizar_grafico();
         assert!(a.graficos.svg.is_some());
+        // Resumindo, o intervalo enorme para nos dados (A1:B3) e desenha.
         a.graficos.intervalo = "A1:XFD1048576".into();
         a.atualizar_grafico();
-        assert!(a.graficos.svg.is_none());
-        assert!(a.graficos.mensagem.contains("200.000"));
+        assert!(a.graficos.svg.is_some(), "{}", a.graficos.mensagem);
+        // Mais de 200 mil células: o resumo liga sozinho e não desliga.
+        a.graficos.agrupar = false;
+        a.atualizar_grafico();
+        assert!(a.graficos.agrupar && a.graficos.resumo_obrigatorio && a.graficos.svg.is_some());
+        assert!(a.graficos.mensagem.contains("200.000"), "{}", a.graficos.mensagem);
+        let _ = a.evento_grafico(Evento::Agrupar(false));
+        assert!(a.graficos.agrupar);
+        let _ = a.evento_grafico(Evento::SerieConta(0, None));
+        assert!(a.graficos.agrupar);
+        // Intervalo pequeno de novo: volta a poder desligar.
+        let _ = a.evento_grafico(Evento::Intervalo("A1:B3".into()));
+        let _ = a.evento_grafico(Evento::Agrupar(false));
+        assert!(!a.graficos.agrupar && !a.graficos.resumo_obrigatorio);
+    }
+
+    /// Pedido de 16/10: mais de 200 mil linhas, resumido (soma, média,
+    /// contagem, desvio padrão), usando todas as linhas.
+    #[test]
+    fn grafico_resumido_le_mais_de_200_mil_linhas() {
+        use feathersheet_core::grafico::chart::AggregateFn;
+        let mut a = App::default();
+        a.workbook.editar(0, |s| {
+            s.set_cell_raw(0, 0, "Gênero".into(), None);
+            s.set_cell_raw(0, 1, "Valor".into(), None);
+            for r in 1..=300_000u32 {
+                s.set_cell_raw(r, 0, ["pop", "rock", "jazz"][(r % 3) as usize].into(), None);
+                s.set_cell_raw(r, 1, (r % 10).to_string(), None);
+            }
+        });
+        a.graficos = Estado {
+            intervalo: "A1:B300001".into(),
+            cabecalho: true, categorias: true, colunas: true, agrupar: true,
+            aba_id: a.workbook.aba(0).map(|s| s.id),
+            ..Default::default()
+        };
+        for conta in [AggregateFn::Sum, AggregateFn::Avg, AggregateFn::Count, AggregateFn::Stddev] {
+            a.graficos.contas.insert(0, conta);
+            a.atualizar_grafico();
+            assert!(a.graficos.svg.is_some(), "{conta:?}: {}", a.graficos.mensagem);
+            assert!(a.graficos.mensagem.contains("3 categorias"), "{conta:?}: {}", a.graficos.mensagem);
+        }
     }
     #[test]
     fn galeria_do_botao_grafico_nao_segue_o_mouse_apos_abrir() {
@@ -561,6 +623,9 @@ use super::editor::svg_do_grafico_salvo;
             let _graficos: Element<'_, Msg> = a.com_graficos_salvos(text("grade").into());
             let _objetos: Element<'_, Msg> = a.grade_com_objetos(text("grade").into());
         }
+        // Passar o mouse pelos itens não fecha o menu (bug de 17/10).
+        let _ = a.evento_grafico(Evento::PassouNoMenu);
+        assert!(a.graficos_contexto().is_some(), "o menu continua aberto para o clique");
         let _ = a.evento_grafico(Evento::FecharContexto);
         assert!(a.graficos_contexto().is_none());
 
@@ -760,7 +825,7 @@ fn boletim_configurar_series_copiar_e_pizza_por_situacao() {
         a.workbook.aba_mut(0).unwrap().sheet.g = Some(g.to_string());
         a.config.zoom = 100;
         let v = feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap().remove(0);
-        let d = super::editor::desenhar_grafico_salvo(&a.workbook.aba(0).unwrap().sheet, &v).unwrap();
+        let d = super::editor::desenhar_grafico_salvo(&a.workbook.aba(0).unwrap().sheet, &v, None).unwrap();
         let mapa = d.mapa.unwrap();
 
         // Dica sobre a coluna de Fev da série Vendas.
@@ -784,7 +849,7 @@ fn boletim_configurar_series_copiar_e_pizza_por_situacao() {
             "_featherNative": ap
         }]).to_string());
         let v2 = feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap().remove(0);
-        let mapa2 = super::editor::desenhar_grafico_salvo(&a.workbook.aba(0).unwrap().sheet, &v2).unwrap().mapa.unwrap();
+        let mapa2 = super::editor::desenhar_grafico_salvo(&a.workbook.aba(0).unwrap().sheet, &v2, None).unwrap().mapa.unwrap();
         let alvo2 = mapa2.pontos.iter().find(|p| p.serie == 0 && p.ponto == 1).unwrap();
         let feather_charts::formatado::FormaAlvo::Retangulo { x, y, largura, altura } = alvo2.forma else { panic!("coluna") };
         let _ = a.evento_grafico(Evento::Pairar("g1".into(), iced::Point::new(x + largura / 2.0, y + altura / 2.0)));
@@ -865,4 +930,75 @@ fn boletim_configurar_series_copiar_e_pizza_por_situacao() {
         assert_eq!(pos(&a)["x"], 300.0, "o arraste inteiro num passo");
         let _ = a.update(Msg::Refazer);
         assert_eq!(pos(&a)["x"], 400.0);
+    }
+
+    /// Tabela com uma série de texto (Cliente) e uma de números (Valor).
+    fn app_com_serie_de_texto() -> App {
+        let mut a = App::default();
+        let _ = a.update(Msg::Colar(
+            "Região\tCliente\tValor\nSul\tAna\t10\nSul\tBia\t5\nNorte\tCaio\t7\nSul\tAna\t1".into(),
+        ));
+        a.graficos = Estado {
+            intervalo: "A1:C5".into(),
+            cabecalho: true, categorias: true, colunas: true, agrupar: true,
+            aba_id: a.workbook.aba(0).map(|s| s.id),
+            ..Default::default()
+        };
+        a
+    }
+
+    /// Pedido de 16/10: série com letra não tem Soma; só Contar e Contar
+    /// distintos (e "Não resumir" quando o resumo não é obrigatório).
+    #[test]
+    fn serie_de_texto_so_oferece_contar_e_contar_distintos() {
+        let mut a = app_com_serie_de_texto();
+        a.atualizar_grafico();
+        assert!(a.graficos.serie_texto(0), "Cliente é texto");
+        assert!(!a.graficos.serie_texto(1), "Valor é número");
+        let contas = |texto, obrigatorio| painel::contas_da_serie(texto, obrigatorio)
+            .into_iter().map(|(_, c)| c).collect::<Vec<_>>();
+        assert_eq!(contas(true, false), [None, Some(AggregateFn::Count), Some(AggregateFn::CountDistinct)]);
+        assert_eq!(contas(true, true), [Some(AggregateFn::Count), Some(AggregateFn::CountDistinct)]);
+        assert!(contas(false, false).contains(&Some(AggregateFn::Sum)));
+        assert!(!contas(true, false).contains(&Some(AggregateFn::Sum)));
+        {
+            let _painel: Element<'_, Msg> = a.view_graficos();
+        }
+        // Contar distintos: no Sul, Ana e Bia (Ana duas vezes); no Norte, Caio.
+        let _ = a.evento_grafico(Evento::SerieConta(0, Some(AggregateFn::CountDistinct)));
+        let _ = a.evento_grafico(Evento::SerieVisivel(1, false));
+        let _ = a.inserir_grafico();
+        let aba = a.workbook.aba(0).unwrap();
+        let v = feathersheet_io::graficos_salvos::listar(&aba.sheet).unwrap().remove(0);
+        assert_eq!(v["aggregateBySeries"]["0"], "countDistinct");
+        let config: ChartConfig = serde_json::from_value(v).unwrap();
+        let c = feathersheet_io::grafico_compartilhado::extrair_grafico(&aba.sheet, &config).unwrap();
+        assert_eq!(c.grafico.categorias, ["Sul", "Norte"]);
+        assert_eq!(c.grafico.series[0].valores, [2.0, 1.0]);
+    }
+
+    /// A conta guardada que não serve à série de texto (e a que falta) vira
+    /// Contar; a da série de números fica. Trocar a categoria recomeça as
+    /// contas e as séries de texto voltam a Contar, no mesmo passo gravado.
+    #[test]
+    fn serie_de_texto_tem_contar_como_padrao() {
+        let mut a = app_com_serie_de_texto();
+        a.graficos.contas = std::collections::BTreeMap::from([(0, AggregateFn::Sum), (1, AggregateFn::Avg)]);
+        a.atualizar_grafico();
+        assert_eq!(a.graficos.contas.get(&0), Some(&AggregateFn::Count));
+        assert_eq!(a.graficos.contas.get(&1), Some(&AggregateFn::Avg));
+        assert_eq!(a.graficos.conta_da_serie(0), AggregateFn::Count);
+        a.graficos.contas.clear();
+        assert_eq!(a.graficos.conta_da_serie(0), AggregateFn::Count, "sem conta, texto conta");
+        assert_eq!(a.graficos.conta_da_serie(1), AggregateFn::Sum, "sem conta, número soma");
+
+        let _ = a.evento_grafico(Evento::Inserir);
+        // Categoria = Valor: sobram Região e Cliente, as duas de texto.
+        let _ = a.evento_grafico(Evento::CategoriaColuna(Some(2)));
+        assert!(a.graficos.serie_texto(0) && a.graficos.serie_texto(1));
+        let v = feathersheet_io::graficos_salvos::listar(&a.workbook.aba(0).unwrap().sheet).unwrap().remove(0);
+        assert_eq!(v["aggregateBySeries"], serde_json::json!({"0": "count", "1": "count"}));
+        assert!(a.graficos.svg.is_some(), "{}", a.graficos.mensagem);
+        // A camada já tem o desenho do gráfico em edição: não lê a tabela de novo.
+        assert!(!a.graficos.svgs.borrow().is_empty());
     }

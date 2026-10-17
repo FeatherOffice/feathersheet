@@ -105,6 +105,7 @@ impl Default for Pagina {
 pub enum Evento {
     Abrir,
     DefinirArea,
+    AdicionarArea,
     LimparArea,
     AlternarQuebras,
     Escopo(Escopo),
@@ -142,7 +143,8 @@ type Quebras = (Rc<Vec<u32>>, Rc<Vec<u32>>);
 /// Estado de impressão da GUI: por id de aba, só em memória.
 #[derive(Default)]
 pub(super) struct Dados {
-    areas: HashMap<u32, Rect>,
+    /// As áreas de impressão de cada aba, na ordem (o Excel aceita várias).
+    areas: HashMap<u32, Vec<Rect>>,
     quebras_visiveis: HashSet<u32>,
     paginas: HashMap<u32, Pagina>,
     dialogo: Option<Estado>,
@@ -173,8 +175,9 @@ fn data_hoje() -> String {
 fn enviar_para_impressora(caminho: &Path) -> Result<String, String> {
     #[cfg(windows)]
     {
-        std::process::Command::new("cmd")
-            .args(["/c", "start", ""]).arg(caminho).spawn()
+        // Sem `cmd /c start`: abriria uma janela de console.
+        std::process::Command::new("rundll32")
+            .arg("url.dll,FileProtocolHandler").arg(caminho).spawn()
             .map_err(|e| trf!("Não foi possível abrir o PDF para imprimir: {e}"))?;
         Ok(tr!("PDF aberto no programa padrão para imprimir").into())
     }
@@ -216,17 +219,22 @@ impl App {
     fn id_aba_atual(&self) -> Option<u32> { self.workbook.aba(self.folha).map(|a| a.id) }
 
     pub(super) fn area_impressao(&self) -> Option<Rect> {
-        self.impressao.areas.get(&self.id_aba_atual()?).cloned()
+        self.impressao.areas.get(&self.id_aba_atual()?)?.first().cloned()
+    }
+
+    /// Todas as áreas de impressão da aba ativa.
+    pub(super) fn areas_impressao(&self) -> Vec<Rect> {
+        self.id_aba_atual().and_then(|id| self.impressao.areas.get(&id).cloned()).unwrap_or_default()
     }
 
     /// A área de impressão definida na aba de `id` (o PDF pedido por macro).
     pub(super) fn area_impressao_da_aba(&self, id: u32) -> Option<Rect> {
-        self.impressao.areas.get(&id).cloned()
+        self.impressao.areas.get(&id)?.first().cloned()
     }
 
     #[cfg(test)]
     pub(super) fn definir_area_impressao_da_aba(&mut self, id: u32, area: Rect) {
-        self.impressao.areas.insert(id, area);
+        self.impressao.areas.insert(id, vec![area]);
     }
 
     /// Faixa efetiva do diálogo, igual a getEffectiveRange() do TS.
@@ -300,21 +308,26 @@ impl App {
     /// uma vez por (aba, versão) até a última célula usada, como o cache do TS.
     pub(super) fn impressao_visual(&self) -> Option<ImpressaoVisual> {
         let aba = self.workbook.aba(self.folha)?;
-        let area = self.impressao.areas.get(&aba.id).cloned();
+        let mut areas = self.impressao.areas.get(&aba.id).cloned().unwrap_or_default();
+        let area = (!areas.is_empty()).then(|| areas.remove(0));
         let mostrar = self.impressao.quebras_visiveis.contains(&aba.id);
         if area.is_none() && !mostrar { return None; }
-        let mut visual = ImpressaoVisual { area, ..ImpressaoVisual::default() };
+        let mut visual = ImpressaoVisual { area, outras: areas, ..ImpressaoVisual::default() };
         if mostrar {
             let mut cache = self.impressao.cache.borrow_mut();
             if !matches!(&*cache, Some((id, v, _)) if *id == aba.id && *v == aba.versao) {
                 let usado = aba.sheet.used_rect();
                 let (fim_l, fim_c) = (usado.r1 + 5, usado.c1 + 5);
                 let linhas = calcular_quebras(fim_l, PAGINA_A,
-                    |r| aba.sheet.row_heights.get(&r).map(|v| *v as f32)
-                        .unwrap_or(crate::grade::ALTURA_PADRAO));
+                    |r| if aba.sheet.linha_oculta(r) { 0.0 } else {
+                        aba.sheet.row_heights.get(&r).map(|v| *v as f32)
+                            .unwrap_or(crate::grade::ALTURA_PADRAO)
+                    });
                 let colunas = calcular_quebras(fim_c, PAGINA_L,
-                    |c| aba.sheet.col_widths.get(&c).map(|v| *v as f32)
-                        .unwrap_or_else(|| crate::grade::largura_padrao_da(&aba.sheet)));
+                    |c| if aba.sheet.coluna_oculta(c) { 0.0 } else {
+                        aba.sheet.col_widths.get(&c).map(|v| *v as f32)
+                            .unwrap_or_else(|| crate::grade::largura_padrao_da(&aba.sheet))
+                    });
                 *cache = Some((aba.id, aba.versao, (Rc::new(linhas), Rc::new(colunas))));
             }
             if let Some((_, _, (l, c))) = &*cache {
@@ -340,13 +353,27 @@ impl App {
         self.alternar(Auxiliar::Imprimir)
     }
 
+    /// Define a área pela seleção; com várias seleções (Ctrl+clique), cada
+    /// uma vira uma área, como no Excel.
     fn definir_area(&mut self) {
         let Some(id) = self.id_aba_atual() else { return };
-        let area = self.area_selecionada().normalized();
-        self.impressao.areas.insert(id, area);
+        let areas: Vec<Rect> = self.areas_selecionadas().into_iter().map(|a| a.normalized()).collect();
+        self.impressao.areas.insert(id, areas);
         // O TS (setPrintAreaFromSelection) também mostra as quebras ao definir.
         self.impressao.quebras_visiveis.insert(id);
         self.status = tr!("Área de impressão definida.").into();
+    }
+
+    /// "Adicionar à área de impressão": a seleção entra como mais uma área.
+    fn adicionar_area(&mut self) {
+        let Some(id) = self.id_aba_atual() else { return };
+        let novas: Vec<Rect> = self.areas_selecionadas().into_iter().map(|a| a.normalized()).collect();
+        let lista = self.impressao.areas.entry(id).or_default();
+        for a in novas {
+            if !lista.contains(&a) { lista.push(a); }
+        }
+        self.impressao.quebras_visiveis.insert(id);
+        self.status = trf!("Área de impressão com {} parte(s).", lista.len());
     }
 
     fn limpar_area(&mut self) {
@@ -359,6 +386,12 @@ impl App {
             Evento::Abrir => return self.abrir_impressao(),
             Evento::DefinirArea => {
                 self.definir_area();
+                if let Some(e) = self.impressao.dialogo.as_mut() {
+                    e.escopo = Escopo::Area; e.pagina = 1;
+                }
+            }
+            Evento::AdicionarArea => {
+                self.adicionar_area();
                 if let Some(e) = self.impressao.dialogo.as_mut() {
                     e.escopo = Escopo::Area; e.pagina = 1;
                 }
@@ -451,6 +484,13 @@ impl App {
     fn pdf_do_dialogo(&self) -> Result<Vec<u8>, String> {
         let e = self.impressao.dialogo.as_ref().ok_or(tr!("diálogo fechado"))?;
         let f = self.faixa_impressao(e);
+        // Várias áreas de impressão: cada uma em páginas próprias, na ordem.
+        let areas = self.areas_impressao();
+        if e.escopo == Escopo::Area && areas.len() > 1 && e.folha == self.folha {
+            let areas: Vec<AreaImpressao> = areas.iter()
+                .map(|a| AreaImpressao { linha0: a.r0, coluna0: a.c0, linha1: a.r1, coluna1: a.c1 }).collect();
+            return feathersheet_io::impressao_pdf::gerar_varias(&self.workbook, e.folha, &areas, &e.config());
+        }
         let area = AreaImpressao { linha0: f.r0, coluna0: f.c0, linha1: f.r1, coluna1: f.c1 };
         gerar_pdf(&self.workbook, e.folha, area, &e.config())
     }
@@ -467,8 +507,10 @@ impl App {
         let ev = |x: Evento| Msg::Impressao(x);
 
         let r_sel = trf!("Seleção atual ({})", rect_texto(&e.selecao));
+        let todas = self.areas_impressao();
         let r_area = match &area {
-            Some(a) => trf!("Área de Impressão definida ({})", rect_texto(a)),
+            Some(_) => trf!("Área de Impressão definida ({})",
+                todas.iter().map(rect_texto).collect::<Vec<_>>().join("; ")),
             None => tr!("Área de Impressão definida (Nenhuma)").into(),
         };
         let escopo = iced::widget::column![
@@ -485,6 +527,8 @@ impl App {
             row![
                 button(text(tr!("Definir Seleção")).size(12)).padding([6, 10])
                     .style(estilo_botao_secundario).on_press(ev(Evento::DefinirArea)),
+                button(text(tr!("Adicionar Seleção")).size(12)).padding([6, 10])
+                    .style(estilo_botao_secundario).on_press(ev(Evento::AdicionarArea)),
                 button(text(tr!("Limpar Área")).size(12)).padding([6, 10])
                     .style(estilo_botao_secundario)
                     .on_press_maybe(area.is_some().then(|| ev(Evento::LimparArea))),

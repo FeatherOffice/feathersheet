@@ -359,6 +359,40 @@ fn achar_fechamento_colchete(s: &[char], inicio: usize) -> Option<usize> {
             continue;
         }
 
+        // [Vendas.fshz]Dados!A1 — referência a outro arquivo sem aspas, como o
+        // Excel escreve quando nem o arquivo nem a aba têm espaço. Arquivo e
+        // aba entram no mesmo token da referência, igual a 'Aba'!A1; com
+        // caminho ou espaço a forma é entre aspas ('/x/[Vendas.fshz]Dados'!A1).
+        if c == '[' {
+            let fecha = (i + 1..n).find(|&k| s[k] == ']' || s[k] == '[').filter(|&k| s[k] == ']');
+            if let Some(fecha) = fecha {
+                let mut j = fecha + 1;
+                while j < n && e_letra_de_nome(s[j]) {
+                    j += 1;
+                }
+                if fecha > i + 1 && j > fecha + 1 && olhar(j) == Some('!') {
+                    let nome = em(i, j);
+                    let inicio_ref = j + 1;
+                    let mut k = inicio_ref;
+                    while k < n && (e_letra_de_nome(s[k]) || s[k] == '$') {
+                        k += 1;
+                    }
+                    let referencia = em(inicio_ref, k);
+                    // [Vendas.fshz]Dados!A:A — colunas (ou linhas) inteiras.
+                    if let Some((fim, depois)) = faixa_inteira_depois(&s, k, &referencia) {
+                        i = depois;
+                        tokens.push(Token::novo(TokenType::Ident, format!("{nome}!{referencia}:{fim}"), inicio));
+                        continue;
+                    }
+                    if parece_referencia(&referencia) {
+                        i = k;
+                        tokens.push(Token::novo(TokenType::Ref, format!("{nome}!{referencia}"), inicio));
+                        continue;
+                    }
+                }
+            }
+        }
+
         // Nome de função, intervalo nomeado ou referência.
         if e_letra(c) || c == '$' || c == '_' {
             while i < n && (e_letra_de_nome(s[i]) || s[i] == '$') {
@@ -620,6 +654,26 @@ mod testes {
     #[test]
     fn acima_de_127_e_sempre_letra() {
         assert_eq!(tipos("§"), vec![TokenType::Ident, TokenType::Eof]);
+    }
+
+    /// Referência a outro arquivo, sem aspas (`[Vendas.fshz]Dados!A1`) e com
+    /// caminho entre aspas: o arquivo e a aba vão no mesmo token.
+    #[test]
+    fn referencia_a_outro_arquivo_sem_e_com_aspas() {
+        assert_eq!(textos("[Vendas.fshz]Dados!A1"), vec!["[Vendas.fshz]Dados!A1", ""]);
+        assert_eq!(tipos("[Vendas.fshz]Dados!A1"), vec![TokenType::Ref, TokenType::Eof]);
+        assert_eq!(
+            tipos("SOMA([Vendas.fshz]Dados!A1:A10)"),
+            vec![
+                TokenType::Ident, TokenType::LParen, TokenType::Ref, TokenType::Colon,
+                TokenType::Ref, TokenType::RParen, TokenType::Eof
+            ]
+        );
+        assert_eq!(textos("'/home/x/[Vendas.fshz]Dados'!$B$2")[0], "/home/x/[Vendas.fshz]Dados!$B$2");
+        assert_eq!(textos("[Vendas.fshz]Dados!A:A")[0], "[Vendas.fshz]Dados!A:A");
+        // Colchete solto continua sendo erro.
+        assert!(tokenize("[Vendas.fshz]").is_err());
+        assert!(tokenize("[]Dados!A1").is_err());
     }
 
     #[test]

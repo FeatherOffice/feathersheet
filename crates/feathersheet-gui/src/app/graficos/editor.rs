@@ -28,11 +28,22 @@ fn previa_indisponivel() -> String {
     )
 }
 
+/// Sem cache: os testes comparam com a prévia lida na hora.
+#[cfg(test)]
 pub(super) fn svg_do_grafico_salvo(
     sheet: &feathersheet_core::Sheet,
     valor: &serde_json::Value,
 ) -> Option<String> {
-    desenhar_grafico_salvo(sheet, valor).map(|d| d.svg)
+    desenhar_grafico_salvo(sheet, valor, None).map(|d| d.svg)
+}
+
+/// O SVG do gráfico salvo, reaproveitando os números já lidos da aba.
+pub(super) fn svg_do_grafico_salvo_em(
+    sheet: &feathersheet_core::Sheet,
+    valor: &serde_json::Value,
+    fonte: Option<super::Fonte<'_>>,
+) -> Option<String> {
+    desenhar_grafico_salvo(sheet, valor, fonte).map(|d| d.svg)
 }
 
 /// O desenho de um gráfico salvo e, nos tipos do desenhista novo, o mapa das
@@ -80,16 +91,36 @@ fn aplicar_desligados(e: &mut feather_charts::estilo::EstiloGrafico, valor: &ser
     }
 }
 
+/// Células que um gráfico lê, ponto a ponto, sem resumir.
+pub(super) const MAX_CELULAS_GRAFICO: u64 = 200_000;
+/// Resumindo (soma, média, contagem…), o gráfico mostra no máximo 10 mil
+/// categorias, mas lê todas as linhas: o teto é o que cabe ler em ~1 s.
+pub(super) const MAX_CELULAS_RESUMO: u64 = 100_000_000;
+
+/// Com resumo, o intervalo para na última linha/coluna com dados: a coluna
+/// inteira (até a linha 100 milhões) viraria milhões de categorias vazias.
+/// Devolve as células que sobram, ou `None` se passam do teto.
+pub(super) fn cortar_intervalo(sheet: &feathersheet_core::Sheet, range: &mut ChartRange, resumir: bool) -> Option<u64> {
+    if resumir && !sheet.is_empty() {
+        range.r1 = range.r1.min(sheet.max_row.max(range.r0));
+        range.c1 = range.c1.min(sheet.max_col.max(range.c0));
+    }
+    let linhas = u64::from(range.r1.checked_sub(range.r0)?) + 1;
+    let colunas = u64::from(range.c1.checked_sub(range.c0)?) + 1;
+    let celulas = linhas.checked_mul(colunas)?;
+    (celulas <= if resumir { MAX_CELULAS_RESUMO } else { MAX_CELULAS_GRAFICO }).then_some(celulas)
+}
+
+/// `fonte`: de onde os números vêm, para não reler a aba inteira quando nada
+/// mudou (ver [`super::CacheDados`]); `None` lê sempre.
 pub(super) fn desenhar_grafico_salvo(
     sheet: &feathersheet_core::Sheet,
     valor: &serde_json::Value,
+    fonte: Option<super::Fonte<'_>>,
 ) -> Option<Desenhado> {
     let mut config = serde_json::from_value::<ChartConfig>(valor.clone()).ok()?;
-    let linhas = u64::from(config.range.r1.checked_sub(config.range.r0)?) + 1;
-    let colunas = u64::from(config.range.c1.checked_sub(config.range.c0)?) + 1;
-    if linhas.checked_mul(colunas)? > 200_000 {
-        return None;
-    }
+    let resumir = config.aggregate;
+    cortar_intervalo(sheet, &mut config.range, resumir)?;
     // O extractor de pizza antigo pode reduzir a primeira série antes
     // de o painel escolher outra. A extração como colunas preserva TODAS
     // as séries; o Charts só recebe a série selecionada no passo seguinte.
@@ -109,7 +140,7 @@ pub(super) fn desenhar_grafico_salvo(
     ) && !pizza {
         let aparencia: Aparencia =
             serde_json::from_value(valor["_featherNative"].clone()).unwrap_or_default();
-        let mut dados = feathersheet_core::grafico::chart::extract_chart_data(sheet, &config);
+        let mut dados = (*super::dados_do_grafico(sheet, &config, false, fonte)).clone();
         super::renomear_series_dados(&mut dados, &config.style.hidden_series, &aparencia);
         let medida = |k: &str, padrao: f64| valor["position"][k].as_f64().unwrap_or(padrao).clamp(120., 3200.) as f32;
         // O estilo já com os itens desligados pela legenda, antes do desenho.
@@ -121,19 +152,11 @@ pub(super) fn desenhar_grafico_salvo(
         let (svg, mapa, g, estilo) = super::desenhar_especial(&config, &dados, &aparencia, None, medida("width", 480.), medida("height", 300.)).ok()?;
         return Some(Desenhado { svg, mapa: Some(mapa), grafico: Some(g), estilo: Some(estilo) });
     }
-    let mut contrato = if valor["_excel"].is_object() {
-        // Gráfico do Excel: célula vazia na série é lacuna lá; o motor comum
-        // recusa lacuna, então vale 0 (categoria e cabeçalho ficam como estão).
-        use feathersheet_core::celulas::values::Value as V;
-        let (r0, c0) = (config.range.r0, config.range.c0);
-        let dados = feathersheet_core::grafico::chart::extract_chart_data_with(&|r, c| match sheet.get_value(r, c) {
-            V::Empty if r > r0 && c > c0 => V::Number(0.0),
-            v => v,
-        }, &config);
-        feathersheet_io::grafico_compartilhado::preparar_grafico(&config, dados).ok()?
-    } else {
-        feathersheet_io::grafico_compartilhado::extrair_grafico(sheet, &config).ok()?
-    };
+    // Gráfico do Excel: célula vazia na série é lacuna lá; o motor comum
+    // recusa lacuna, então vale 0 (categoria e cabeçalho ficam como estão).
+    let lacuna_zero = valor["_excel"].is_object();
+    let dados = super::dados_do_grafico(sheet, &config, lacuna_zero, fonte);
+    let mut contrato = feathersheet_io::grafico_compartilhado::preparar_grafico(&config, (*dados).clone()).ok()?;
     let aparencia: Aparencia =
         serde_json::from_value(valor["_featherNative"].clone()).unwrap_or_default();
     super::aplicar_nomes_origem(&mut contrato, &aparencia);
@@ -244,6 +267,9 @@ impl App {
         valor["categoryColumnIndex"] = json!(g.coluna_categoria);
         valor["style"]["hiddenSeries"] = json!(g.ocultas);
         valor["aggregateBySeries"] = serde_json::to_value(&g.contas).unwrap_or_default();
+        if let Some(d) = &g.dinamica {
+            valor["pivotSource"] = json!(d);
+        }
         if let Some(e) = &a.estilo {
             // O gravador `.xlsx` lê as cores daqui: as que se veem (tema/estilo).
             for i in 0..g.series.len() {
@@ -255,9 +281,15 @@ impl App {
             .and_then(|i| self.workbook.aba(i))
             .and_then(|aba| feathersheet_io::graficos_salvos::listar(&aba.sheet).ok())
             .and_then(|l| l.into_iter().find(|v| v["id"].as_str() == Some(id)));
+        // Gráfico novo nasce na parte da folha que está à vista (era sempre
+        // perto de A1: rolado até a linha 900 mil, ele sumia lá no topo).
+        let (x0, y0) = match self.indice_aba_grafico().filter(|&i| i == self.folha).and_then(|i| self.workbook.aba(i)) {
+            Some(aba) => super::posicionamento::scroll_em_pixels(&aba.sheet, self.linha_inicio, self.coluna_inicio),
+            None => (0.0, 0.0),
+        };
         let mut posicao = salvo.as_ref().map(|v| v["position"].clone())
             .filter(serde_json::Value::is_object)
-            .unwrap_or_else(|| json!({"x":80,"y":80,"width":480,"height":300}));
+            .unwrap_or_else(|| json!({"x": x0 + 80.0, "y": y0 + 80.0, "width": 480, "height": 300}));
         // Medida fora da faixa (digitando) não estraga o quadro gravado.
         if let (Some(largura), Some(altura)) = (dimensao(&a.largura), dimensao(&a.altura)) {
             posicao["width"] = json!(largura);
@@ -281,6 +313,9 @@ impl App {
         self.graficos.ultimo_campo = campo;
         let Ok(valor) = self.json_do_editor(&id) else { return };
         let Some(indice) = self.indice_aba_grafico() else { return };
+        // Só o JSON do gráfico muda: os números já lidos da aba continuam
+        // valendo (ver `CacheDados::renovar`).
+        let antes = self.geracao_da_aba(indice);
         let Some(aba) = self.workbook.aba_mut(indice) else { return };
         match feathersheet_io::graficos_salvos::mesclado(&aba.sheet, &id, valor) {
             Ok(novo) => {
@@ -290,6 +325,7 @@ impl App {
             }
             Err(e) => self.graficos.mensagem = e,
         }
+        self.renovar_dados_da_aba(indice, antes);
     }
 
     pub(super) fn inserir_grafico(&mut self) -> Task<Msg> {
@@ -416,8 +452,13 @@ impl App {
             .and_then(|i| self.workbook.aba(i))
             .map_or(aba.id, |a| a.id);
         let copiado = self.graficos.copiado.take();
+        // O que já foi lido e desenhado continua valendo.
+        let dados = std::mem::take(&mut self.graficos.dados);
+        let svgs = std::mem::take(&mut self.graficos.svgs);
         self.graficos = Estado {
             copiado,
+            dados,
+            svgs,
             aberto: true,
             id: Some(id.into()),
             aba_grafico: Some(aba.id),
@@ -442,6 +483,19 @@ impl App {
         self.atualizar_grafico();
         Task::none()
     }
+    /// A chave do SVG de um gráfico na camada: aba dos dados, versão dela,
+    /// tema e o JSON do gráfico.
+    fn chave_svg_camada(&self, indice: usize, v: &serde_json::Value) -> String {
+        format!("{indice}|{}|{}|{}", self.workbook.versao(indice), feather_ui::tema::escuro(), v)
+    }
+
+    /// Guarda o SVG de um gráfico para a camada não desenhá-lo de novo.
+    pub(super) fn guardar_svg_camada(&self, indice: usize, v: &serde_json::Value, svg: &str) {
+        let mut cache = self.graficos.svgs.borrow_mut();
+        if cache.len() > 64 { cache.clear(); }
+        cache.insert(self.chave_svg_camada(indice, v), svg.to_owned());
+    }
+
     /// Os gráficos da aba ativa para a camada de objetos desenhar:
     /// `(z, retângulo, svg)`. Os do `.xlsx` vêm na ordem do desenho do
     /// Excel (`_excel.z`); os criados no app ficam por cima de tudo.
@@ -461,15 +515,14 @@ impl App {
             // gráfico do `.xlsx` e ele sumia ao abrir "Editar gráfico…").
             // Desenhar é caro (dados, escalas, SVG): só quando algo mudou, não
             // a cada quadro da rolagem.
-            let chave = format!("{indice}|{}|{}|{}", self.workbook.versao(indice), feather_ui::tema::escuro(), v);
+            let chave = self.chave_svg_camada(indice, &v);
             let guardado = self.graficos.svgs.borrow().get(&chave).cloned();
             let svg = match guardado {
                 Some(svg) => svg,
                 None => {
-                    let svg = svg_do_grafico_salvo(dados, &v).unwrap_or_else(previa_indisponivel);
-                    let mut cache = self.graficos.svgs.borrow_mut();
-                    if cache.len() > 64 { cache.clear(); }
-                    cache.insert(chave, svg.clone());
+                    let svg = svg_do_grafico_salvo_em(dados, &v, self.fonte_dados(indice))
+                        .unwrap_or_else(previa_indisponivel);
+                    self.guardar_svg_camada(indice, &v, &svg);
                     svg
                 }
             };
@@ -478,7 +531,9 @@ impl App {
             let svg = match v["id"].as_str().and_then(|id| self.transicao_do_grafico(id)) {
                 Some((item, t)) if t < 1.0 => {
                     let (antes, _, _) = super::interacao::com_item_alternado(&v, item);
-                    match svg_do_grafico_salvo(dados, &antes) {
+                    // A legenda não muda os números: o cache poupa reler a
+                    // aba a cada quadro da transição.
+                    match svg_do_grafico_salvo_em(dados, &antes, self.fonte_dados(indice)) {
                         Some(velho) => cruzar(&velho, &svg, t),
                         None => svg,
                     }

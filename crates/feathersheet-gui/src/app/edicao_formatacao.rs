@@ -1,6 +1,9 @@
 //! Formatação, cores, comandos da Ribbon, edição e colagem especial.
 use super::*;
 
+/// A partir disto (linhas), um valor colado vai em blocos de 65.536 linhas.
+const LINHAS_COLAGEM_RAPIDA: usize = 100_000;
+
 impl App {
     pub(super) fn formatar(&mut self, acao: Formatacao) {
         self.confirmar();
@@ -414,9 +417,43 @@ impl App {
         } else {
             (origem_altura, origem_largura)
         };
+        // Um valor numa coluna até o fim (A1 em A2:A100000000, 17/10/2026):
+        // a parte vazia da coluna vai em blocos pelo motor, então cola tudo.
+        // `Some` = o texto de cada coluna do bloco (uma linha só, valor
+        // simples, sem formatação nem validação na aba).
+        let selecao = self.area_selecionada().normalized();
+        let rapida: Option<Vec<String>> = (|| {
+            if origem_altura != 1 || matches!(modo, ModoColagem::Transposta
+                | ModoColagem::SomenteFormato | ModoColagem::ValoresComFormato) {
+                return None;
+            }
+            if ((selecao.r1 - selecao.r0) as usize) < LINHAS_COLAGEM_RAPIDA { return None; }
+            let validacao = self.workbook.aba(self.folha).and_then(|a| a.sheet.va.as_deref())
+                .is_some_and(|t| !matches!(t.trim(), "" | "[]"));
+            if validacao { return None; }
+            (0..origem_largura).map(|oc| {
+                let raw = match (internas, modo) {
+                    (Some(l), ModoColagem::Completa) => {
+                        let s = l[0].get(oc)?;
+                        if s.style.is_some() { return None; }
+                        s.raw.clone()
+                    }
+                    (Some(l), ModoColagem::FormulasSemFormato) => l[0].get(oc)?.raw.clone(),
+                    (Some(_), _) => valores_internos?.first()?.get(oc)?.clone(),
+                    (None, _) => externas.as_ref()?.first()?.get(oc).cloned().unwrap_or_default(),
+                };
+                feathersheet_core::planilha::sheet::Sheet::valor_de_faixa(&raw).map(|_| raw)
+            }).collect()
+        })();
+        // Fora disso, a seleção que vai até o fim da planilha (coluna ou
+        // linha inteira, Ctrl+Shift+↓ numa coluna vazia) para na última
+        // linha/coluna com dados: fórmula a fórmula seriam 100 milhões de
+        // células (16/10/2026).
+        let (destino, cortada) = if rapida.is_some() { (selecao, false) }
+            else { self.area_de_colagem(altura_bloco, largura_bloco) };
         // Validação completa antes de alterar qualquer célula.
         let plano = match PlanoColagem::calcular(
-            &self.area_selecionada(), altura_bloco, largura_bloco,
+            &destino, altura_bloco, largura_bloco,
         ) {
             Ok(plano) => plano,
             Err(mensagem) => {
@@ -477,9 +514,17 @@ impl App {
                 }
             }
         }
+        let mut sem_bloco: Option<u32> = None;
         self.workbook.editar(self.folha, |sheet| {
             sheet.abrir_transacao();
-            for dr in 0..plano.altura {
+            // Com a colagem rápida, célula a célula só até onde a aba tem
+            // conteúdo; a parte vazia abaixo vai em blocos, no fim.
+            let altura_celulas = match &rapida {
+                Some(_) if sheet.max_row < plano.r0 => 0,
+                Some(_) => ((sheet.max_row - plano.r0) as usize + 1).min(plano.altura),
+                None => plano.altura,
+            };
+            for dr in 0..altura_celulas {
                 for dc in 0..plano.largura {
                     let (r, c) = (plano.r0 + dr as u32, plano.c0 + dc as u32);
                     // Na transposição, linhas da origem tornam-se colunas;
@@ -545,6 +590,15 @@ impl App {
                     }
                 }
             }
+            if let Some(textos) = &rapida {
+                let (de, ate) = (plano.r0 + altura_celulas as u32, plano.r0 + plano.altura as u32 - 1);
+                for dc in 0..plano.largura {
+                    let c = plano.c0 + dc as u32;
+                    let preenchida = de > ate || (sheet.faixa_vazia(c, de, ate)
+                        && sheet.preencher_faixa_vazia(c, de, ate, &textos[dc % origem_largura]));
+                    if !preenchida { sem_bloco.get_or_insert(c); }
+                }
+            }
             sheet.fechar_transacao();
         });
         self.alterado = true;
@@ -575,12 +629,46 @@ impl App {
                 ModoColagem::SomenteFormato => tr!(" (somente formatação)"),
             },
         );
+        if cortada {
+            // A seleção até o fim é a escolha de quem cola; o aviso diz
+            // por que parou (17/10: "não consigo colar de A2:A100.000.000").
+            self.status.push_str(&trf!(" · a seleção ia até o fim da planilha (100 milhões de linhas): colado só até {}, a última linha com dados",
+                cell_name(area.r1, area.c1)));
+        }
+        if let Some(c) = sem_bloco {
+            self.status.push_str(&trf!("; a coluna {} já tinha algo abaixo da última linha usada e não foi preenchida até o fim",
+                feathersheet_core::celulas::refs::col_name(c)));
+        }
         if let Some(erro) = erro_tabela {
             self.status.push_str(&trf!("; não foi possível ampliar a tabela: {erro}"));
         }
         if let Some(aviso) = aviso_validacao {
             self.status.push_str(&trf!("; aviso de validação: {aviso}"));
         }
+    }
+
+    /// A área onde colar: a seleção, mas a que chega à última linha (ou
+    /// coluna) da planilha para na última com dados, arredondada para um
+    /// múltiplo do bloco copiado. Planilha vazia: o bloco uma vez. Devolve
+    /// também se cortou.
+    pub(super) fn area_de_colagem(&self, altura: usize, largura: usize) -> (Rect, bool) {
+        let mut area = self.area_selecionada().normalized();
+        let Some(sheet) = self.workbook.aba(self.folha).map(|a| &a.sheet) else { return (area, false) };
+        let vazia = sheet.is_empty();
+        let mut cortada = false;
+        let mut cortar = |inicio: u32, fim: &mut u32, maximo: u32, ultima: u32, bloco: usize| {
+            if *fim < maximo - 1 || *fim == inicio || bloco == 0 {
+                return;
+            }
+            let bloco = bloco as u32;
+            let ultima = if vazia { inicio } else { ultima.max(inicio) };
+            let vezes = (ultima - inicio) / bloco + 1;
+            *fim = (inicio + vezes * bloco - 1).min(maximo - 1);
+            cortada = true;
+        };
+        cortar(area.r0, &mut area.r1, MAX_ROWS, sheet.max_row, altura);
+        cortar(area.c0, &mut area.c1, MAX_COLS, sheet.max_col, largura);
+        (area, cortada)
     }
 
     pub(super) fn historico(&mut self, refazer: bool) {

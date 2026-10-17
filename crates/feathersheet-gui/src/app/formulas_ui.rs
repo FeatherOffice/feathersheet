@@ -85,13 +85,9 @@ pub struct Rastreio {
 }
 
 /// Nome em português da função, quando existe apelido (SUM → SOMA).
-fn nome_exibido(canonico: &str) -> &str {
-    // Em inglês, as fórmulas usam o nome canônico (SUM).
-    if crate::idioma::em_ingles() { return canonico; }
-    functions::aliases().iter()
-        .find(|(_, real)| *real == canonico)
-        .map(|(apelido, _)| *apelido)
-        .unwrap_or(canonico)
+fn nome_exibido(canonico: &str) -> String {
+    // O de-para do idioma (SOMA, SUM, SUMA).
+    crate::idioma::nome_funcao(canonico)
 }
 
 /// Primeira frase da ajuda, cortada para caber na linha do menu.
@@ -492,7 +488,7 @@ impl App {
                 let mut ordenados: Vec<&str> = nomes.to_vec();
                 ordenados.sort_by_key(|n| nome_exibido(n).to_lowercase());
                 for canonico in ordenados {
-                    let nome = nome_exibido(canonico).to_owned();
+                    let nome = nome_exibido(canonico);
                     lista = lista.push(Self::item_menu(nome.clone(), resumo(canonico),
                         Msg::InserirFuncao(nome), false));
                 }

@@ -69,6 +69,27 @@ impl Grade<'_> {
         if c1.0 == a.c1 { f.fill_rectangle(Point::new(x1 - esp, y0), Size::new(esp, y1 - y0), cor); }
     }
 
+    /// A área do Ctrl+C: contorno tracejado, como o do Excel. Só os lados
+    /// à vista (a cópia que passa da tela não ganha borda na beirada).
+    pub(super) fn desenhar_copiada(&self, f: &mut Frame, colunas: &[Faixa], linhas: &[Faixa], cor: Color) {
+        let Some(a) = self.copiada.as_ref() else { return };
+        let cols: Vec<_> = colunas.iter().filter(|c| c.0 >= a.c0 && c.0 <= a.c1).collect();
+        let rows: Vec<_> = linhas.iter().filter(|r| r.0 >= a.r0 && r.0 <= a.r1).collect();
+        let (Some(c0), Some(c1), Some(r0), Some(r1)) = (cols.first(), cols.last(), rows.first(), rows.last())
+            else { return };
+        let (x0, y0, x1, y1) = (c0.1, r0.1, c1.1 + c1.2, r1.1 + r1.2);
+        let e = 1.0 / self.zoom.max(0.25);
+        let traco = canvas::Stroke {
+            line_dash: canvas::LineDash { segments: &[5.0, 3.0], offset: 0 },
+            ..canvas::Stroke::default().with_color(cor).with_width(2.0 * e)
+        };
+        let lado = |f: &mut Frame, de: Point, ate: Point| f.stroke(&canvas::Path::line(de, ate), traco.clone());
+        if r0.0 == a.r0 { lado(f, Point::new(x0, y0 + e), Point::new(x1, y0 + e)); }
+        if r1.0 == a.r1 { lado(f, Point::new(x0, y1 - e), Point::new(x1, y1 - e)); }
+        if c0.0 == a.c0 { lado(f, Point::new(x0 + e, y0), Point::new(x0 + e, y1)); }
+        if c1.0 == a.c1 { lado(f, Point::new(x1 - e, y0), Point::new(x1 - e, y1)); }
+    }
+
     /// O quadradinho e, durante o arrasto, o destino tracejado.
     pub(super) fn desenhar_alca(
         &self, f: &mut Frame, viewport: Size, arrasto: Option<&ArrastoAlca>,

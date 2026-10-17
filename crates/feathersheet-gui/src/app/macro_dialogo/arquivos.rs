@@ -102,7 +102,7 @@ impl App {
                 }
                 Err(e) => {
                     self.monitor.registrar(feather_ui::monitor::Nivel::Erro, tr!("Macros"),
-                        &format!("[macro] falhou ao gravar {}: {e}", caminho.display()));
+                        &trf!("[macro] falhou ao gravar {}: {e}", caminho.display()));
                     falhas.push(trf!("Não foi possível gravar {}: {e}", caminho.display()));
                 }
             }

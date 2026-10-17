@@ -13,12 +13,17 @@ pub(super) struct Eixo {
     prefixos: Vec<f64>,
     /// Intervalos [início, fim) de linhas/colunas de tamanho zero.
     ocultos: Vec<(u32, u32)>,
+    /// Daqui até o fim tudo está oculto (`quantidade` quando nada está).
+    limite: u32,
 }
 
 impl Eixo {
-    pub(super) fn novo(quantidade: u32, padrao: f32, dimensoes: &HashMap<u32, u32>) -> Self {
+    /// `ocultas_desde`: tudo a partir desse índice está oculto (ocultar da
+    /// linha 30 até a última sem guardar uma altura por linha).
+    pub(super) fn novo(quantidade: u32, padrao: f32, dimensoes: &HashMap<u32, u32>, ocultas_desde: Option<u32>) -> Self {
+        let limite = ocultas_desde.map_or(quantidade, |n| n.min(quantidade));
         let mut excecoes: Vec<_> = dimensoes.iter()
-            .filter(|(i, _)| **i < quantidade)
+            .filter(|(i, _)| **i < limite)
             .map(|(&i, &tamanho)| (i, tamanho as f32))
             .collect();
         excecoes.sort_unstable_by_key(|(i, _)| *i);
@@ -36,10 +41,17 @@ impl Eixo {
                 }
             }
         }
-        Self { quantidade, padrao, excecoes, prefixos, ocultos }
+        if limite < quantidade {
+            match ocultos.last_mut() {
+                Some((_, fim)) if *fim == limite => *fim = quantidade,
+                _ => ocultos.push((limite, quantidade)),
+            }
+        }
+        Self { quantidade, padrao, excecoes, prefixos, ocultos, limite }
     }
 
     pub(super) fn tamanho(&self, indice: u32) -> f32 {
+        if indice >= self.limite { return 0.0; }
         self.excecoes.binary_search_by_key(&indice, |(i, _)| *i)
             .ok().map(|pos| self.excecoes[pos].1).unwrap_or(self.padrao)
     }
@@ -48,7 +60,8 @@ impl Eixo {
     /// permitir calcular a extensão total sem percorrer o eixo.
     #[allow(dead_code)]
     pub(super) fn inicio(&self, indice: u32) -> f64 {
-        let indice = indice.min(self.quantidade);
+        // Depois do limite tudo tem tamanho zero: a posição para de crescer.
+        let indice = indice.min(self.quantidade).min(self.limite);
         let antes = self.excecoes.partition_point(|(i, _)| *i < indice);
         f64::from(indice) * f64::from(self.padrao) + self.prefixos[antes]
     }
@@ -179,6 +192,7 @@ struct Cache {
     versao: u32,
     linhas_count: usize,
     colunas_count: usize,
+    desde: (Option<u32>, Option<u32>),
     linhas: Eixo,
     colunas: Eixo,
 }
@@ -238,6 +252,7 @@ impl EstadoEixos {
             c.id != aba.id || c.versao != aba.versao
                 || c.linhas_count != aba.sheet.row_heights.len()
                 || c.colunas_count != aba.sheet.col_widths.len()
+                || c.desde != (aba.sheet.linhas_ocultas_desde, aba.sheet.colunas_ocultas_desde)
         });
         if atualizar {
             self.cache = Some(Cache {
@@ -245,10 +260,12 @@ impl EstadoEixos {
                 versao: aba.versao,
                 linhas_count: aba.sheet.row_heights.len(),
                 colunas_count: aba.sheet.col_widths.len(),
-                linhas: Eixo::novo(linhas_total, altura_padrao, &aba.sheet.row_heights),
+                desde: (aba.sheet.linhas_ocultas_desde, aba.sheet.colunas_ocultas_desde),
+                linhas: Eixo::novo(linhas_total, altura_padrao, &aba.sheet.row_heights, aba.sheet.linhas_ocultas_desde),
                 // A Largura padrão da aba (Formatar ▾) vence a da grade.
                 colunas: Eixo::novo(colunas_total,
-                    aba.sheet.largura_padrao.map_or(largura_padrao, |v| v as f32), &aba.sheet.col_widths),
+                    aba.sheet.largura_padrao.map_or(largura_padrao, |v| v as f32), &aba.sheet.col_widths,
+                    aba.sheet.colunas_ocultas_desde),
             });
         }
         let cache = self.cache.as_ref()?;
@@ -263,7 +280,7 @@ mod testes {
     #[test]
     fn prefixos_e_hit_test_equivalem_ao_eixo_typescript() {
         let medidas = HashMap::from([(1, 0), (2, 0), (3, 16), (7, 35), (99, 1)]);
-        let e = Eixo::novo(10, 28., &medidas);
+        let e = Eixo::novo(10, 28., &medidas, None);
         assert_eq!(e.inicio(1), 28.);
         assert_eq!(e.inicio(3), 28.);
         assert_eq!(e.inicio(4), 44.);
@@ -278,12 +295,12 @@ mod testes {
     fn milhoes_de_indices_ocultos_nao_sao_percorridos_para_saltar() {
         let mut medidas = HashMap::new();
         for i in 0..100_000 { medidas.insert(i, 0); }
-        let e = Eixo::novo(10_000_000, 28., &medidas);
+        let e = Eixo::novo(10_000_000, 28., &medidas, None);
         assert_eq!(e.proximo_visivel(0), Some(100_000));
         assert_eq!(e.proximo_visivel(75_000), Some(100_000));
         assert_eq!(e.inicio(100_000), 0.);
         assert_eq!(e.inicio(100_001), 28.);
-        let todas = Eixo::novo(2, 28., &HashMap::from([(0, 0), (1, 0)]));
+        let todas = Eixo::novo(2, 28., &HashMap::from([(0, 0), (1, 0)]), None);
         assert_eq!(todas.proximo_visivel(0), None);
         assert_eq!(todas.proximo_visivel(1), None);
     }
@@ -307,7 +324,7 @@ mod testes {
     fn rolagem_horizontal_conta_colunas_visiveis_nao_indices_ocultos() {
         let eixo = Eixo::novo(12, 122., &HashMap::from([
             (2, 0), (3, 0), (8, 0),
-        ]));
+        ]), None);
         assert_eq!(eixo.deslocar_visiveis(1, 0, 1), 4);
         assert_eq!(eixo.deslocar_visiveis(1, 0, 2), 5);
         assert_eq!(eixo.deslocar_visiveis(7, 0, -2), 5);
@@ -320,11 +337,11 @@ mod testes {
     #[test]
     fn rolagem_sem_colunas_visiveis_nao_varre_toda_planilha() {
         let todas = (0..200u32).map(|i| (i, 0)).collect::<HashMap<_, _>>();
-        let eixo = Eixo::novo(200, 122., &todas);
+        let eixo = Eixo::novo(200, 122., &todas, None);
         assert_eq!(eixo.deslocar_visiveis(0, 0, 2), 0);
         assert_eq!(eixo.deslocar_visiveis(100, 4, -2), 4);
         let quase = (2..199u32).map(|i| (i, 0)).collect::<HashMap<_, _>>();
-        let eixo = Eixo::novo(200, 122., &quase);
+        let eixo = Eixo::novo(200, 122., &quase, None);
         assert_eq!(eixo.deslocar_visiveis(1, 0, 1), 199);
         assert_eq!(eixo.deslocar_visiveis(199, 0, -1), 1);
     }
@@ -334,7 +351,7 @@ mod testes {
         let medidas = HashMap::from([
             (0, 0), (1, 0), (5, 0), (6, 0), (7, 0), (12, 0)
         ]);
-        let e = Eixo::novo(15, 28., &medidas);
+        let e = Eixo::novo(15, 28., &medidas, None);
         assert_eq!(e.proximo_visivel(0), Some(2));
         assert_eq!(e.anterior_visivel(1), None);
         assert_eq!(e.anterior_visivel(2), Some(2));
@@ -357,7 +374,7 @@ mod testes {
                 (5, 0), (6, 0), (7, 0), (8, 0), (9, 0)]),
         ];
         for alturas in configuracoes {
-            let eixo = Eixo::novo(10, 28.0, &alturas);
+            let eixo = Eixo::novo(10, 28.0, &alturas, None);
             for disponivel in [1., 8., 27., 28., 29., 56., 70., 90., 112., 280., 999.] {
                 assert_eq!(eixo.inicio_da_cauda(f64::from(disponivel)),
                     inicio_reverso_anterior(&eixo, disponivel),
@@ -368,12 +385,12 @@ mod testes {
 
     #[test]
     fn cauda_em_igualdade_exata_nao_inclui_linha_oculta_anterior() {
-        let eixo = Eixo::novo(3, 12., &HashMap::from([(1, 0)]));
+        let eixo = Eixo::novo(3, 12., &HashMap::from([(1, 0)]), None);
         // A última linha ocupa sozinha o viewport; a linha 1 está
         // oculta e não deve antecipar a origem ao índice 1.
         assert_eq!(eixo.inicio_da_cauda(12.), 2);
         assert_eq!(eixo.inicio_da_cauda(13.), 1);
-        let com_zero_no_inicio = Eixo::novo(2, 12., &HashMap::from([(0, 0)]));
+        let com_zero_no_inicio = Eixo::novo(2, 12., &HashMap::from([(0, 0)]), None);
         assert_eq!(com_zero_no_inicio.inicio_da_cauda(12.), 1);
         assert_eq!(com_zero_no_inicio.inicio_da_cauda(13.), 0);
     }
@@ -389,7 +406,7 @@ mod testes {
                 codigo /= 3;
                 if altura != 28 { alturas.insert(indice, altura); }
             }
-            let eixo = Eixo::novo(5, 28., &alturas);
+            let eixo = Eixo::novo(5, 28., &alturas, None);
             for disp in [0., 1., 12., 13., 28., 29., 56., 75., 90., 150., 375.] {
                 assert_eq!(eixo.inicio_da_cauda(f64::from(disp)),
                     inicio_reverso_anterior(&eixo, disp),
@@ -404,7 +421,7 @@ mod testes {
         for indice in 9_800_000..10_000_000 {
             alturas.insert(indice, 0);
         }
-        let eixo = Eixo::novo(10_000_000, 28.0, &alturas);
+        let eixo = Eixo::novo(10_000_000, 28.0, &alturas, None);
         // Inclui as linhas ocultas da cauda sem fazer 200 mil passos.
         assert_eq!(eixo.inicio_da_cauda(100.0), 9_799_997);
         assert_eq!(eixo.inicio_da_cauda(28.0), 9_799_999);
@@ -474,4 +491,17 @@ mod testes {
         cache.limpar();
         assert!(cache.cache.is_none());
     }
+
+    #[test]
+    fn ocultas_ate_o_fim_param_a_posicao_e_saltam_na_rolagem() {
+        let e = Eixo::novo(100_000_000, 28., &HashMap::new(), Some(29));
+        assert_eq!(e.tamanho(28), 28.0);
+        assert_eq!(e.tamanho(29), 0.0);
+        assert_eq!(e.tamanho(99_999_999), 0.0);
+        assert_eq!(e.total(), 29.0 * 28.0);
+        assert_eq!(e.proximo_visivel(29), None);
+        assert_eq!(e.anterior_visivel(50_000_000), Some(28));
+        assert_eq!(e.deslocar_visiveis(20, 0, 50), 28);
+    }
 }
+

@@ -1005,6 +1005,66 @@ fn modelo_orcamento_domestico_preenche_pasta_pelo_motor_real() {
         assert!(sheet.estilo_resolvido(2, 0).is_none());
     }
 
+    /// Pedido de 17/10: o Ctrl+C deixa a área marcada (tracejado) até uma
+    /// edição; o recortar não marca (a origem já foi limpa).
+    #[test]
+    fn ctrl_c_marca_a_area_copiada_ate_editar() {
+        let mut app = App::default();
+        app.workbook.escrever_celula(0, 0, 0, "1".into());
+        let _ = app.update(Msg::Selecionar(0, 0));
+        app.fim_selecao = (2, 1);
+        let _ = app.update(Msg::Copiar);
+        assert_eq!(app.marca_copia, Some((0, Rect::new(0, 0, 2, 1))));
+        assert_eq!(app.grade().copiada, Some(Rect::new(0, 0, 2, 1)));
+        // Digitar numa célula tira a marca.
+        let _ = app.update(Msg::Selecionar(5, 5));
+        let _ = app.update(Msg::Editar("x".into()));
+        let _ = app.update(Msg::EnviarEditor);
+        assert!(app.marca_copia.is_none());
+        let _ = app.update(Msg::Selecionar(0, 0));
+        let _ = app.update(Msg::Recortar);
+        assert!(app.marca_copia.is_none(), "recortar não deixa marca");
+    }
+
+    /// 16/10: colar até "a última linha" gravava 100 milhões de células e
+    /// travava. 17/10: um valor simples cola até o fim de verdade (em
+    /// blocos, no motor); fórmula continua parando na última linha com dados.
+    #[test]
+    fn colar_ate_o_fim_da_planilha() {
+        use feathersheet_core::celulas::refs::MAX_ROWS;
+        use feathersheet_core::celulas::values::Value;
+        // A1 escrito, copiado e colado em A2:A100000000: as 100 milhões.
+        let mut app = App::default();
+        app.workbook.escrever_celula(0, 0, 0, "7".into());
+        for r in 0..10 { app.workbook.escrever_celula(0, r, 1, r.to_string()); }
+        let _ = app.update(Msg::Selecionar(0, 0));
+        let copiado = app.copiar_selecao().unwrap();
+        let _ = app.update(Msg::Selecionar(1, 0));
+        app.fim_selecao = (MAX_ROWS - 1, 0);
+        let _ = app.update(Msg::Colar(copiado));
+        let v = |app: &App, r| app.workbook.valor(0, r, 0);
+        for r in [1, 9, 10, 65_536, MAX_ROWS - 1] {
+            assert_eq!(v(&app, r), Value::Number(7.0), "linha {r}");
+        }
+        assert!(app.status.contains("99999999 células coladas"), "{}", app.status);
+        // Um Ctrl+Z desfaz a colagem inteira.
+        let _ = app.update(Msg::Desfazer);
+        assert_eq!((v(&app, 1), v(&app, MAX_ROWS - 1), v(&app, 0)), (Value::Empty, Value::Empty, Value::Number(7.0)));
+        // Fórmula: dados até a linha 10, coluna inteira de C vai até C10.
+        let _ = app.update(Msg::Selecionar(0, 2));
+        app.fim_selecao = (MAX_ROWS - 1, 2);
+        let _ = app.update(Msg::Colar("=B1".into()));
+        let sheet = &app.workbook.aba(0).unwrap().sheet;
+        // (Texto de fora: a fórmula vai igual em todas as linhas.)
+        assert_eq!((sheet.get_raw(9, 2), sheet.get_raw(10, 2)), ("=B1".into(), String::new()));
+        assert!(app.status.contains("C10"), "{}", app.status);
+        // Seleção que não chega ao fim cola inteira, como antes.
+        let _ = app.update(Msg::Selecionar(0, 3));
+        app.fim_selecao = (19, 3);
+        let _ = app.update(Msg::Colar("y".into()));
+        assert_eq!(app.workbook.aba(0).unwrap().sheet.get_raw(19, 3), "y");
+    }
+
     #[test]
     fn duplicar_aba_ativa_a_copia_e_desfaz_com_ctrl_z() {
         use super::*;

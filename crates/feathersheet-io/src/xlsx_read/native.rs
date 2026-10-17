@@ -95,22 +95,123 @@ fn converter<'a>(bruto: &'a str, xf: usize, xfs: &[styles::XfStyle]) -> std::bor
     bruto.into()
 }
 
+/// A fórmula do Excel com as referências de célula trocadas pela posição
+/// relativa à célula (`row`, `col`; com `$`, a absoluta): duas células com a
+/// mesma chave têm a mesma fórmula, só deslocada. Devolve `false` (sem
+/// chave) quando não reconheceu nada como referência.
+///
+/// Referência é `$?LETRAS$?DÍGITOS` (até XFD e 1.048.576… o teto da aba)
+/// fora de aspas, sem letra, dígito, `_`, `.` ou `\` antes e sem letra,
+/// dígito, `_`, `(`, `!`, `.` ou `[` depois — assim `LOG10(`, `Q1!A1` (o `Q1`
+/// é nome de aba) e nomes definidos não viram referência. Se algo fosse lido
+/// como referência sem ser, as duas células teriam chaves diferentes (o
+/// deslocamento não bate) e cada uma seguiria pelo caminho completo.
+fn chave_relativa(f: &str, row: u32, col: u32, saida: &mut String) -> bool {
+    use std::fmt::Write;
+    let b = f.as_bytes();
+    let antes_ok = |i: usize| i == 0 || !(b[i - 1].is_ascii_alphanumeric() || matches!(b[i - 1], b'_' | b'.' | b'\\' | b'$'));
+    let mut achou = false;
+    let mut i = 0;
+    let mut trecho = 0;
+    while i < b.len() {
+        match b[i] {
+            // Texto entre aspas e nome de aba entre apóstrofos: literal.
+            q @ (b'"' | b'\'') => {
+                i += 1;
+                while i < b.len() {
+                    if b[i] == q {
+                        if b.get(i + 1) == Some(&q) { i += 2; continue; }
+                        break;
+                    }
+                    i += 1;
+                }
+                i += 1;
+            }
+            c if (c == b'$' || c.is_ascii_uppercase()) && antes_ok(i) => {
+                let inicio = i;
+                let mut j = i;
+                let col_fixa = b[j] == b'$';
+                if col_fixa { j += 1; }
+                let letras = j;
+                while j < b.len() && b[j].is_ascii_uppercase() && j - letras < 3 { j += 1; }
+                let n_letras = j - letras;
+                let lin_fixa = j < b.len() && b[j] == b'$';
+                if lin_fixa { j += 1; }
+                let digitos = j;
+                while j < b.len() && b[j].is_ascii_digit() && j - digitos < 8 { j += 1; }
+                let n_digitos = j - digitos;
+                let depois_ok = j >= b.len() || !(b[j].is_ascii_alphanumeric() || matches!(b[j], b'_' | b'(' | b'!' | b'.' | b'['));
+                let coluna = b[letras..letras + n_letras].iter().fold(0u32, |a, &l| a * 26 + u32::from(l - b'A' + 1));
+                let linha: u32 = f[digitos..j].parse().unwrap_or(0);
+                if n_letras > 0 && n_digitos > 0 && depois_ok && coluna >= 1 && coluna <= 16_384 && linha >= 1
+                    && !(n_digitos > 1 && b[digitos] == b'0') {
+                    saida.push_str(&f[trecho..inicio]);
+                    let (c0, r0) = (coluna - 1, linha - 1);
+                    let _ = if col_fixa { write!(saida, "\u{1}C${c0}") } else { write!(saida, "\u{1}C{}", i64::from(c0) - i64::from(col)) };
+                    let _ = if lin_fixa { write!(saida, "R${r0}\u{1}") } else { write!(saida, "R{}\u{1}", i64::from(r0) - i64::from(row)) };
+                    trecho = j;
+                    achou = true;
+                }
+                // Não era referência: segue depois do nome inteiro.
+                i = if j > i { j } else { i + 1 };
+                while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') { i += 1; }
+            }
+            _ => i += 1,
+        }
+    }
+    saida.push_str(&f[trecho..]);
+    achou
+}
+
 /// Prepara o lote em `nucleos` threads, mantendo a ordem: cada thread
 /// converte (traduz a fórmula, formata o número) e analisa a sua parte num
 /// texto próprio; no fim os textos se juntam e as posições se deslocam.
+///
+/// Fórmula repetida linha a linha (`E2*F2`, `E3*F3`…) é traduzida e
+/// analisada uma vez: as outras com a mesma [`chave_relativa`] reaproveitam
+/// o padrão em pt-BR, que só ganha a posição da célula. Traduzir e analisar
+/// eram ~4 µs por fórmula — 28 s de CPU nos 7 milhões de fórmulas da
+/// Planilha Pesada (16/10/2026).
 fn preparar_em_paralelo(lote: LoteBruto, nucleos: usize, xfs: &[styles::XfStyle]) -> LotePreparado {
+    preparar_em_paralelo_com(lote, nucleos, xfs, true)
+}
+
+fn preparar_em_paralelo_com(lote: LoteBruto, nucleos: usize, xfs: &[styles::XfStyle], reaproveitar: bool) -> LotePreparado {
+    use feathersheet_core::planilha::sheet::carga::Preparo;
+    use std::sync::Arc;
     type Bruta = (u32, u32, usize, Option<Value>, (u32, u32));
     let LoteBruto { texto, celulas } = lote;
     let texto = &texto;
     let parte_pronta = |parte: Vec<Bruta>| -> (String, Vec<CelulaPreparada>) {
         let mut padroes = Padroes::default();
+        // Chave relativa → (padrão em pt-BR, volátil).
+        let mut ja_vistas: HashMap<String, (Arc<str>, bool)> = HashMap::new();
+        let mut chave = String::new();
         let mut saida = String::with_capacity(parte.len() * 12);
         let prontas = parte.into_iter().map(|(r, c, xf, v, faixa)| {
             let bruto = &texto[faixa.0 as usize..faixa.1 as usize];
+            let formula = bruto.strip_prefix(MARCA_FORMULA).map(str::trim);
+            chave.clear();
+            let com_chave = reaproveitar && formula.is_some_and(|f| chave_relativa(f, r, c, &mut chave));
+            if com_chave {
+                if let Some((padrao, volatil)) = ja_vistas.get(chave.as_str()) {
+                    let inicio = saida.len() as u32;
+                    saida.push_str(&feathersheet_core::formula::formula_pattern::expand_pattern(padrao, r as i32, c as i32));
+                    return CelulaPreparada { row: r, col: c, estilo: xf, faixa: (inicio, saida.len() as u32),
+                        preparo: Preparo::Formula { padrao: Some(padrao.clone()), arvore: None, volatil: *volatil }, guardado: v };
+                }
+            }
             let raw = converter(bruto, xf, xfs);
             let inicio = saida.len() as u32;
             saida.push_str(&raw);
-            CelulaPreparada::preparar(r, c, &raw, (inicio, saida.len() as u32), xf, v, &mut padroes)
+            let pronta = CelulaPreparada::preparar(r, c, &raw, (inicio, saida.len() as u32), xf, v, &mut padroes);
+            // Só o que coube na coluna empacotada (sem árvore própria) volta a ser usado.
+            if com_chave {
+                if let Preparo::Formula { padrao: Some(p), arvore: None, volatil } = &pronta.preparo {
+                    ja_vistas.insert(chave.clone(), (p.clone(), *volatil));
+                }
+            }
+            pronta
         }).collect();
         (saida, prontas)
     };
@@ -148,6 +249,7 @@ fn ler_aba(
     xfs: &[styles::XfStyle],
     estilos: &[Option<EstiloParcial>],
     rels: &HashMap<String, String>,
+    imagens: &HashMap<u32, String>,
     folha: &mut Sheet,
     total: &mut usize,
 ) -> Result<sheet::SheetJson, String> {
@@ -163,6 +265,7 @@ fn ler_aba(
     }
     let mut shared = HashMap::<String, sheet::SharedFormula>::new();
     let mut alturas = Vec::<sheet::AlturaLida>::new();
+    let mut ultima_visivel = -1_i64;
     let mut so_formatadas = 0usize;
     // Áreas de matriz dinâmica (`cm`): as células derramadas vêm só com valor e
     // não podem virar literais, senão bloqueiam o derrame (#SPILL!).
@@ -233,6 +336,7 @@ fn ler_aba(
                 if !(0..1_048_576).contains(&linha) { return Ok(()); }
                 vigia.tique()?;
                 let hidden = matches!(row.attr("hidden"), Some("1") | Some("true"));
+                if !hidden { ultima_visivel = ultima_visivel.max(linha); }
                 // Estilo da linha inteira: vale nas células vazias dela.
                 let estilo_linha = row.attr("s").and_then(|v| v.parse::<usize>().ok())
                     .filter(|_| matches!(row.attr("customFormat"), Some("1") | Some("true")))
@@ -270,7 +374,12 @@ fn ler_aba(
                     let formula_comum = celula.f.get().filter(|f| !f.trim().is_empty() && celula.f_t.get() != Some("shared"));
                     // O texto vai para um buffer reaproveitado (sem alocar por célula).
                     bruto.clear();
-                    if let Some(f) = formula_comum {
+                    // Imagem "Colocar na célula": a figura (data URL) no lugar do #VALUE!.
+                    let imagem = celula.f.get().is_none().then(|| celula.vm.get()).flatten()
+                        .and_then(|vm| vm.parse::<u32>().ok()).and_then(|vm| imagens.get(&vm));
+                    if let Some(url) = imagem {
+                        bruto.push_str(url);
+                    } else if let Some(f) = formula_comum {
                         bruto.push(MARCA_FORMULA);
                         bruto.push_str(f);
                     } else if celula.f.get().is_none() && tipo == "n" {
@@ -317,13 +426,13 @@ fn ler_aba(
     })?;
     let total_aba = inicio.elapsed();
     if celulas > 0 {
-        feathersheet_core::diario::anotar(format!(
+        feathersheet_core::anotar!(
             "[abrir] aba '{nome}': {celulas} células em {:.1} s · {nucleos} núcleos · preparar {:.1} s · gravar no motor {:.1} s (ler o XML corre junto)",
-            total_aba.as_secs_f64(), t_preparar.as_secs_f64(), t_gravar.as_secs_f64()));
+            total_aba.as_secs_f64(), t_preparar.as_secs_f64(), t_gravar.as_secs_f64());
     }
     // Metadados pequenos (dimensões, regras, mesclas) são analisados depois
     // das linhas, sem reter o sheetData.
-    let meta = sheet::ler_metadados(nome, &raiz, rels, alturas, xfs);
+    let meta = sheet::ler_metadados(nome, &raiz, rels, alturas, ultima_visivel, xfs);
     for (linha, s) in linhas_com_estilo {
         if let Some(Some(e)) = estilos.get(s) { folha.row_styles.insert(linha, e.clone()); }
     }
@@ -416,6 +525,8 @@ pub fn ler_xlsx_workbook(bytes: Vec<u8>) -> Result<(Workbook, usize), String> {
     let _paleta = super::cores::instalar(&entry_text(&mut arquivo, "xl/theme/theme1.xml").unwrap_or_default(), &estilos_xml);
     let xfs = styles::read_styles(&estilos_xml);
     let estilos = estilos_parciais(&xfs);
+    // Imagens "Colocar na célula" (vm → data URL), lidas uma vez para todas as abas.
+    let imagens_vm = super::imagens_celula::ler(&mut arquivo);
     let mut workbook = Workbook::vazia();
     let mut resumos = Vec::new();
     let mut caminhos = Vec::new();
@@ -445,7 +556,7 @@ pub fn ler_xlsx_workbook(bytes: Vec<u8>) -> Result<(Workbook, usize), String> {
                 &mut arquivo, &format!("{pasta}/_rels/{basename}.rels"),
             )?);
             let resumo = ler_aba(
-                &mut arquivo, &caminho, &nome, &strings, &xfs, &estilos, &rels_aba,
+                &mut arquivo, &caminho, &nome, &strings, &xfs, &estilos, &rels_aba, &imagens_vm,
                 &mut workbook.aba_mut(idx).expect("aba recém-criada").sheet, &mut total,
             )?;
             let comentarios = super::comentarios::ler_comentarios(&mut arquivo, &caminho);
@@ -479,6 +590,8 @@ pub fn ler_xlsx_workbook(bytes: Vec<u8>) -> Result<(Workbook, usize), String> {
         let Some(viva) = workbook.aba_mut(i) else { continue };
         let folha = &mut viva.sheet;
         folha.largura_padrao = resumo.largura_padrao.filter(|&w| w > 0).map(|w| w as u32);
+        folha.linhas_ocultas_desde = resumo.linhas_ocultas_desde;
+        folha.colunas_ocultas_desde = resumo.colunas_ocultas_desde;
         folha.topicos = std::mem::take(&mut resumo.topicos);
         folha.protecao = resumo.protecao.take();
         if !resumo.validacoes.is_empty() {
@@ -604,8 +717,9 @@ mod tests {
         // Coluna A pintada (estilo de coluna); linha 2 sem estilo próprio.
         assert_eq!(sh.estilo_resolvido(1, 0).and_then(|e| e.bg).as_deref(), Some("#000000"));
         assert_eq!(sh.estilo_resolvido(1, 2).and_then(|e| e.bg), None);
-        // D até XFD ocultas.
-        assert_eq!((sh.col_widths.get(&3), sh.col_widths.get(&16383)), (Some(&0), Some(&0)));
+        // D até XFD ocultas: um número só.
+        assert_eq!(sh.colunas_ocultas_desde, Some(3));
+        assert!(sh.coluna_oculta(16383) && !sh.coluna_oculta(2));
     }
 
     #[test]
@@ -626,5 +740,75 @@ mod tests {
         xml.push_str("</sheetData></worksheet>");
         let (wb, _) = ler_xlsx_workbook(xlsx(&xml, None)).unwrap();
         assert_eq!(wb.aba(0).unwrap().sheet.get_raw(259_999, 0), "260000");
+    }
+}
+
+#[cfg(test)]
+mod testes_reaproveitar {
+    use super::*;
+    use feathersheet_core::planilha::sheet::carga::Preparo;
+
+    /// Com e sem reaproveitar a tradução, o lote preparado é o mesmo:
+    /// o mesmo texto em cada célula e o mesmo padrão.
+    #[test]
+    fn reaproveitar_a_traducao_da_o_mesmo_resultado() {
+        let modelos: Vec<fn(u32) -> String> = vec![
+            |r| format!("E{r}*F{r}"),
+            |r| format!("IF(E{r}>50,G{r}*0.1,0)"),
+            |r| format!("K{}+I{r}", r.max(2) - 1),
+            |r| format!("_xlfn.XLOOKUP(D{r},Produtos!$A$2:$A$201,Produtos!$C$2:$C$201)"),
+            |r| format!("IF(I{r}>2000,\"Alto A{r}\",IF(I{r}>800,\"Médio\",\"Baixo\"))"),
+            |r| format!("SUM($A$1:A{r})"),
+            |r| format!("LOG10(A{r})+ATAN2(B{r},C{r})"),
+            |r| format!("'Plano 2023'!B{r}*Q1!C{r}"),
+            |r| format!("SUMIFS(Dados!$I$2:$I$1000001,Dados!$C$2:$C$1000001,$A{r},Dados!$J$2:$J$1000001,{r})"),
+            |_| "A:A".to_string(),
+            |_| "TODAY()".to_string(),
+            |r| format!("IFERROR(1/(A{r}-1),\"x\")&TEXT(B{r},\"0.00\")"),
+            |r| format!("XFD{r}+AA{r}*$B${r}"),
+            |r| format!("SUM(A{r}:C{r})/COUNT(1:1)"),
+            |r| format!("A{r}=TRUE"),
+            |r| format!("{{1,2;3,4}}*A{r}"),
+            |r| format!("Tabela1[Coluna]+A{r}"),
+            |r| format!("LEN(\"B{r}\")+B{r}"),
+        ];
+        let mut lote = LoteBruto::com_capacidade(4096);
+        for r in 1..400u32 {
+            for (c, m) in modelos.iter().enumerate() {
+                let f = m(r + 1);
+                lote.push(r, c as u32 + 3, &format!("{MARCA_FORMULA}{f}"), 0, None);
+            }
+            lote.push(r, 30, &format!("{MARCA_NUMERO}{r}.5"), 0, None);
+            lote.push(r, 31, "texto", 0, None);
+        }
+        let copia = LoteBruto { texto: lote.texto.clone(), celulas: lote.celulas.clone() };
+        let com = preparar_em_paralelo_com(lote, 4, &[], true);
+        let sem = preparar_em_paralelo_com(copia, 4, &[], false);
+        assert_eq!(com.celulas.len(), sem.celulas.len());
+        let padrao = |p: &Preparo| match p {
+            Preparo::Formula { padrao, arvore, volatil } => format!("{padrao:?} {} {volatil}", arvore.is_some()),
+            outro => format!("{outro:?}"),
+        };
+        for (a, b) in com.celulas.iter().zip(&sem.celulas) {
+            assert_eq!((a.row, a.col), (b.row, b.col));
+            assert_eq!(a.raw(&com.texto), b.raw(&sem.texto), "célula ({}, {})", a.row, a.col);
+            assert_eq!(padrao(&a.preparo), padrao(&b.preparo), "célula ({}, {}) {}", a.row, a.col, a.raw(&com.texto));
+        }
+    }
+
+    #[test]
+    fn chave_relativa_reconhece_so_referencias() {
+        let mut k = String::new();
+        assert!(chave_relativa("E3*F3", 2, 6, &mut k));
+        let mut k2 = String::new();
+        assert!(chave_relativa("E4*F4", 3, 6, &mut k2));
+        assert_eq!(k, k2, "a mesma fórmula uma linha abaixo tem a mesma chave");
+        for (f, tem) in [("LOG10(2)", false), ("Q1!A1", true), ("\"A1\"", false), ("SUM(A:A)", false), ("NOME_DEFINIDO", false), ("$B$2", true)] {
+            k.clear();
+            assert_eq!(chave_relativa(f, 0, 0, &mut k), tem, "{f}: {k:?}");
+        }
+        k.clear();
+        chave_relativa("Q1!A1", 0, 0, &mut k);
+        assert!(k.starts_with("Q1!"), "o nome da aba fica como texto: {k:?}");
     }
 }

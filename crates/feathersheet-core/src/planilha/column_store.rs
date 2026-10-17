@@ -144,6 +144,26 @@ impl<T: Copy + Default> ChunkedColumn<T> {
         }
     }
 
+    /// Carga de arquivo por blocos: põe um bloco pronto (`CHUNK_SIZE` valores
+    /// e a máscara de `CHUNK_SIZE / 8` bytes) na posição `idx`, sem copiar.
+    /// O bloco tem de estar vazio — é para a aba que acabou de nascer.
+    /// Devolve a primeira e a última linha presentes, se houver alguma.
+    pub fn colocar_bloco(&mut self, idx: usize, valores: Box<[T]>, mascara: Box<[u8]>) -> Option<(u32, u32)> {
+        debug_assert_eq!(valores.len(), CHUNK_SIZE);
+        debug_assert_eq!(mascara.len(), CHUNK_SIZE >> 3);
+        let primeiro = mascara.iter().position(|&b| b != 0)?;
+        let ultimo = mascara.iter().rposition(|&b| b != 0)?;
+        let base = (idx << CHUNK_SHIFT) as u32;
+        let primeira = base + (primeiro * 8) as u32 + mascara[primeiro].trailing_zeros();
+        let ultima = base + (ultimo * 8) as u32 + 7 - mascara[ultimo].leading_zeros();
+        self.ensure_chunk(idx);
+        self.chunks[idx] = Some(valores);
+        self.presence[idx] = Some(mascara);
+        self.min_row = self.min_row.min(primeira);
+        self.max_row = self.max_row.max(ultima as i64);
+        Some((primeira, ultima))
+    }
+
     /// Permuta as linhas `first..first + ordem.len()`: a linha `ordem[i]` vai
     /// para `first + i` (é o ordenar). `ordem` tem de ser uma permutação desse
     /// mesmo trecho. Mexe direto nos blocos e acerta os limites uma vez no
@@ -245,6 +265,55 @@ impl<T: Copy + Default> ChunkedColumn<T> {
 
     /// Apaga o valor e atualiza os limites se alguma extremidade foi removida.
     /// Antes, remover somente a primeira linha deixava `min_row` incorreto.
+    /// `r0..=r1` passam a valer `val`. Bloco coberto inteiro nasce pronto
+    /// (sem passar linha a linha): é o colar de um valor em 100 milhões de
+    /// linhas (17/10/2026). As pontas vão linha a linha.
+    pub fn preencher_faixa(&mut self, r0: u32, r1: u32, val: T) {
+        if r0 > r1 { return; }
+        let (b0, b1) = ((r0 >> CHUNK_SHIFT) as usize, (r1 >> CHUNK_SHIFT) as usize);
+        self.ensure_chunk(b1);
+        for b in b0..=b1 {
+            let base = (b as u32) << CHUNK_SHIFT;
+            let (de, ate) = ((r0.max(base) - base) as usize, (r1.min(base + CHUNK_MASK) - base) as usize);
+            if de == 0 && ate == CHUNK_MASK as usize {
+                self.chunks[b] = Some(vec![val; CHUNK_SIZE].into_boxed_slice());
+                self.presence[b] = Some(vec![0xff; CHUNK_SIZE >> 3].into_boxed_slice());
+                continue;
+            }
+            let chunk = self.chunks[b].get_or_insert_with(|| vec![T::default(); CHUNK_SIZE].into_boxed_slice());
+            let mask = self.presence[b].get_or_insert_with(|| vec![0u8; CHUNK_SIZE >> 3].into_boxed_slice());
+            chunk[de..=ate].fill(val);
+            for o in de..=ate { mask[o >> 3] |= 1 << (o & 7); }
+        }
+        self.min_row = self.min_row.min(r0);
+        self.max_row = self.max_row.max(r1 as i64);
+    }
+
+    /// Esvazia `r0..=r1` bloco a bloco e acerta os limites uma vez só. O
+    /// [`Self::clear`] linha a linha podia procurar a nova ponta a cada
+    /// chamada: desfazer o colar de 100 milhões de linhas não acabava.
+    pub fn apagar_faixa(&mut self, r0: u32, r1: u32) {
+        if r0 > r1 || self.max_row < r0 as i64 || self.min_row > r1 { return; }
+        let r1 = r1.min(self.max_row as u32);
+        let (b0, b1) = ((r0 >> CHUNK_SHIFT) as usize, (r1 >> CHUNK_SHIFT) as usize);
+        for b in b0..=b1.min(self.chunks.len().saturating_sub(1)) {
+            let base = (b as u32) << CHUNK_SHIFT;
+            let (de, ate) = ((r0.max(base) - base) as usize, (r1.min(base + CHUNK_MASK) - base) as usize);
+            if de == 0 && ate == CHUNK_MASK as usize {
+                self.chunks[b] = None;
+                self.presence[b] = None;
+                continue;
+            }
+            if let Some(mask) = self.presence[b].as_mut() {
+                for o in de..=ate { mask[o >> 3] &= !(1 << (o & 7)); }
+            }
+            if let Some(chunk) = self.chunks[b].as_mut() {
+                chunk[de..=ate].fill(T::default());
+            }
+        }
+        self.acertar_limites();
+    }
+
     pub fn clear(&mut self, row: u32) {
         if !self.has(row) { return; }
         self.apagar_sem_limites(row);

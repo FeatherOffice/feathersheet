@@ -12,9 +12,9 @@ pub(crate) fn normalizar_limite(valor: f64) -> u16 {
 /// RAM instalada, em GB inteiros (Linux: `MemTotal` do `/proc/meminfo`).
 /// `None` quando o sistema não conta: a lista mostra todas as opções.
 pub(crate) fn ram_total_gb() -> Option<u16> {
-    let info = std::fs::read_to_string("/proc/meminfo").ok()?;
-    let kb: u64 = info.lines().find(|l| l.starts_with("MemTotal:"))?
-        .split_whitespace().nth(1)?.parse().ok()?;
+    // Linux (`/proc/meminfo`) e Windows (`GlobalMemoryStatusEx`): a mesma
+    // leitura do monitor F12 da suíte (antes era só Linux).
+    let kb = feather_ui::monitor::ram_total_kb()?;
     // 32 GB instalados aparecem como ~30,7 GiB (o sistema reserva uma
     // parte): arredonda para o par de cima, o tamanho dos pentes.
     let gib = kb.div_ceil(1024 * 1024);

@@ -138,7 +138,7 @@ impl Rect {
 /// que a regex TypeScript não permite. Não ampliar a regra sem mudar
 /// o parser de fórmulas e o formato de arquivo conjuntamente.
 pub fn quote_sheet(name: &str) -> String {
-    let simples = !name.is_empty() && name.chars().enumerate().all(|(i, c)| {
+    let nome_simples = |nome: &str| !nome.is_empty() && nome.chars().enumerate().all(|(i, c)| {
         let letra = c.is_ascii_alphabetic() || ('\u{C0}'..='\u{FF}').contains(&c);
         if i == 0 {
             letra || c == '_'
@@ -146,7 +146,15 @@ pub fn quote_sheet(name: &str) -> String {
             letra || c.is_ascii_digit() || c == '_' || c == '.'
         }
     });
-    if simples {
+    // Aba de outro arquivo (`[Vendas.fshz]Dados`): sem aspas quando o arquivo
+    // não tem caminho, espaço nem aspa e a aba é simples — como o Excel
+    // escreve e como o tokenizador lê (`[` no começo do token).
+    let externo_simples = name.strip_prefix('[').and_then(|resto| resto.split_once(']')).is_some_and(|(arquivo, aba)| {
+        !arquivo.is_empty()
+            && arquivo.chars().all(|c| c.is_ascii_alphanumeric() || ('\u{C0}'..='\u{FF}').contains(&c) || matches!(c, '_' | '.' | '-'))
+            && nome_simples(aba)
+    });
+    if externo_simples || nome_simples(name) {
         name.to_owned()
     } else {
         format!("'{}'", name.replace('\'', "''"))
@@ -299,6 +307,18 @@ mod testes {
         // A classe literal À-ÿ da regex TS inclui inclusive × (U+D7)
         // e ÷ (U+F7), ainda que não sejam letras Unicode.
         assert_eq!(quote_sheet("A×B"), "A×B");
+    }
+
+    /// Aba de outro arquivo: sem aspas na forma simples (como o Excel), entre
+    /// aspas com caminho, espaço ou aba com espaço.
+    #[test]
+    fn aba_de_outro_arquivo_so_tem_aspas_quando_precisa() {
+        assert_eq!(quote_sheet("[Vendas.fshz]Dados"), "[Vendas.fshz]Dados");
+        assert_eq!(quote_sheet("[vendas-2026.xlsx]Plan1"), "[vendas-2026.xlsx]Plan1");
+        assert_eq!(quote_sheet("[Minhas Vendas.fshz]Dados"), "'[Minhas Vendas.fshz]Dados'");
+        assert_eq!(quote_sheet("[Vendas.fshz]Meu Plano"), "'[Vendas.fshz]Meu Plano'");
+        assert_eq!(quote_sheet("/home/x/[Vendas.fshz]Dados"), "'/home/x/[Vendas.fshz]Dados'");
+        assert_eq!(quote_sheet("[d'água.fshz]P"), "'[d''água.fshz]P'");
     }
 
     #[test]

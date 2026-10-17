@@ -44,6 +44,12 @@ pub trait Hospede {
     /// Sabe acertar tabelas ao inserir/excluir (só o aplicativo, por enquanto:
     /// essa regra ainda mora na interface).
     fn reflui_tabelas(&self) -> bool { false }
+    /// AutoFiltro do intervalo `area` (a regra de tabelas e filtros mora no
+    /// aplicativo): `acao` aplicar (critério na `coluna`, absoluta), limpar
+    /// (critérios; só da `coluna`, se vier), remover (o AutoFiltro) ou listar.
+    fn filtrar(&mut self, _aba: usize, _area: Rect, _acao: &str, _coluna: Option<u32>, _criterio: Option<Value>) -> Result<String, String> {
+        Err("O filtro usa as tabelas do aplicativo: abra o FeatherSheet (com o MCP ligado nas Configurações) e chame de novo. Sem o app, sheet_consulta filtra para outra aba.".into())
+    }
     /// O catálogo de macros mudou: o aplicativo recarrega o editor.
     fn macros_mudaram(&mut self) {}
 }

@@ -80,12 +80,38 @@ pub struct Configuracao {
     /// Última versão cujas novidades a pessoa viu; diferente da atual abre
     /// "O que há de novo" sozinha.
     pub versao_vista: String,
+    /// O que aparece na barra de status (chaves de `barra_status::ITENS`),
+    /// escolhido pelo botão direito no rodapé.
+    pub barra_status: Vec<String>,
+    /// MCP ao vivo: uma IA desta máquina pode usar a planilha aberta.
+    /// Desligado de fábrica (privacidade por padrão).
+    pub mcp_ativo: bool,
+    /// Com o MCP ligado, a IA só lê (não escreve, não formata, não salva).
+    pub mcp_so_leitura: bool,
     /// O arquivo de preferências já existia ao abrir (não é instalação nova).
     /// Não é gravado.
     #[serde(skip)]
     pub existia: bool,
 }
 fn csv_detectar_padrao() -> bool { true }
+
+/// O idioma da interface para o idioma do sistema ("pt-PT", "en_GB.UTF-8"…):
+/// português vira pt-BR, espanhol es-ES; qualquer outro, inglês.
+pub fn idioma_suportado(sistema: Option<&str>) -> &'static str {
+    match sistema.map(|s| s.to_ascii_lowercase()) {
+        Some(s) if s.starts_with("pt") => "pt-BR",
+        Some(s) if s.starts_with("es") => "es-ES",
+        Some(_) => "en-US",
+        None => "pt-BR",
+    }
+}
+
+/// Barra de status numa instalação nova: o padrão do Excel (média,
+/// contagem, soma) mais a posição, o aviso de erro e o zoom.
+pub fn barra_status_padrao() -> Vec<String> {
+    ["celula", "media", "contagem", "soma", "aviso_erro", "zoom"]
+        .iter().map(|s| (*s).to_string()).collect()
+}
 
 /// Curvas da pressão oferecidas nas Configurações (rótulo, gama).
 pub const CURVAS_CANETA: [(&str, f32); 4] =
@@ -123,6 +149,9 @@ impl Default for Configuracao {
             autor_organizacao: String::new(),
             primeiros_passos_vistos: false,
             versao_vista: String::new(),
+            barra_status: barra_status_padrao(),
+            mcp_ativo: false,
+            mcp_so_leitura: false,
             existia: false,
         }
     }
@@ -183,9 +212,13 @@ impl Configuracao {
         let lido: Option<Self> = std::fs::read(path).ok()
             .and_then(|b| serde_json::from_slice(&b).ok());
         let existia = lido.is_some();
-        let mut c = lido.unwrap_or_default();
+        let mut c = lido.unwrap_or_else(|| Self {
+            // Primeira abertura: o idioma do computador, se a interface o tem.
+            idioma: idioma_suportado(sys_locale::get_locale().as_deref()).into(),
+            ..Default::default()
+        });
         c.existia = existia;
-        if !matches!(c.idioma.as_str(), "pt-BR" | "en-US") { c.idioma = "pt-BR".into(); }
+        if !matches!(c.idioma.as_str(), "pt-BR" | "en-US" | "es-ES") { c.idioma = "pt-BR".into(); }
         c.acento = c.acento.min(feather_ui::tema::ACENTOS.len().saturating_sub(1));
         c.linhas_visiveis = c.linhas_visiveis.clamp(10, 50);
         c.colunas_visiveis = c.colunas_visiveis.clamp(6, 24);
@@ -262,6 +295,16 @@ mod testes_ui010 {
         // O campo não vai para o arquivo.
         c.gravar_em(&arquivo).unwrap();
         assert!(!std::fs::read_to_string(&arquivo).unwrap().contains("existia"));
+    }
+
+    #[test]
+    fn primeira_abertura_segue_o_idioma_do_sistema() {
+        assert_eq!(idioma_suportado(Some("pt-BR")), "pt-BR");
+        assert_eq!(idioma_suportado(Some("pt_PT.UTF-8")), "pt-BR");
+        assert_eq!(idioma_suportado(Some("en-GB")), "en-US");
+        assert_eq!(idioma_suportado(Some("de-DE")), "en-US");
+        assert_eq!(idioma_suportado(Some("es_MX.UTF-8")), "es-ES");
+        assert_eq!(idioma_suportado(None), "pt-BR");
     }
 
     #[test]

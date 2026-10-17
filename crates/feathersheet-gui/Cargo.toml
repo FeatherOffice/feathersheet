@@ -1,6 +1,6 @@
 [package]
 name = "feathersheet-gui"
-version = "0.0.5"
+version = "0.1.0"
 edition = "2021"
 description = "Interface nativa FeatherSheet em Rust/Iced usando o template FeatherOffice"
 
@@ -9,13 +9,15 @@ name = "feathersheet"
 path = "src/main.rs"
 
 [dependencies]
-feather-charts = { git = "https://github.com/FeatherOffice/feather-charts", tag = "v0.3.0" }
-feather-ui = { git = "https://github.com/FeatherOffice/feather-ui", tag = "v0.2.7" }
+# Idioma do sistema na primeira abertura (já vinha como dependência indireta).
+sys-locale = "0.3"
+feather-charts = { git = "https://github.com/FeatherOffice/feather-charts", tag = "v0.3.1" }
+feather-ui = { git = "https://github.com/FeatherOffice/feather-ui", tag = "v0.2.9" }
 feather-draw = { git = "https://github.com/FeatherOffice/feather-draw", tag = "v0.1.1" }
 # Formas, ícones e SmartArt comuns da suíte (camada de objetos soltos, app/objetos).
 feather-shapes = { git = "https://github.com/FeatherOffice/feather-shapes", tag = "v0.1.1" }
 # Efeitos RGBA compartilhados com FeatherDocs; codecs ficam na GUI.
-feather-image = { path = "../../../feather-io/crates/feather-image" }
+feather-image = { git = "https://github.com/FeatherOffice/feather-io", tag = "v0.1.1" }
 base64 = "0.22"
 # Compatibilidade exata com ui/protecao/protecao.ts (PBKDF2-HMAC-SHA256,
 # sal criptográfico e normalização Unicode NFC); nunca armazenar senha pura.
@@ -25,7 +27,7 @@ unicode-normalization = "0.1"
 getrandom = "0.2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # Apenas representacao/algoritmos de borda no Canvas; engine colunar permanece no core.
-feather-tables = { path = "../../../feather-io/crates/feather-tables" }
+feather-tables = { git = "https://github.com/FeatherOffice/feather-io", tag = "v0.1.1" }
 feathersheet-core = { path = "../feathersheet-core" }
 feathersheet-io = { path = "../feathersheet-io" }
 feathersheet-macros = { path = "../feathersheet-macros" }
@@ -33,7 +35,7 @@ feathersheet-macros = { path = "../feathersheet-macros" }
 feathersheet-vba = { path = "../feathersheet-vba" }
 # MCP ao vivo: as ferramentas da IA agem na planilha da tela (canal local, sem rede).
 feathersheet-mcp = { path = "../feathersheet-mcp" }
-feather-macros = { path = "../../../feather-io/crates/feather-macros" }
+feather-macros = { git = "https://github.com/FeatherOffice/feather-io", tag = "v0.1.1" }
 iced = { version = "0.13", features = ["canvas", "svg", "image", "tokio", "advanced", "highlighter"] }
 tokio = { version = "1", features = ["rt", "time"] }
 # Colar imagem da area de transferencia (print). Rust puro; wayland-data-control
@@ -55,6 +57,16 @@ lto = true
 codegen-units = 1
 strip = true
 
+# Medições de tempo (`cargo test --profile medir`): otimizado como o release,
+# mas sem LTO e com compilação incremental — recompila em segundos, não em
+# 6 minutos. Os números ficam próximos dos do release, não idênticos.
+[profile.medir]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+strip = false
+
 # Só a ligação com a libc do sistema (que o Rust já usa): `malloc_trim`
 # devolve ao sistema a memória que uma operação grande já soltou.
 [target.'cfg(all(target_os = "linux", target_env = "gnu"))'.dependencies]
@@ -62,7 +74,9 @@ libc = "0.2"
 
 [profile.dev]
 opt-level = 1
+# Só as linhas (o backtrace continua útil): com a depuração completa, o
+# target/debug passou de 100 GB (15/10/2026).
+debug = "line-tables-only"
 
 [profile.dev.package."*"]
 opt-level = 3
-

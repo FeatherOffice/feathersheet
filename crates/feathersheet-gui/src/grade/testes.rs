@@ -16,7 +16,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
         wb.escrever_celula(0, 0, 1, "=A1*2".into());
         wb.escrever_celula(0, 0, 2, "Texto".into());
         let condicional = RefCell::new(EstadoCondicional::default());
-        let mut grade = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+        let mut grade = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
             workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0,
             linha_inicio: 0, coluna_inicio: 0,
             selecionada: (0, 0), area: Rect::cell(0, 0),
@@ -45,7 +45,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
         let mut wb = Workbook::new();
         wb.escrever_celula(0, 0, 0, "=2+3".into());
         let condicional = RefCell::new(EstadoCondicional::default());
-        let mut grade = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+        let mut grade = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
             workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0,
             linha_inicio: 0, coluna_inicio: 0,
             selecionada: (0, 0), area: Rect::cell(0, 0),
@@ -63,7 +63,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
     fn ctrl_roda_no_centro_da_celula_produz_zoom_sem_rolagem() {
         let wb = Workbook::new();
         let condicional = RefCell::new(EstadoCondicional::default());
-        let mut grade = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+        let mut grade = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
             workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0,
             linha_inicio: 0, coluna_inicio: 0,
             selecionada: (0, 0), area: Rect::cell(0, 0),
@@ -94,7 +94,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
     fn arrastar_divisoria_do_cabecalho_muda_a_largura_com_zoom() {
         let wb = Workbook::new();
         let condicional = RefCell::new(EstadoCondicional::default());
-        let grade = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+        let grade = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
             workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0,
             linha_inicio: 0, coluna_inicio: 0,
             selecionada: (0, 0), area: Rect::cell(0, 0),
@@ -146,7 +146,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
         let wb = Workbook::new();
         let condicional = RefCell::new(EstadoCondicional::default());
         for linhas_grade in [true, false] {
-            let grade = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+            let grade = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
                 workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0,
                 linha_inicio: 0, coluna_inicio: 0,
                 selecionada: (11, 0), area: Rect::cell(11, 0),
@@ -194,7 +194,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
         let condicional = RefCell::new(EstadoCondicional::default());
         wb.aba_mut(0).unwrap().sheet.row_heights.insert(0,0);
         wb.aba_mut(0).unwrap().sheet.col_widths.insert(0,0);
-        let g = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[], workbook:&wb, condicional:&condicional, eixos: eixos_teste(), aba:0,linha_inicio:0,coluna_inicio:0,
+        let g = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[], workbook:&wb, condicional:&condicional, eixos: eixos_teste(), aba:0,linha_inicio:0,coluna_inicio:0,
             selecionada:(1,1),area:Rect::cell(1,1),escuro:false,linhas_grade:true,realce_eixos:true, mostrar_formulas: false,zoom: 2.0, ctrl_pressionado: false, rascunho:None,refs_formula: Vec::new(), lista_aberta: false, lista_pagina: 0, lista_destaque: 0, fonte_padrao: "sans", tamanho_fonte_padrao: 13, congelar_linhas: 0, congelar_colunas: 0 };
         assert_eq!(g.celula_no_ponto(Point::new(200.,72.),Size::new(800.,500.)),Some((1,1)));
         assert_eq!(g.celula_no_ponto(Point::new(100.,72.),Size::new(800.,500.)),None);
@@ -203,7 +203,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
     fn ponto_da_grade_respeita_deslocamento_e_largura() {
         let wb = Workbook::new();
         let condicional = RefCell::new(EstadoCondicional::default());
-        let g = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+        let g = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
             workbook:&wb, condicional:&condicional, eixos: eixos_teste(), aba:0,linha_inicio:200,coluna_inicio:26,
             selecionada:(200,26),area:Rect::cell(200,26),escuro:false,linhas_grade:true,realce_eixos:true, mostrar_formulas: false,zoom: 1.0, ctrl_pressionado: false, rascunho:None,refs_formula: Vec::new(), lista_aberta: false, lista_pagina: 0, lista_destaque: 0, fonte_padrao: "sans", tamanho_fonte_padrao: 13, congelar_linhas: 0, congelar_colunas: 0
         };
@@ -239,7 +239,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
         let condicional = RefCell::new(EstadoCondicional::default());
         let largura_tela = 1260.0;
         for zoom in [0.5, 1.0, 2.0] {
-            let g = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+            let g = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
                 workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0, linha_inicio: 0, coluna_inicio: MAX_COLS - 3,
                 selecionada: (0, MAX_COLS - 1),
                 area: Rect::cell(0, MAX_COLS - 1), escuro: false,
@@ -267,7 +267,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
         let condicional = RefCell::new(EstadoCondicional::default());
         let altura_tela = 590.0;
         for zoom in [0.5, 1.0, 2.0] {
-            let g = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+            let g = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
                 workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0, linha_inicio: MAX_ROWS - 1, coluna_inicio: 0,
                 selecionada: (MAX_ROWS - 1, 0),
                 area: Rect::cell(MAX_ROWS - 1, 0), escuro: false,
@@ -307,7 +307,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
         sheet.row_heights.insert(MAX_ROWS - 2, 0);
         sheet.row_heights.insert(MAX_ROWS - 3, 70);
         for zoom in [0.5, 1.0, 2.0] {
-            let g = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+            let g = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
                 workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0, linha_inicio: MAX_ROWS - 1, coluna_inicio: 0,
                 selecionada: (MAX_ROWS - 1, 0),
                 area: Rect::cell(MAX_ROWS - 1, 0), escuro: false,
@@ -343,7 +343,7 @@ fn eixos_teste() -> &'static RefCell<EstadoEixos> {
         let largura_tela = 900.0;
         for zoom in [0.5, 1.0, 2.0] {
             for linha_inicio in [19, MAX_ROWS - 1] {
-                let g = Grade { cache: cache_teste(), impressao: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
+                let g = Grade { cache: cache_teste(), impressao: None, copiada: None, setas: &[], comentarios: Default::default(), circulos_validacao: &[], opcoes_coluna: None, areas_extras: &[],
                     workbook: &wb, condicional: &condicional, eixos: eixos_teste(), aba: 0,
                     linha_inicio, coluna_inicio: 0,
                     selecionada: (0, 0), area: Rect::cell(0, 0), escuro: false,

@@ -72,6 +72,9 @@ impl EditorFormula {
     }
     pub fn sugestoes(&self, texto:&str, ingles:bool)->Vec<Sugestao> {
         if !self.ativo || self.ocultar_sugestoes { return Vec::new(); }
+        if crate::idioma::lingua()==crate::idioma::Lingua::Es {
+            return sugestoes_es(texto,self.posicao(texto),6);
+        }
         suggest_at(texto,self.posicao(texto),6,ingles)
     }
     pub fn pode_apontar(&self, texto:&str)->bool {
@@ -108,6 +111,25 @@ impl EditorFormula {
         let nome=if let Some(aba)=outra_aba {
             format!("'{}'!{}",aba.replace("'","''"),nome)
         } else {nome};
+        if !self.trocar_trecho(texto,&nome) {return false;}
+        self.ancora=Some(ancora);
+        self.ponto=Some((row,col));
+        true
+    }
+
+    /// Referência já escrita (`[Vendas.fshz]Dados!A1`, clicada noutra
+    /// janela): entra no lugar da apontada antes, como um clique na grade.
+    pub fn referencia_pronta(&mut self, texto:&mut String, nome:&str)->bool {
+        if !self.pode_apontar(texto) && !self.modo_apontar {return false;}
+        if !self.trocar_trecho(texto,nome) {return false;}
+        // A próxima seta na própria grade começa de novo.
+        self.ancora=None;
+        self.ponto=None;
+        true
+    }
+
+    /// Põe `nome` no trecho apontado (ou na seleção, ou no cursor).
+    fn trocar_trecho(&mut self, texto:&mut String, nome:&str)->bool {
         let n=texto.chars().count();
         let (ini,fim)=self.trecho
             .or(self.selecao_texto.filter(|_|self.selecao_substituivel(texto)))
@@ -115,12 +137,10 @@ impl EditorFormula {
         if ini>n || fim>n || ini>fim {return false;}
         let a=byte_em_char(texto,ini);
         let b=byte_em_char(texto,fim);
-        texto.replace_range(a..b,&nome);
+        texto.replace_range(a..b,nome);
         self.trecho=Some((ini,ini+nome.chars().count()));
         self.cursor=Some(ini+nome.chars().count());
         self.selecao_texto=None;
-        self.ancora=Some(ancora);
-        self.ponto=Some((row,col));
         self.modo_apontar=true;
         self.modo_texto=false;
         self.ocultar_sugestoes=true;
@@ -279,4 +299,30 @@ mod testes {
         assert!(e.alternar_referencia(&mut t));
         assert_eq!(t,"=A1+$B$2");
     }
+}
+
+/// Autocompletar em espanhol: os nomes do de-para (`funcoes.es-ES.json`)
+/// que começam com o que foi digitado; a ajuda vem do nome canônico.
+fn sugestoes_es(texto:&str, cursor:usize, limite:usize)->Vec<Sugestao> {
+    use feathersheet_core::formula::assistente::describe;
+    if !texto.starts_with('=') { return Vec::new(); }
+    // O motor diz se o cursor está num nome de função (mesma regra do pt/en):
+    // com prefixo vazio de sugestões ele não serve; recorta o token aqui.
+    let Some(token)=token_before(texto,cursor) else { return Vec::new(); };
+    if token.start==0 { return Vec::new(); }
+    let prefixo=token.text.to_uppercase();
+    if prefixo.is_empty() || prefixo.chars().next().is_some_and(|c| !c.is_alphabetic()) { return Vec::new(); }
+    if texto.chars().nth(token.end)==Some('(') { return Vec::new(); }
+    let nomes=&crate::idioma::funcoes_de(crate::idioma::Lingua::Es).nomes;
+    let mut achados:Vec<(&String,&String)>=nomes.iter()
+        .filter(|(c,es)| es.starts_with(&prefixo)
+            && feathersheet_core::funcoes::function_help::help_for(c).is_some())
+        .collect();
+    achados.sort_by(|a,b| a.1.chars().count().cmp(&b.1.chars().count()).then_with(|| a.1.cmp(b.1)));
+    achados.into_iter().take(limite).map(|(c,es)| {
+        let mut s=describe(c);
+        s.name=es.clone();
+        if let Some(h)=s.help { s.signature=crate::idioma::assinatura(c,h); }
+        s
+    }).collect()
 }

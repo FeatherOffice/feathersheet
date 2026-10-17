@@ -52,6 +52,11 @@ pub fn chamar(h: &mut dyn Hospede, nome: &str, args: &Json) -> Saida {
         "sheet_formatar" => crate::formato::formatar(h, args),
         "sheet_estrutura" => crate::formato::estrutura(h, args),
         "sheet_mesclar" => crate::formato::mesclar(h, args),
+        "sheet_ordenar" => crate::edicao::ordenar(h, args),
+        "sheet_filtrar" => crate::edicao::filtrar(h, args),
+        "sheet_substituir" => crate::edicao::substituir(h, args),
+        "sheet_mover" => crate::edicao::mover(h, args),
+        "sheet_copiar" => crate::edicao::copiar(h, args),
         outro => Err(format!("Ferramenta desconhecida: {outro}")),
     }
 }

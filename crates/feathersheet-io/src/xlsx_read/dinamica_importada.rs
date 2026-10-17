@@ -14,7 +14,7 @@
 use feathersheet_core::celulas::estilo_parcial::{Campo, EstiloParcial};
 use feathersheet_core::celulas::refs::Rect;
 use feathersheet_core::celulas::values::Value;
-use feathersheet_core::dinamica::dinamica_layout::{self, InfoLinha, Layout, Opcoes, TipoLinha};
+use feathersheet_core::dinamica::dinamica_layout::{self, Filtro, InfoLinha, Layout, Opcoes, TipoLinha};
 use feathersheet_core::dinamica::exibicao::Extras;
 use feathersheet_core::dinamica::pivot::{AgregacaoOp, DinamicaConfig, MedidaDinamica};
 use feathersheet_core::planilha::workbook::Workbook;
@@ -90,12 +90,22 @@ fn calcular(wb: &Workbook, destino: usize, indice: usize, meta: &Json) -> Option
         origem: origem.clone(), linhas: linhas.clone(), colunas: cols.clone(),
         valores: valores.clone(), agrupar_data: None,
     };
+    // Filtros e grupos recolhidos que o leitor achou (itens ocultos,
+    // `pageFields`, `sd="0"`). Lista vazia = "(Tudo)", como no painel.
+    let filtros = meta["filtros"].as_array().into_iter().flatten().filter_map(|f| {
+        let coluna = f["col"].as_u64()? as usize;
+        let valores: std::collections::HashSet<String> = f["valores"].as_array()?.iter()
+            .filter_map(|v| v.as_str().map(str::to_string)).collect();
+        (!valores.is_empty() && !fora(&coluna))
+            .then(|| Filtro { coluna, valores, excluir: f["excluir"].as_bool().unwrap_or(false) })
+    }).collect();
     let opcoes = Opcoes {
         layout: if meta["layout"] == "compacto" { Layout::Compacto } else { Layout::Tabular },
         repetir_rotulos: meta["repetirRotulos"].as_bool().unwrap_or(false),
         subtotais: meta["subtotais"].as_bool().unwrap_or(false),
-        recolhidos: Default::default(),
-        filtros: Vec::new(),
+        recolhidos: meta["recolhidos"].as_array().into_iter().flatten()
+            .filter_map(|v| v.as_str().map(str::to_string)).collect(),
+        filtros,
     };
     let extras: Extras = serde_json::from_value(meta["extras"].clone()).unwrap_or_default();
     let (r0, c0) = (origem.r0, origem.c0);

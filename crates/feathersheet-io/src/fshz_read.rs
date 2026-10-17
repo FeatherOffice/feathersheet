@@ -79,6 +79,10 @@ struct AbaMetaLida {
     #[serde(default)]
     cm: Option<Json>,
     #[serde(default)]
+    lo: Option<u32>,
+    #[serde(default)]
+    co: Option<u32>,
+    #[serde(default)]
     w: Vec<(u32, f64)>,
     #[serde(default)]
     h: Vec<(u32, f64)>,
@@ -147,6 +151,9 @@ struct LivroMetaLida {
     /// Catálogo de macros da pasta.
     #[serde(default)]
     mc: Option<Json>,
+    /// Valores guardados das pastas externas (ver `crate::externos_guardados`).
+    #[serde(default)]
+    ex: Option<Json>,
     #[serde(default)]
     t: Vec<Json>,
     s: Vec<AbaMetaLida>,
@@ -202,6 +209,8 @@ pub struct AbaLida {
     pub tp: Option<Json>,
     pub pt: Option<Json>,
     pub cm: Option<Json>,
+    pub lo: Option<u32>,
+    pub co: Option<u32>,
     pub avulsas: Vec<CelulaAvulsaLida>,
     /// Os estilos distintos do arquivo, uma vez só (partilhados entre as
     /// abas). Célula guarda a posição aqui, não uma cópia: eram 6 milhões
@@ -256,6 +265,8 @@ pub struct PastaLida {
     pub es: Option<Json>,
     pub pr: Option<Json>,
     pub mc: Option<Json>,
+    /// Valores guardados das pastas externas (ver `crate::externos_guardados`).
+    pub ex: Option<Json>,
     pub sheets: Vec<AbaLida>,
 }
 
@@ -417,6 +428,8 @@ fn montar_aba_lida(aba: AbaMetaLida, estilos: &std::sync::Arc<Vec<Json>>, arrow_
         tp: aba.tp,
         pt: aba.pt,
         cm: aba.cm,
+        lo: aba.lo,
+        co: aba.co,
         avulsas,
         estilos: estilos.clone(),
         estilos_diretos,
@@ -451,7 +464,7 @@ fn montar_pasta_lida(livro: LivroMetaLida, arrow_bytes: &[u8]) -> Result<PastaLi
     let tabela = std::sync::Arc::new(livro.t);
     let sheets =
         livro.s.into_iter().map(|aba| montar_aba_lida(aba, &tabela, arrow_bytes)).collect::<Result<Vec<_>, _>>()?;
-    Ok(PastaLida { v: livro.v, a: livro.a, names: livro.names, es: livro.es, pr: livro.pr, mc: livro.mc, sheets })
+    Ok(PastaLida { v: livro.v, a: livro.a, names: livro.names, es: livro.es, pr: livro.pr, mc: livro.mc, ex: livro.ex, sheets })
 }
 
 fn ler_fshz2(resto: &[u8]) -> Result<PastaLida, String> {
@@ -521,7 +534,7 @@ fn ler_fluxo<R: Read>(origem: R, versao: u32) -> Result<PastaLida, String> {
     if leitor.read(&mut extra).map_err(|e| format!("Compressão FSH3 inválida: {e}"))? != 0 {
         return Err("Dados extras no fim do FSH3".into());
     }
-    Ok(PastaLida { v: versao, a: livro.a, names: livro.names, es: livro.es, pr: livro.pr, mc: livro.mc, sheets })
+    Ok(PastaLida { v: versao, a: livro.a, names: livro.names, es: livro.es, pr: livro.pr, mc: livro.mc, ex: livro.ex, sheets })
 }
 
 /// Converte FSH2 em FSH3 sem reconstruir uma Workbook e sem expandir o
@@ -641,6 +654,8 @@ mod testes {
             tp: None,
             pt: None,
             cm: None,
+            lo: None,
+            co: None,
             w: vec![],
             h: vec![],
             g: None,
@@ -683,7 +698,7 @@ mod testes {
         }]);
         let mut aba = aba_vazia("Planilha1");
         aba.pr = Some(protecoes.clone());
-        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, sheets: vec![aba] };
+        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, ex: None, sheets: vec![aba] };
         let bytes = crate::fshz_write::gerar_fshz2(&pasta).unwrap();
 
         let lida = ler_fshz(&bytes).unwrap();
@@ -705,7 +720,7 @@ mod testes {
         let pd = serde_json::json!({ "web:texto:https://x": { "v": "oi", "at": 1 }, "web:dados:https://y\u{0}": { "m": [["a", 1]], "at": 2 } });
         let mut aba = aba_vazia("Planilha1");
         aba.pd = Some(pd.clone());
-        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, sheets: vec![aba] };
+        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, ex: None, sheets: vec![aba] };
         let bytes = crate::fshz_write::gerar_fshz2(&pasta).unwrap();
         assert_eq!(ler_fshz(&bytes).unwrap().sheets[0].pd, Some(pd.clone()));
         let legado = crate::fshz_write::gerar_fshz2_legado(&pasta).unwrap();
@@ -720,7 +735,7 @@ mod testes {
         let mut aba = aba_vazia("Planilha1");
         aba.avulsas = vec![CelulaAvulsaBruta { k: 5, v: "10".into(), estilo: None }];
         aba.linhas = 1;
-        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, sheets: vec![aba] };
+        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, ex: None, sheets: vec![aba] };
         let bytes = crate::fshz_write::gerar_fshz2(&pasta).unwrap();
 
         let lida = ler_fshz(&bytes).unwrap();
@@ -744,7 +759,7 @@ mod testes {
         let mut aba = aba_vazia("Dados");
         aba.linhas = linhas;
         aba.colunas_num = vec![ColunaNumBruta { col: 3, values: values.clone(), bitmap: bitmap.clone() }];
-        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, sheets: vec![aba] };
+        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, ex: None, sheets: vec![aba] };
         let bytes = crate::fshz_write::gerar_fshz2(&pasta).unwrap();
 
         let lida = ler_fshz(&bytes).unwrap();
@@ -769,7 +784,7 @@ mod testes {
         let mut aba = aba_vazia("Texto");
         aba.linhas = linhas;
         aba.colunas_txt = vec![ColunaTxtBruta { col: 1, indices: indices.clone(), bitmap, dict: dict.clone() }];
-        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, sheets: vec![aba] };
+        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, ex: None, sheets: vec![aba] };
         let bytes = crate::fshz_write::gerar_fshz2(&pasta).unwrap();
 
         let lida = ler_fshz(&bytes).unwrap();
@@ -797,7 +812,7 @@ mod testes {
             dict: vec![],
             erros: vec![ErroBruto { code: "#DIV/0!".into(), detail: None }],
         }];
-        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, sheets: vec![aba] };
+        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, ex: None, sheets: vec![aba] };
         let bytes = crate::fshz_write::gerar_fshz2(&pasta).unwrap();
 
         let lida = ler_fshz(&bytes).unwrap();
@@ -819,7 +834,7 @@ mod testes {
         }];
         aba.estilos_literais = vec![(1, serde_json::json!({"negrito": true}))];
         aba.linhas = 1;
-        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, sheets: vec![aba] };
+        let pasta = PastaBruta { a: 0, names: None, es: None, pr: None, mc: None, ex: None, sheets: vec![aba] };
         let bytes = crate::fshz_write::gerar_fshz2(&pasta).unwrap();
 
         let lida = ler_fshz(&bytes).unwrap();

@@ -318,6 +318,35 @@ const CONTAS: [(&str, Option<AggregateFn>); 8] = [
     ("Moda", Some(AggregateFn::Mode)),
 ];
 
+/// Série de texto não tem soma nem média: só contar (pedido de 16/10).
+const CONTAS_TEXTO: [(&str, Option<AggregateFn>); 3] = [
+    ("Não resumir", None),
+    ("Contar", Some(AggregateFn::Count)),
+    ("Contar distintos", Some(AggregateFn::CountDistinct)),
+];
+
+/// As contas que a lista de uma série oferece: a de texto só conta; acima de
+/// 200 mil células (`resumo_obrigatorio`) "Não resumir" sai.
+pub(super) fn contas_da_serie(texto: bool, resumo_obrigatorio: bool) -> Vec<(&'static str, Option<AggregateFn>)> {
+    let tabela: &[(&'static str, Option<AggregateFn>)] = if texto { &CONTAS_TEXTO } else { &CONTAS };
+    tabela.iter().copied().filter(|(_, valor)| valor.is_some() || !resumo_obrigatorio).collect()
+}
+
+/// Quantas células de cada série olhar, no máximo, para saber se ela é de
+/// texto quando a tabela passa de 200 mil células (espalhadas pela série).
+const AMOSTRA_TIPO: u32 = 2048;
+
+/// A célula tem letra: texto que não é número (`"12"` e `"1,5"` são números).
+fn celula_de_texto(v: &feathersheet_core::celulas::values::Value) -> bool {
+    match v {
+        feathersheet_core::celulas::values::Value::Text(t) => {
+            let t = t.trim();
+            !t.is_empty() && t.parse::<f64>().is_err() && t.replacen(',', ".", 1).parse::<f64>().is_err()
+        }
+        _ => false,
+    }
+}
+
 // ------------------------------------------------------------ funções puras
 
 /// Passo das setas/roda e a faixa de cada campo, pela chave dele.
@@ -1082,6 +1111,48 @@ impl App {
             .collect()
     }
 
+    /// As séries de texto, pela ordem de origem (a de [`Self::series_da_origem`]):
+    /// as que têm alguma célula com letra. Vazio e o cabeçalho não contam.
+    /// Até 200 mil células olha tudo; acima, uma amostra espalhada de cada
+    /// série ([`AMOSTRA_TIPO`]), e só até a última linha/coluna usada.
+    pub(super) fn series_de_texto(&self) -> std::collections::BTreeSet<u32> {
+        let g = &self.graficos;
+        let mut texto = std::collections::BTreeSet::new();
+        let Some(r) = parse_range_ref(g.intervalo.trim()).map(|r| r.normalized()) else { return texto };
+        let Some(aba) = (0..self.workbook.len()).filter_map(|i| self.workbook.aba(i)).find(|a| Some(a.id) == g.aba_id) else {
+            return texto;
+        };
+        let s = &aba.sheet;
+        let n = if g.colunas { r.c1 - r.c0 + 1 } else { r.r1 - r.r0 + 1 };
+        // A mesma lista do painel: tabela larga demais não tem escolha por série.
+        if n > 200 || s.is_empty() { return texto; }
+        // Os valores de cada série: sem o cabeçalho (e, em linhas, sem a
+        // coluna dos nomes), até a última célula usada da aba.
+        let (inicio, fim) = if g.colunas {
+            (r.r0 + u32::from(g.cabecalho), r.r1.min(s.max_row))
+        } else {
+            (r.c0 + u32::from(g.cabecalho || g.categorias), r.c1.min(s.max_col))
+        };
+        if fim < inicio { return texto; }
+        let total = fim - inicio + 1;
+        let passo = if u64::from(total) * u64::from(n) <= super::editor::MAX_CELULAS_GRAFICO {
+            1
+        } else {
+            total.div_ceil(AMOSTRA_TIPO).max(1)
+        };
+        let mut ordem = 0;
+        for k in 0..n {
+            if g.categorias && k == g.coluna_categoria { continue; }
+            let tem_letra = (inicio..=fim).step_by(passo as usize).any(|i| {
+                let (lr, lc) = if g.colunas { (i, r.c0 + k) } else { (r.r0 + k, i) };
+                celula_de_texto(&s.get_value(lr, lc))
+            });
+            if tem_letra { texto.insert(ordem); }
+            ordem += 1;
+        }
+        texto
+    }
+
     /// Aba Configurar: tipo, intervalo, categorias e séries (mostrar, nome
     /// na legenda e conta de cada uma), como o editor do Google Planilhas.
     fn view_configurar(&self) -> Element<'_, Msg> {
@@ -1125,15 +1196,22 @@ impl App {
         } else {
             tr!("Marque as séries do gráfico. Nome em branco usa o cabeçalho.")
         }).size(11).color(COR_TEXTO_MUTED()));
-        let contas: Vec<Opcao<Option<AggregateFn>>> = CONTAS.iter()
-            .map(|&(nome, valor)| Opcao { valor, nome: tr!(nome).to_owned() }).collect();
+        // Acima de 200 mil células só resumido: "Não resumir" sai da lista.
+        // Série de texto só conta (o tipo vem calculado de `atualizar_grafico`).
+        let opcoes_de = |texto: bool| -> Vec<Opcao<Option<AggregateFn>>> {
+            contas_da_serie(texto, g.resumo_obrigatorio).into_iter()
+                .map(|(nome, valor)| Opcao { valor, nome: tr!(nome).to_owned() }).collect()
+        };
+        let contas_numero = opcoes_de(false);
+        let contas_texto = opcoes_de(true);
         let series = self.series_da_origem();
         if series.is_empty() {
             col = col.push(text(tr!("Escolha um intervalo com dados.")).size(12).color(COR_TEXTO_MUTED()));
         }
         for (n, nome) in series {
             let visivel = !g.ocultas.contains(&n);
-            let conta_atual = if g.agrupar { Some(g.contas.get(&n).copied().unwrap_or(AggregateFn::Sum)) } else { None };
+            let contas = if g.serie_texto(n) { &contas_texto } else { &contas_numero };
+            let conta_atual = g.agrupar.then(|| g.conta_da_serie(n));
             let atual = contas.iter().find(|o| o.valor == conta_atual).cloned();
             let nome_atual = g.aparencia.nomes_origem.get(&n).cloned().unwrap_or_default();
             col = col.push(row![
@@ -1144,7 +1222,10 @@ impl App {
                     .text_size(12).padding([5, 6]).width(Length::Fixed(120.0)),
             ].spacing(6).align_y(Alignment::Center));
         }
-        if g.agrupar {
+        if g.resumo_obrigatorio {
+            col = col.push(text(tr!("Mais de 200.000 células: o gráfico sempre resume. Categorias iguais viram uma só, com a conta de cada série."))
+                .size(11).color(COR_TEXTO_MUTED()));
+        } else if g.agrupar {
             col = col.push(text(tr!("Categorias iguais viram uma só, com a conta de cada série. \"Não resumir\" vale para todas."))
                 .size(11).color(COR_TEXTO_MUTED()));
         }
@@ -1270,7 +1351,7 @@ impl App {
                     .push(alternar(tr!("Usar cabeçalhos"), g.cabecalho, |v| ev(Evento::Cabecalho(v))))
                     .push(alternar(tr!("Usar categorias"), g.categorias, |v| ev(Evento::Categorias(v))))
                     .push(alternar(tr!("Séries em colunas"), g.colunas, |v| ev(Evento::Colunas(v))))
-                    .push(alternar(tr!("Somar categorias iguais"), g.agrupar, |v| ev(Evento::Agrupar(v))));
+                    .push(alternar(tr!("Resumir categorias iguais"), g.agrupar, |v| ev(Evento::Agrupar(v))));
                 if pizza {
                     col = col.push(rotulo(tr!("Série da pizza"))).push(escolhas(
                         g.series.iter().map(|s| (cortar(s, 14), g.serie.as_deref() == Some(s.as_str()), ev(Evento::Serie(s.clone())))).collect(), 2));
@@ -1934,7 +2015,7 @@ impl App {
         let Some(aba) = self.workbook.aba(self.folha) else { return Task::none() };
         let Ok(lista) = feathersheet_io::graficos_salvos::listar(&aba.sheet) else { return Task::none() };
         let Some(v) = lista.into_iter().find(|v| v["id"].as_str() == Some(&id)) else { return Task::none() };
-        let Some(mapa) = super::editor::desenhar_grafico_salvo(&aba.sheet, &v).and_then(|d| d.mapa) else { return Task::none() };
+        let Some(mapa) = super::editor::desenhar_grafico_salvo(&aba.sheet, &v, None).and_then(|d| d.mapa) else { return Task::none() };
         let zoom = (self.config.zoom as f32 / 100.).max(0.01);
         if variante == "legenda" {
             if let Some(item) = mapa.legenda.iter().find(|i| i.indice == 1) {

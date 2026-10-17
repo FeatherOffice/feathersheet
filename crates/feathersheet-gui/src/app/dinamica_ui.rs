@@ -7,13 +7,21 @@ use feathersheet_core::{
     operacoes::ops,
 };
 use feathersheet_core::dinamica::dinamica_layout::{Filtro, Layout};
-use feathersheet_core::dinamica::exibicao::Extras;
+use feathersheet_core::dinamica::exibicao::{Agrupamento, Eixo as EixoExtra, Extras, MostrarComo, Ordenacao};
 
 mod avancado;
 mod painel_avancado;
 mod edicao;
 mod origem;
 mod fluxo;
+mod config_campo;
+mod detalhes;
+mod grafico_dinamico;
+mod segmentacao;
+mod faixa;
+#[cfg(test)]
+mod testes_arrasto;
+pub(super) use segmentacao::Segmentacoes;
 use fluxo::Fase;
 use avancado::{Calculado, calcular, conferir_nomes_calculados, gravar_opcoes, mapa_json};
 use serde_json::json;
@@ -69,6 +77,9 @@ pub enum Evento {
     ArrastoMover(iced::Point),
     ArrastoSoltar,
     ArrastoSobre(Option<AreaDinamica>),
+    /// Passou sobre o campo `i` de uma área durante o arrasto: soltar ali
+    /// põe o campo antes dele (reordena a hierarquia na mesma área).
+    ArrastoSobreItem(Option<(AreaDinamica, usize)>),
     /// Saiu desta área (só limpa se ainda for a marcada: a vizinha pode ter entrado antes).
     ArrastoSair(AreaDinamica),
     BuscaCampo(String),
@@ -82,6 +93,35 @@ pub enum Evento {
     LayoutEscolher(bool),
     AgruparEscolher(Option<AgruparData>),
     TemaEscolher(&'static str),
+    // Configurações do campo (16/10/2026, v0.1.0): "Mostrar valores como",
+    // classificar, agrupar e totais gerais. O motor já fazia; faltava a tela.
+    /// Abre (ou fecha, com `None`) as configurações do campo da área.
+    ConfigurarCampo(Option<(AreaDinamica, usize)>),
+    OperacaoEscolher(usize, AgregacaoOp),
+    MostrarComo(usize, MostrarComo),
+    Ordenar(EixoExtra, usize, Ordenacao),
+    AgruparCampo(EixoExtra, usize, Option<Agrupamento>),
+    /// Início, fim ou intervalo (0, 1, 2) das faixas do campo aberto.
+    FaixaTexto(usize, String),
+    TotaisGerais { linhas: bool, ligado: bool },
+    AtualizarSozinha(bool),
+    /// Inserir ▸ Gráfico dinâmico.
+    GraficoDinamico,
+    // Segmentação de dados (básica, v0.1.0).
+    SegmentacaoInserir,
+    SegmentacaoCampo(usize),
+    SegmentacaoFecharEscolha,
+    /// (aba da dinâmica, id, coluna do campo, item)
+    SegmentacaoItem(usize, String, usize, String),
+    SegmentacaoLimpar(usize, String, usize),
+    SegmentacaoRemover(usize, String, usize),
+    /// Um botão da aba contextual "Tabela Dinâmica" (com ou sem o painel aberto).
+    NaFaixa(Box<Evento>),
+    /// Clique no funil de um filtro de relatório na grade (linha, coluna).
+    FiltroNaGrade(u32, u32),
+    /// A conta adiada de uma origem grande (o número da vez: só a última
+    /// mudança calcula), depois que a barra de status mostrou o aviso.
+    AtualizarAgora(u32),
 }
 
 /// As quatro áreas do painel, mais a lista de campos (soltar nela tira o campo).
@@ -91,15 +131,25 @@ pub enum AreaDinamica { Filtros, Colunas, Linhas, Valores, Lista }
 /// O que é só do painel (não vai para o arquivo).
 #[derive(Debug, Clone, Default)]
 pub(super) struct PainelUi {
+    /// Vez da última conta adiada ([`Evento::AtualizarAgora`]).
+    vez_adiada: u32,
     busca_campo: String,
     arrasto: Option<Arrasto>,
     /// Área sob o mouse durante o arrasto.
     sob: Option<AreaDinamica>,
+    /// Campo de uma área sob o mouse durante o arrasto (onde vai entrar).
+    sob_item: Option<(AreaDinamica, usize)>,
     /// Item com o menu ▾ aberto.
     menu_item: Option<(AreaDinamica, usize)>,
     filtro_busca: String,
     /// Filtros como estavam ao abrir a lista: o Cancelar volta para eles.
     filtros_antes: Option<Vec<Filtro>>,
+    /// Campo com as configurações abertas embaixo das áreas.
+    config_campo: Option<(AreaDinamica, usize)>,
+    /// Itens do campo base de "% de"/"Diferença de" (lidos ao abrir).
+    itens_base: Vec<String>,
+    /// Início, fim e intervalo das faixas como digitados.
+    faixa_txt: [String; 3],
 }
 
 #[derive(Debug, Clone)]
@@ -111,8 +161,6 @@ struct Arrasto {
     /// Só vira arrasto depois de andar uns pixels; antes disso é clique.
     movido: bool,
 }
-
-const TEMAS_DINAMICA: &[&str] = &["padrao","azul","verde","laranja","vermelho","roxo","cinza"];
 
 #[derive(Debug, Clone)]
 pub(super) struct Estado {
@@ -150,6 +198,12 @@ pub(super) struct Estado {
     extras: Extras,
     /// (linhas, colunas, colunas das medidas) para as quais `extras` foi lido.
     extras_campos: (Vec<usize>, Vec<usize>, Vec<usize>),
+    /// Recalcula sozinha quando a aba de origem muda (opção, desligada).
+    atualizar_sozinha: bool,
+    /// Criada pelo botão Gráfico dinâmico: ao criar, o gráfico vem junto.
+    com_grafico: bool,
+    /// Segmentações de dados: (coluna do campo, itens escolhidos).
+    segmentacoes: Vec<(usize, Vec<String>)>,
 }
 
 impl Estado {
@@ -157,6 +211,8 @@ impl Estado {
     pub(super) fn arrastando(&self) -> bool { self.ui.arrasto.is_some() }
 
     fn tirar_de(&mut self, area: AreaDinamica, i: usize) {
+        // As posições mudam: as configurações abertas apontariam para outro campo.
+        self.ui.config_campo = None;
         match area {
             AreaDinamica::Linhas if i < self.linhas.len() => { self.linhas.remove(i); }
             AreaDinamica::Colunas if i < self.colunas.len() => { self.colunas.remove(i); }
@@ -169,6 +225,11 @@ impl Estado {
     /// Põe o campo na área, como o Excel: Linhas, Colunas e Filtros não
     /// repetem o mesmo campo entre si; Valores aceita qualquer campo.
     fn por_em(&mut self, col: usize, area: AreaDinamica, numerico: bool) {
+        self.por_em_posicao(col, area, numerico, None);
+    }
+
+    /// [`Self::por_em`] numa posição da área (`None` = no fim).
+    fn por_em_posicao(&mut self, col: usize, area: AreaDinamica, numerico: bool, posicao: Option<usize>) {
         let real = self.origem.c0 as usize + self.nomes.len().saturating_sub(self.calculados.len());
         let calculado = col >= real;
         match area {
@@ -191,6 +252,43 @@ impl Estado {
             }
             AreaDinamica::Lista => {}
         }
+        // Entrou no fim: leva para a posição pedida.
+        if let Some(p) = posicao {
+            fn levar<T>(v: &mut Vec<T>, p: usize) {
+                if let Some(x) = v.pop() { v.insert(p.min(v.len()), x); }
+            }
+            match area {
+                AreaDinamica::Linhas => levar(&mut self.linhas, p),
+                AreaDinamica::Colunas => levar(&mut self.colunas, p),
+                AreaDinamica::Valores => levar(&mut self.valores, p),
+                AreaDinamica::Filtros if self.filtros.last().is_some_and(|f| f.coluna == col) => levar(&mut self.filtros, p),
+                _ => {}
+            }
+        }
+    }
+
+    /// Leva o campo `de` da área para antes do campo `para` (`para` pode
+    /// ser o tamanho da área: vai para o fim).
+    fn reordenar_para(&mut self, area: AreaDinamica, de: usize, para: usize) {
+        fn mover<T>(v: &mut Vec<T>, de: usize, para: usize) {
+            if de >= v.len() || para == de || para == de + 1 { return; }
+            let x = v.remove(de);
+            v.insert(if para > de { para - 1 } else { para }.min(v.len()), x);
+        }
+        self.ui.config_campo = None;
+        match area {
+            AreaDinamica::Linhas => mover(&mut self.linhas, de, para),
+            AreaDinamica::Colunas => mover(&mut self.colunas, de, para),
+            AreaDinamica::Valores => mover(&mut self.valores, de, para),
+            AreaDinamica::Filtros => mover(&mut self.filtros, de, para),
+            AreaDinamica::Lista => {}
+        }
+    }
+
+    /// Os filtros de relatório: campo na área Filtros (não em Linhas/Colunas,
+    /// cujo filtro de itens também mora em `filtros`).
+    fn filtros_de_relatorio(&self) -> Vec<&Filtro> {
+        self.filtros.iter().filter(|f| !self.linhas.contains(&f.coluna) && !self.colunas.contains(&f.coluna)).collect()
     }
 
     fn coluna_em(&self, area: AreaDinamica, i: usize) -> Option<usize> {
@@ -273,11 +371,54 @@ fn retangulo_json(v: &serde_json::Value) -> Option<Rect> {
         .then(|| Rect::new(r0, c0, r1, c1))
 }
 
+/// Testes: os campos com que a dinâmica abria antes de nascer vazia (17/10)
+/// — 1ª coluna em Linhas e a última numérica em Valores (soma).
+#[cfg(test)]
+pub(in crate::app) fn campos_de_antes(app: &mut App) {
+    let Some(e) = app.dinamica.as_mut() else { return };
+    let campos = campos::campos(e.origem.clone(), |r, c| app.workbook.valor(e.folha_origem, r, c));
+    let medida = campos.iter().enumerate().rev().find(|(_, c)| c.numerico)
+        .map_or(e.origem.c1 as usize, |(i, _)| e.origem.c0 as usize + i);
+    e.linhas = vec![e.origem.c0 as usize];
+    e.valores = vec![MedidaDinamica { coluna: medida, op: AgregacaoOp::Soma }];
+}
+
+/// Acima disto (linhas da origem) a conta espera a barra de status avisar.
+const ORIGEM_GRANDE: u32 = 100_000;
+
 impl App {
     pub(super) fn evento_dinamica(&mut self, evento: Evento) -> Task<Msg> {
         let ao_vivo = Self::evento_atualiza_ao_vivo(&evento);
+        let medir = ao_vivo || matches!(evento, Evento::Criar | Evento::NaFaixa(..));
+        let nome = format!("{evento:?}");
+        let nome = nome.split(['(', ' ', '{']).next().unwrap_or("").to_owned();
+        let inicio = std::time::Instant::now();
+        if let Evento::AtualizarAgora(vez) = evento {
+            if self.dinamica.as_ref().is_some_and(|e| e.ui.vez_adiada == vez) {
+                self.atualizar_ao_vivo();
+                let ms = inicio.elapsed().as_millis();
+                feathersheet_core::diario::anotar(trf!("[dinâmica] {nome}: {ms} ms no total"));
+            }
+            return Task::none();
+        }
         let tarefa = self.evento_dinamica_base(evento);
+        // Origem grande: primeiro a barra de status avisa (a tela redesenha),
+        // depois a conta. Antes a janela parava sem dizer nada.
+        let grande = self.dinamica.as_ref().is_some_and(|e| e.origem.r1 - e.origem.r0 > ORIGEM_GRANDE);
+        if ao_vivo && grande {
+            let Some(e) = self.dinamica.as_mut() else { return tarefa };
+            e.ui.vez_adiada = e.ui.vez_adiada.wrapping_add(1);
+            let vez = e.ui.vez_adiada;
+            self.status = tr!("Atualizando a tabela dinâmica…").into();
+            let adiada = Task::perform(tokio::time::sleep(std::time::Duration::from_millis(30)),
+                move |_| Msg::Dinamica(Evento::AtualizarAgora(vez)));
+            return Task::batch([tarefa, adiada]);
+        }
         if ao_vivo { self.atualizar_ao_vivo(); }
+        if medir {
+            let ms = inicio.elapsed().as_millis();
+            feathersheet_core::diario::anotar(trf!("[dinâmica] {nome}: {ms} ms no total"));
+        }
         tarefa
     }
 
@@ -304,19 +445,18 @@ impl App {
                     self.status = tr!("Não foram encontrados campos na origem.").into();
                     return Task::none();
                 }
-                let coluna_medida = campos.iter().enumerate().rev()
-                    .find(|(_, c)| c.numerico)
-                    .map(|(i, _)| origem.c0 as usize + i)
-                    .unwrap_or(origem.c1 as usize);
                 self.dinamica = Some(Estado {
                     origem: origem.clone(),
                     origem_texto: format!("{}:{}", cell_name(origem.r0,origem.c0), cell_name(origem.r1,origem.c1)),
                     recomendacoes: false,
                     folha_origem: self.folha,
                     nomes: campos.into_iter().map(|c| c.nome).collect(),
-                    linhas: vec![origem.c0 as usize],
+                    // Vazia, como no Excel: a origem só é lida quando o
+                    // primeiro campo entra (com o ID em Linhas, criar
+                    // montava 1 milhão de linhas e a janela travava).
+                    linhas: Vec::new(),
                     colunas: Vec::new(),
-                    valores: vec![MedidaDinamica { coluna: coluna_medida, op: AgregacaoOp::Soma }],
+                    valores: Vec::new(),
                     agrupar_data: None,
                     nova_aba: true,
                     editando: None,
@@ -339,6 +479,9 @@ impl App {
                     ui: PainelUi::default(),
                     extras: Extras::default(),
                     extras_campos: Default::default(),
+                    atualizar_sozinha: false,
+                    com_grafico: false,
+                    segmentacoes: Vec::new(),
                 });
                 self.menu_aberto = false;
                 self.contexto = None;
@@ -426,13 +569,18 @@ impl App {
                 let primeiro_passo = self.dinamica.as_ref()
                     .is_some_and(|e| e.fase == Fase::Origem && e.editando.is_none());
                 if primeiro_passo && !self.aplicar_texto_antes_de_criar() { return Task::none(); }
+                let com_grafico = self.dinamica.as_ref().is_some_and(|e| e.com_grafico);
                 self.criar_dinamica_nativa();
+                let criada = self.dinamica.is_none();
                 // Criada: abre o painel de campos sobre a dinâmica recém-criada.
-                if primeiro_passo && self.dinamica.is_none() { self.abrir_edicao_dinamica(); }
+                if primeiro_passo && criada { self.abrir_edicao_dinamica(); }
+                // Pelo botão Gráfico dinâmico: o gráfico vem junto.
+                if com_grafico && criada { return self.inserir_grafico_dinamico(); }
             }
             Evento::DestinoNova(nova) => if let Some(e) = &mut self.dinamica { e.nova_aba = nova; },
             Evento::AlternarAvancado => if let Some(e) = &mut self.dinamica { e.avancado = !e.avancado; },
             Evento::Remover(eixo, i) => if let Some(e) = &mut self.dinamica {
+                e.ui.config_campo = None;
                 match eixo {
                     EixoDinamica::Linhas if i < e.linhas.len() => { e.linhas.remove(i); }
                     EixoDinamica::Colunas if i < e.colunas.len() => { e.colunas.remove(i); }
@@ -585,6 +733,12 @@ impl App {
                 if !a.movido && ((p.x - inicio.x).abs() + (p.y - inicio.y).abs()) > 5.0 { a.movido = true; }
             },
             Evento::ArrastoSobre(area) => if let Some(e) = &mut self.dinamica { e.ui.sob = area; },
+            Evento::ArrastoSobreItem(item) => if let Some(e) = &mut self.dinamica {
+                match item {
+                    Some(item) => { e.ui.sob_item = Some(item); e.ui.sob = Some(item.0); }
+                    None => e.ui.sob_item = None,
+                }
+            },
             Evento::ArrastoSair(area) => if let Some(e) = &mut self.dinamica {
                 if e.ui.sob == Some(area) { e.ui.sob = None; }
             },
@@ -595,18 +749,43 @@ impl App {
                 let numerico = self.campo_numerico(a.coluna);
                 let Some(e) = &mut self.dinamica else { return Task::none() };
                 if !a.movido {
-                    // Clique sem arrastar no nome de um campo da lista = marcar/desmarcar.
-                    if a.origem.is_none() {
-                        let i = a.coluna - e.origem.c0 as usize;
-                        return self.evento_dinamica_base(Evento::Campo(i));
+                    match a.origem {
+                        // Clique sem arrastar no nome de um campo da lista = marcar/desmarcar.
+                        None => {
+                            let i = a.coluna - e.origem.c0 as usize;
+                            return self.evento_dinamica_base(Evento::Campo(i));
+                        }
+                        // Clique num campo de Filtros: a lista de itens.
+                        Some((AreaDinamica::Filtros, _)) => {
+                            let i = a.coluna.saturating_sub(e.origem.c0 as usize);
+                            return self.evento_dinamica_base(Evento::FiltroCampo(i));
+                        }
+                        // Clique num campo das outras áreas: as configurações
+                        // dele (Resumir por, Mostrar valores como, classificar),
+                        // como no Excel. Clicar de novo fecha.
+                        Some(item) => {
+                            let alvo = (e.ui.config_campo != Some(item)).then_some(item);
+                            return self.evento_dinamica_base(Evento::ConfigurarCampo(alvo));
+                        }
                     }
                 } else {
+                    // Sobre um campo da área de destino: entra antes dele.
+                    let posicao = e.ui.sob_item.filter(|(area, _)| Some(*area) == e.ui.sob).map(|(_, j)| j);
                     match (a.origem, e.ui.sob) {
-                        // Soltou na mesma área: nada muda.
-                        (Some((de, _)), Some(para)) if de == para => {}
+                        // Mesma área: reordena (soltar no vazio leva para o fim).
+                        (Some((de, i)), Some(para)) if de == para => {
+                            let fim = match para {
+                                AreaDinamica::Linhas => e.linhas.len(),
+                                AreaDinamica::Colunas => e.colunas.len(),
+                                AreaDinamica::Valores => e.valores.len(),
+                                AreaDinamica::Filtros => e.filtros.len(),
+                                AreaDinamica::Lista => 0,
+                            };
+                            e.reordenar_para(para, i, posicao.unwrap_or(fim));
+                        }
                         (origem, Some(para)) if para != AreaDinamica::Lista => {
                             if let Some((de, i)) = origem { e.tirar_de(de, i); }
-                            e.por_em(a.coluna, para, numerico);
+                            e.por_em_posicao(a.coluna, para, numerico, posicao);
                         }
                         // Fora das áreas (ou de volta na lista): sai, como no Excel.
                         (Some((de, i)), _) => e.tirar_de(de, i),
@@ -614,6 +793,7 @@ impl App {
                     }
                 }
                 e.ui.sob = None;
+                e.ui.sob_item = None;
             }
             Evento::BuscaCampo(t) => if let Some(e) = &mut self.dinamica { e.ui.busca_campo = t; },
             Evento::MenuItem(item) => if let Some(e) = &mut self.dinamica {
@@ -631,6 +811,7 @@ impl App {
                 }
             }
             Evento::Reordenar(area, i, delta) => if let Some(e) = &mut self.dinamica {
+                e.ui.config_campo = None;
                 let j = i as i64 + delta as i64;
                 if j >= 0 {
                     let j = j as usize;
@@ -673,6 +854,18 @@ impl App {
             },
             Evento::AgruparEscolher(modo) => if let Some(e) = &mut self.dinamica { e.agrupar_data = modo; },
             Evento::TemaEscolher(tema) => if let Some(e) = &mut self.dinamica { e.tema = tema.to_owned(); },
+            evento @ (Evento::ConfigurarCampo(_) | Evento::OperacaoEscolher(..) | Evento::MostrarComo(..)
+                | Evento::Ordenar(..) | Evento::AgruparCampo(..) | Evento::FaixaTexto(..)
+                | Evento::TotaisGerais { .. }) => self.evento_config_campo(evento),
+            Evento::AtualizarSozinha(v) => if let Some(e) = &mut self.dinamica { e.atualizar_sozinha = v; },
+            Evento::GraficoDinamico => return self.inserir_grafico_dinamico(),
+            Evento::NaFaixa(evento) => return self.evento_na_faixa(*evento),
+            // Tratada em `evento_dinamica` (antes de chegar aqui).
+            Evento::AtualizarAgora(_) => {}
+            Evento::FiltroNaGrade(r, c) => self.abrir_filtro_na_grade(r, c),
+            evento @ (Evento::SegmentacaoInserir | Evento::SegmentacaoCampo(_) | Evento::SegmentacaoFecharEscolha
+                | Evento::SegmentacaoItem(..) | Evento::SegmentacaoLimpar(..) | Evento::SegmentacaoRemover(..)) =>
+                self.evento_segmentacao(evento),
         }
         Task::none()
     }
@@ -794,6 +987,7 @@ impl App {
         existentes.push(meta);
         let metadados = serde_json::to_string(&existentes)
             .expect("metadados JSON em memória são serializáveis");
+        let extras = avancado::extras_vigentes(&e);
         // Escrever em uma transação, preservando o histórico de edição.
         self.workbook.editar(indice, |sheet| {
             sheet.abrir_transacao();
@@ -803,17 +997,21 @@ impl App {
             let mut escritas = 0usize;
             for (r, linha) in matriz.rows().iter().enumerate() {
                 for (c, valor) in linha.iter().enumerate() {
-                    sheet.set_cell(r as u32, inicio_col + c as u32, &texto_celula(valor));
+                    sheet.set_cell_divisao(r as u32, inicio_col + c as u32, &texto_celula(valor));
                     escritas += 1;
                     if escritas % 16_384 == 0 { sheet.compactar_lote_divisao(); }
                 }
             }
             sheet.compactar_lote_divisao();
+            config_campo::formatar_valores(sheet,
+                &Rect::new(0, inicio_col, (altura - 1) as u32, inicio_col + colunas as u32 - 1),
+                &resultado, &extras, e.valores.len());
             // Metadados e células compõem uma única operação de Ctrl+Z.
             sheet.alterar_dinamicas(Some(metadados),
                 &Rect::new(0,inicio_col,(altura-1) as u32,inicio_col+colunas as u32-1));
             sheet.fechar_transacao();
         });
+        avancado::guardar_caminhos(self, &e, &resultado);
         self.dinamica = None;
         self.folha = indice;
         self.linha_inicio = 0;
@@ -838,6 +1036,23 @@ mod testes {
     use super::*;
 
     #[test]
+    fn criar_nasce_vazia_com_o_aviso_como_no_excel() {
+        let mut app = App::default();
+        app.workbook.editar(0, |s| {
+            s.set_cell(0,0,"ID"); s.set_cell(0,1,"Vendas");
+            s.set_cell(1,0,"1"); s.set_cell(1,1,"10");
+            s.set_cell(2,0,"2"); s.set_cell(2,1,"20");
+        });
+        app.linha=0; app.coluna=0; app.fim_selecao=(2,1);
+        app.evento_dinamica(Evento::Abrir);
+        app.evento_dinamica(Evento::Criar);
+        let e = app.dinamica.as_ref().expect("painel de campos aberto");
+        assert!(e.linhas.is_empty() && e.valores.is_empty(), "nenhum campo escolhido sozinho");
+        let aviso = app.workbook.aba(app.folha).unwrap().sheet.get_raw(0, 0);
+        assert!(aviso.contains("escolha os campos"), "{aviso}");
+    }
+
+    #[test]
     fn monta_e_grava_dinamica_em_nova_aba_sem_apagar_origem() {
         let mut app = App::default();
         app.workbook.editar(0, |s| {
@@ -847,6 +1062,7 @@ mod testes {
         });
         app.linha=0; app.coluna=0; app.fim_selecao=(2,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::Criar);
         assert_eq!(app.workbook.len(), 2);
         assert_eq!(app.workbook.valor(0,1,1), Value::Number(10.));
@@ -865,6 +1081,7 @@ mod testes {
         });
         app.fim_selecao = (2,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::Criar);
         app.workbook.editar(0, |s| s.set_cell(1,1,"30"));
         app.evento_dinamica(Evento::Atualizar);
@@ -882,6 +1099,7 @@ mod testes {
         });
         app.fim_selecao = (2, 1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::Criar);
         assert_eq!(app.workbook.valor(1, 1, 1), Value::Number(30.));
         app.workbook.editar(1, |sheet| sheet.set_cell(3, 0, "Dado que deve ser preservado"));
@@ -913,6 +1131,7 @@ mod testes {
         });
         app.fim_selecao=(1,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::Destino);
         app.evento_dinamica(Evento::Criar);
         assert_eq!(app.workbook.len(),1);
@@ -929,6 +1148,7 @@ mod testes {
         });
         app.fim_selecao=(1,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         let e = app.dinamica.as_mut().unwrap();
         e.campo_filtro = Some(0);
         e.filtro_cortado = true;
@@ -947,6 +1167,7 @@ mod testes {
         });
         app.fim_selecao=(1,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::Destino);
         app.evento_dinamica(Evento::Criar);
         assert_eq!(app.workbook.len(), 1);
@@ -958,6 +1179,7 @@ mod testes {
     fn selecao_sem_dados_recusada_e_modo_agrupamento_percorre_opcoes() {
         let mut app=App::default();
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         assert!(app.dinamica.is_none());
         assert!(app.status.contains("Selecione"));
         assert_eq!(proximo_agrupamento(Some(AgruparData::Ano)),None);
@@ -973,6 +1195,7 @@ mod testes {
         });
         app.fim_selecao = (2,1);
         let _ = app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         assert!(app.dinamica.as_ref().unwrap().fase == Fase::Origem);
         let _ = app.evento_dinamica(Evento::Criar); // OK do primeiro passo
         let e = app.dinamica.as_ref().expect("painel de campos aberto");

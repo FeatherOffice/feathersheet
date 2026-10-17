@@ -30,8 +30,7 @@ impl App {
                 TETO_CTRL_ENTER);
             return true;
         }
-        let texto = feathersheet_core::celulas::locale::normalizar_formula(
-            &self.edicao, &self.regionalizacao());
+        let texto = self.formula_para_gravar(&self.edicao, "");
         let formula = texto.starts_with('=');
         self.editor_formula.encerrar();
         self.edicao_inline = None;

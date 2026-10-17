@@ -271,7 +271,7 @@ fn visiveis_ao_expandir(eixo: &EixoTopicos, nivel: u8, inicio: u32, fim: u32, sa
 mod testes {
     use super::*;
 
-    fn oculta(s: &Sheet, r: u32) -> bool { s.row_heights.get(&r) == Some(&0) }
+    fn oculta(s: &Sheet, r: u32) -> bool { s.linha_oculta(r) }
 
     #[test]
     fn agrupar_recolher_e_expandir_desfazem_num_passo() {

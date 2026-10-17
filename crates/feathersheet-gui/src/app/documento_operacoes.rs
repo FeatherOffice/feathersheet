@@ -2,6 +2,21 @@
 use super::*;
 
 impl App {
+    /// A fórmula como a barra mostra: separadores e nomes das funções no
+    /// idioma da interface (de-para de `funcoes.<idioma>.json`).
+    pub(super) fn formula_para_mostrar(&self, raw: &str) -> String {
+        let nomes = crate::idioma::mostrar_formula(raw);
+        feathersheet_core::celulas::locale::apresentar_formula(&nomes, &self.regionalizacao())
+    }
+
+    /// O texto editado para gravar. Sem mudança em relação ao que a barra
+    /// mostrou, fica o original (trocar SUM por SOMA na tela não é edição).
+    pub(super) fn formula_para_gravar(&self, editado: &str, antes: &str) -> String {
+        if !antes.is_empty() && self.formula_para_mostrar(antes) == editado { return antes.to_owned(); }
+        let motor = crate::idioma::formula_para_motor(editado);
+        feathersheet_core::celulas::locale::normalizar_formula(&motor, &self.regionalizacao())
+    }
+
     pub(super) fn regionalizacao(&self) -> feathersheet_core::LocaleConfig {
         feathersheet_core::LocaleConfig::embutida(&self.config.idioma)
             .unwrap_or_else(feathersheet_core::LocaleConfig::pt_br)
@@ -54,13 +69,16 @@ impl App {
                 .and_then(|t|t["nome"].as_str()).unwrap_or("").to_owned();
             self.tabela_editando=novo_id;
         }
+        if self.faixa_ativa == AbaFaixa::Dinamica && !self.dinamica_na_faixa() {
+            self.faixa_ativa = AbaFaixa::Inicio;
+        }
         if self.faixa_ativa == AbaFaixa::Tabela && self.tabela_editando.is_none() {
             self.faixa_ativa = AbaFaixa::Inicio;
         }
         // Fórmula oculta (Formatar células → Proteção) com a aba protegida: a barra fica vazia.
         self.edicao = self.workbook.aba(self.folha)
             .filter(|a| !a.sheet.formula_oculta(self.linha, self.coluna))
-            .map(|a| feathersheet_core::celulas::locale::apresentar_formula(&a.sheet.get_raw(self.linha, self.coluna), &self.regionalizacao())).unwrap_or_default();
+            .map(|a| self.formula_para_mostrar(&a.sheet.get_raw(self.linha, self.coluna))).unwrap_or_default();
         self.endereco = cell_name(self.linha, self.coluna);
         self.endereco_digitado = false;
         self.manter_selecao_a_vista(clique);
@@ -169,7 +187,48 @@ impl App {
     /// bloco — sem montar o texto de cada célula no caminho.
     pub(super) fn destino_ctrl_seta_de(&mut self, origem:(u32,u32), dr:i32, dc:i32)->(u32,u32) {
         let Some(aba)=self.workbook.aba_mut(self.folha) else {return origem};
-        aba.sheet.borda_dos_dados(origem.0, origem.1, dr, dc, MAX_ROWS-1, MAX_COLS-1)
+        // Ocultas até o fim: o salto para na última visível (Ctrl+↓ não
+        // some na faixa oculta).
+        let ultima_l=aba.sheet.linhas_ocultas_desde.map_or(MAX_ROWS-1, |n| n.saturating_sub(1)).max(origem.0);
+        let ultima_c=aba.sheet.colunas_ocultas_desde.map_or(MAX_COLS-1, |n| n.saturating_sub(1)).max(origem.1);
+        aba.sheet.borda_dos_dados(origem.0, origem.1, dr, dc, ultima_l, ultima_c)
+    }
+
+    /// Uma seta: a próxima linha/coluna visível na direção, pulando as
+    /// ocultas como o Excel. Sem visível adiante, fica onde está.
+    pub(super) fn passo_visivel(&self, origem:(u32,u32), dr:i64, dc:i64)->(u32,u32) {
+        let andar=|v:u32, d:i64, limite:u32, oculta:&dyn Fn(u32)->bool| -> u32 {
+            if d==0 { return v; }
+            let mut alvo=(v as i64+d).clamp(0, limite as i64-1) as u32;
+            while alvo!=v && oculta(alvo) {
+                let proximo=(alvo as i64+d.signum()).clamp(0, limite as i64-1) as u32;
+                if proximo==alvo { return v; }
+                alvo=proximo;
+            }
+            if oculta(alvo) && alvo!=v { v } else { alvo }
+        };
+        let nada=|_:u32| false;
+        let Some(aba)=self.workbook.aba(self.folha) else {
+            return (andar(origem.0, dr, MAX_ROWS, &nada), andar(origem.1, dc, MAX_COLS, &nada));
+        };
+        let s=&aba.sheet;
+        // A faixa oculta do fim encerra a caminhada de uma vez (não percorre
+        // 100 milhões de linhas uma a uma). Já dentro dela (Ir para), anda
+        // sem pular.
+        let (limite_l, pula_l)=match s.linhas_ocultas_desde {
+            Some(n) if origem.0<n => (n, true),
+            Some(_) => (MAX_ROWS, false),
+            None => (MAX_ROWS, true),
+        };
+        let (limite_c, pula_c)=match s.colunas_ocultas_desde {
+            Some(n) if origem.1<n => (n, true),
+            Some(_) => (MAX_COLS, false),
+            None => (MAX_COLS, true),
+        };
+        let linha_oculta=|r:u32| pula_l && s.linha_oculta(r);
+        let coluna_oculta=|c:u32| pula_c && s.coluna_oculta(c);
+        (andar(origem.0, dr, limite_l, &linha_oculta),
+         andar(origem.1, dc, limite_c, &coluna_oculta))
     }
 
     pub(super) fn copiar_selecao(&mut self) -> Option<String> {
@@ -309,7 +368,7 @@ impl App {
             .unwrap_or((self.folha, self.linha, self.coluna));
         let antes = self.workbook.aba(folha)
             .map(|a| a.sheet.get_raw(linha, coluna)).unwrap_or_default();
-        let canonica = feathersheet_core::celulas::locale::normalizar_formula(&self.edicao, &self.regionalizacao());
+        let canonica = self.formula_para_gravar(&self.edicao, &antes);
         // Valor fora da validação abre o alerta de erro (Parar, Aviso ou
         // Informações); a edição continua até a resposta. `validacao_aceita`
         // é o Sim/OK do alerta: grava sem perguntar de novo.
@@ -330,6 +389,8 @@ impl App {
         self.edicao_inline = None;
         self.multilinha = None;
         if antes != canonica {
+            // Digitar numa célula tira a marca do Ctrl+C, como no Excel.
+            self.marca_copia = None;
             // Dimensionamento explícito: textos Alt+Enter não podem ocupar a
             // linha seguinte. Respeita altura personalizada se já for maior.
             let linhas = canonica.split('\n').count();
@@ -435,6 +496,7 @@ impl App {
         self.tabela_area = None;
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_ascii_lowercase();
         self.workbook = workbook;
+        self.vinculos_novo_documento();
         self.recarregar_macros();
         self.inspecoes.clear();
         self.eixos_grade.borrow_mut().limpar();
@@ -675,6 +737,7 @@ impl App {
                 self.estatisticas_geracao = self.estatisticas_geracao.wrapping_add(1);
                 self.estatisticas = None;
                 self.workbook = Workbook::new();
+                self.vinculos_novo_documento();
                 self.recarregar_macros();
                 self.inspecoes.clear();
                 self.eixos_grade.borrow_mut().limpar();
@@ -728,6 +791,7 @@ impl App {
                     // Mesmo fluxo de Novo (zera estado da pasta); depois entra o conteúdo do modelo.
                     let _ = self.executar_pendente(Pendente::Novo);
                     self.workbook = modelo;
+                    self.vinculos_novo_documento();
                     self.recarregar_macros();
                     for &(aba, linhas, colunas) in super::menu_principal::modelos::congelamento(id) {
                         if let Some(a) = self.workbook.aba(aba) { self.congelados.insert(a.id, (linhas, colunas)); }
@@ -743,7 +807,7 @@ impl App {
                 }
             },
             Pendente::RecuperarTemporario => self.dialogo_recuperar_temporario(),
-            Pendente::Sair => { mcp_vivo::encerrar(); iced::exit() }
+            Pendente::Sair => { mcp_vivo::encerrar(); vinculos::encerrar(); iced::exit() }
         }
     }
     pub(super) fn proteger(&mut self, alvo: Pendente) -> Task<Msg> {
@@ -759,33 +823,14 @@ impl App {
             Task::none()
         } else { self.executar_pendente(alvo) }
     }
+    /// Só o diálogo: a leitura começa em `Msg::ArquivoEscolhido`, depois de
+    /// sair da tela inicial, para a barra de progresso do rodapé aparecer.
     pub(super) fn dialogo_abrir(&self) -> Task<Msg> {
-        let separador = self.config.separador_csv();
-        let limite_gb = self.config.limite_memoria_gb;
         Task::perform(async move {
-            let file = rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao())
+            rfd::AsyncFileDialog::new().set_directory(dialogos::pasta_padrao())
                 .add_filter(tr!("Planilhas"), &["fshz", "xlsx", "xlsm", "csv", "tsv", "parquet"])
-                .pick_file().await;
-            let Some(file) = file else { return Ok(None); };
-            let path = file.path().to_path_buf();
-            // CSV/XLSX grandes eram decodificados dentro de update(), travando a janela.
-            // Trabalhar fora da thread do Iced também mantém a barra responsiva.
-            match tokio::task::spawn_blocking(move || {
-                let inicio = Instant::now();
-                feathersheet_io::progresso::comecar(&path);
-                limite_memoria::verificar(limite_gb)?;
-                let (workbook, folha) = Self::decodificar_caminho(&path, separador)?;
-                limite_memoria::verificar(limite_gb)?;
-                Ok::<PastaLida, String>(PastaLida {
-                    caminho: path,
-                    dados: Arc::new(Mutex::new(Some((workbook, folha)))),
-                    ms: inicio.elapsed().as_millis().min(u128::from(u64::MAX)) as u64,
-                })
-            }).await {
-                Ok(resultado) => resultado.map(Some),
-                Err(e) => Err(trf!("Falha ao carregar arquivo: {e}")),
-            }
-        }, Msg::Aberto)
+                .pick_file().await.map(|file| file.path().to_path_buf())
+        }, Msg::ArquivoEscolhido)
     }
     pub(super) fn tarefa_abrir_recente(path: PathBuf, separador: Option<char>) -> Task<Msg> {
         // Usar a preferência persistida evita alterar os despachos antigos.
@@ -804,7 +849,7 @@ impl App {
                 })
             }).await {
                 Ok(resultado) => resultado.map(Some),
-                Err(e) => Err(trf!("Falha ao carregar recente: {e}")),
+                Err(e) => Err(trf!("Falha ao carregar arquivo: {e}")),
             }
         }, Msg::Aberto)
     }

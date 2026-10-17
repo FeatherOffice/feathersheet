@@ -100,7 +100,23 @@ pub(super) fn ler_estado(app: &App, destino: usize, meta: &Json) -> Result<Estad
         fase: Fase::Campos, avancado: false,
         ui: Default::default(),
         extras_campos, extras: serde_json::from_value(meta["extras"].clone()).unwrap_or_default(),
+        atualizar_sozinha: meta["atualizarSozinha"].as_bool().unwrap_or(false),
+        com_grafico: false,
+        segmentacoes: meta["segmentacoes"].as_array().map(|lista| lista.iter().filter_map(|s| {
+            let coluna = usize::try_from(s["col"].as_u64()?).ok()?;
+            let sel = s["sel"].as_array()?.iter().filter_map(|v| v.as_str().map(str::to_owned)).collect();
+            Some((coluna, sel))
+        }).collect()).unwrap_or_default(),
     })
+}
+
+/// A dinâmica cujo resultado contém (`r`, `c`) da aba `aba`, se houver.
+pub(super) fn localizar_na_celula(app: &App, aba: usize, r: u32, c: u32) -> Option<(usize, Json)> {
+    let texto = app.workbook.aba(aba)?.sheet.dn.as_deref()?;
+    let definicoes: Vec<Json> = serde_json::from_str(texto).ok()?;
+    definicoes.into_iter().find(|d| d.get("areaResultado").and_then(retangulo_json)
+        .is_some_and(|a| r >= a.r0 && r <= a.r1 && c >= a.c0 && c <= a.c1))
+        .map(|d| (aba, d))
 }
 
 /// Permite abrir um resultado existente mesmo depois de salvar e reabrir a pasta.
@@ -167,6 +183,47 @@ impl App {
         }
     }
 
+    /// Dinâmicas com "Atualizar sozinha": se a aba de origem mudou desde a
+    /// última conta, recalcula (pulso de 1 s). Nunca com o painel da
+    /// dinâmica aberto nem no meio de uma edição, e sem tirar a pessoa da
+    /// aba e da seleção em que está.
+    pub(in crate::app) fn atualizar_dinamicas_sozinhas(&mut self) {
+        if self.dinamica.is_some() || self.editor_formula.ativo { return; }
+        let mut pendentes: Vec<(usize, Json, usize, String)> = Vec::new();
+        for destino in 0..self.workbook.len() {
+            let Some(txt) = self.workbook.aba(destino).and_then(|a| a.sheet.dn.as_deref()) else { continue };
+            // A lista pode ser grande (o mapa de cada linha): só lê se precisa.
+            if !txt.contains("\"atualizarSozinha\":true") { continue; }
+            let Ok(lista) = serde_json::from_str::<Vec<Json>>(txt) else { continue };
+            for meta in lista {
+                if meta["atualizarSozinha"].as_bool() != Some(true) { continue; }
+                let (Some(id), Some(fonte)) = (meta["id"].as_str(), meta["fonte"]["aba"].as_str()) else { continue };
+                let Some(origem) = self.workbook.nomes().iter().position(|n| n == fonte) else { continue };
+                let versao = self.workbook.aba(origem).map_or(0, |a| a.versao);
+                match self.versoes_origem_dinamicas.get(id).copied() {
+                    Some(v) if v == versao => {}
+                    // Primeira vez: a conta gravada vale para a origem de agora.
+                    None => { self.versoes_origem_dinamicas.insert(id.to_owned(), versao); }
+                    Some(_) => pendentes.push((destino, meta.clone(), origem, id.to_owned())),
+                }
+            }
+        }
+        for (destino, meta, origem, id) in pendentes {
+            let lugar = (self.folha, self.linha, self.coluna, self.linha_inicio, self.coluna_inicio,
+                self.fim_selecao, self.endereco.clone(), self.status.clone());
+            let feito = ler_estado(self, destino, &meta).and_then(|e| self.aplicar_estado_na_dinamica(destino, &e));
+            (self.folha, self.linha, self.coluna, self.linha_inicio, self.coluna_inicio,
+                self.fim_selecao, self.endereco, self.status) = lugar;
+            if feito.is_ok() {
+                feathersheet_core::diario::anotar(trf!("[dinâmica] {id} atualizada sozinha"));
+            }
+            // Com ou sem sucesso, só tenta de novo na próxima mudança da origem
+            // (a escrita do resultado também pode ter mudado a versão dela).
+            let versao = self.workbook.aba(origem).map_or(0, |a| a.versao);
+            self.versoes_origem_dinamicas.insert(id, versao);
+        }
+    }
+
     pub(super) fn salvar_edicao_dinamica(&mut self, e: &Estado, id: &str) {
         let destino = (0..self.workbook.len()).find(|&i| self.workbook.aba(i)
             .and_then(|a| a.sheet.dn.as_deref())
@@ -194,18 +251,29 @@ impl App {
             .ok_or(tr!("A dinâmica selecionada foi removida."))?;
         let antigo = retangulo_json(&lista[pos]["areaResultado"])
             .ok_or(tr!("Área do resultado anterior inválida."))?;
+        let inicio = std::time::Instant::now();
         let resultado = avancado::calcular(self,e)?;
+        let conta_ms = inicio.elapsed().as_millis();
         let altura = resultado.matriz.height();
         let largura = resultado.matriz.rows().iter().map(Vec::len).max().unwrap_or(0);
         if altura == 0 || largura == 0 { return Err(tr!("Nenhum resultado para a dinâmica.").into()); }
-        let fim_linha = (antigo.r0 as usize).checked_add(altura)
+        // Filtros de relatório na grade, acima da tabela (como o Excel):
+        // uma linha por campo e uma em branco; sem espaço, a tabela desce.
+        let antiga_af = lista[pos].get("areaFiltros").and_then(retangulo_json);
+        // Só os filtros de relatório (campo na área Filtros); o filtro de itens
+        // de um campo de Linhas/Colunas fica no próprio campo.
+        let paginas = e.filtros_de_relatorio();
+        let n_filtros = paginas.len() as u32;
+        let inicio_r = if n_filtros > 0 { antigo.r0.max(n_filtros + 1) } else { antigo.r0 };
+        let nova_af = (n_filtros > 0).then(|| Rect::new(inicio_r - n_filtros - 1, antigo.c0, inicio_r - 2, antigo.c0 + 1));
+        let fim_linha = (inicio_r as usize).checked_add(altura)
             .ok_or(tr!("Linhas de destino fora dos limites."))?;
         let fim_coluna = (antigo.c0 as usize).checked_add(largura)
             .ok_or(tr!("Colunas de destino fora dos limites."))?;
         if fim_linha > MAX_ROWS as usize || fim_coluna > MAX_COLS as usize {
             return Err(tr!("O resultado excederia os limites da planilha.").into());
         }
-        let nova = Rect::new(antigo.r0, antigo.c0, fim_linha as u32 - 1, fim_coluna as u32 - 1);
+        let nova = Rect::new(inicio_r, antigo.c0, fim_linha as u32 - 1, fim_coluna as u32 - 1);
         // Não permitir que o crescimento toque em outra tabela dinâmica.
         if lista.iter().enumerate().any(|(i, d)| i != pos &&
             d.get("areaResultado").and_then(retangulo_json).is_some_and(|r|
@@ -225,41 +293,95 @@ impl App {
                 }
             }
         }
+        if let Some(af) = &nova_af {
+            for r in af.r0..=af.r1 {
+                for c in af.c0..=af.c1 {
+                    let livre = antigo.contains(r, c) || antiga_af.as_ref().is_some_and(|a| a.contains(r, c))
+                        || aba.get_raw(r, c).is_empty();
+                    if !livre {
+                        return Err(tr!("Não há espaço livre acima da dinâmica para os filtros; não houve alteração.").into());
+                    }
+                }
+            }
+        }
+        let celulas_filtro: Vec<(String, String)> = paginas.iter().map(|f| {
+            let item = if f.excluir && f.valores.is_empty() { tr!("(Tudo)").to_string() }
+                else if !f.excluir && f.valores.len() == 1 { f.valores.iter().next().cloned().unwrap_or_default() }
+                else { tr!("(Vários itens)").to_string() };
+            (e.nome_da_coluna(f.coluna), item)
+        }).collect();
         let m = &mut lista[pos];
         m["fonte"] = json!({"aba":origem_nome,"area":{
             "r0":e.origem.r0,"r1":e.origem.r1,"c0":e.origem.c0,"c1":e.origem.c1
         }});
         avancado::gravar_campos(m,e);
         m["areaResultado"] = json!({"r0":nova.r0,"c0":nova.c0,"r1":nova.r1,"c1":nova.c1});
+        m["areaFiltros"] = nova_af.as_ref().map_or(Json::Null, |a| json!({"r0":a.r0,"c0":a.c0,"r1":a.r1,"c1":a.c1}));
+        // Funil cheio na grade: o filtro de relatório esconde algo.
+        m["filtrosPagina"] = json!(paginas.iter().map(|f| !(f.excluir && f.valores.is_empty())).collect::<Vec<_>>());
         avancado::gravar_opcoes(m,e,avancado::mapa_json(&resultado.linhas, resultado.colunas_de_rotulo));
         let gravar = serde_json::to_string(&lista)
             .map_err(|_| tr!("Falha ao serializar as opções da dinâmica."))?;
+        let extras = avancado::extras_vigentes(e);
         self.workbook.editar(destino, |sheet| {
             sheet.abrir_transacao();
             let mut escritas = 0usize;
             for r in antigo.r0..=antigo.r1 {
                 for c in antigo.c0..=antigo.c1 {
                     // Limpar apenas células ocupadas evita criar snapshots
-                    // desnecessários para espaços em branco do resultado.
-                    if !sheet.get_raw(r,c).is_empty() {
+                    // desnecessários para espaços em branco do resultado. O
+                    // que fica dentro da área nova é sobrescrito logo abaixo.
+                    if !nova.contains(r, c) && !sheet.get_raw(r,c).is_empty() {
                         sheet.set_cell(r,c,"");
                         escritas += 1;
                         if escritas % 16_384 == 0 { sheet.compactar_lote_divisao(); }
                     }
                 }
             }
+            // Caminho rápido do Texto para Colunas: analisa o texto uma vez e
+            // grava direto, com o mesmo passo de Ctrl+Z (era 1 milhão de
+            // `set_cell` completos numa dinâmica de 1 milhão de linhas).
             for (i,row) in resultado.matriz.rows().iter().enumerate() {
-                for (j,v) in row.iter().enumerate() {
-                    sheet.set_cell(nova.r0+i as u32, nova.c0+j as u32,&texto_celula(v));
+                let r = nova.r0 + i as u32;
+                for j in 0..largura {
+                    let c = nova.c0 + j as u32;
+                    match row.get(j) {
+                        Some(v) => sheet.set_cell_divisao(r, c, &texto_celula(v)),
+                        None if !sheet.get_raw(r, c).is_empty() => sheet.set_cell(r, c, ""),
+                        None => continue,
+                    }
                     escritas += 1;
                     if escritas % 16_384 == 0 { sheet.compactar_lote_divisao(); }
                 }
             }
+            // Filtros acima da tabela: limpa os de antes e escreve os de agora.
+            if let Some(af) = &antiga_af {
+                for r in af.r0..=af.r1 {
+                    for c in af.c0..=af.c1 {
+                        if !nova.contains(r, c) && !sheet.get_raw(r, c).is_empty() { sheet.set_cell(r, c, ""); }
+                    }
+                }
+            }
+            if let Some(af) = &nova_af {
+                for (i, (campo, item)) in celulas_filtro.iter().enumerate() {
+                    sheet.set_cell(af.r0 + i as u32, af.c0, &texto_celula(&Value::Text(campo.clone())));
+                    sheet.set_cell(af.r0 + i as u32, af.c0 + 1, &texto_celula(&Value::Text(item.clone())));
+                }
+            }
             sheet.compactar_lote_divisao();
+            super::config_campo::formatar_valores(sheet, &nova, &resultado, &extras, e.valores.len());
             sheet.alterar_dinamicas(Some(gravar), &nova);
             sheet.fechar_transacao();
         });
+        avancado::guardar_caminhos(self, e, &resultado);
+        let total_ms = inicio.elapsed().as_millis();
+        let linhas_origem = e.origem.r1 - e.origem.r0;
+        feathersheet_core::diario::anotar(trf!(
+            "[dinâmica] conta {conta_ms} ms e gravação {} ms ({linhas_origem} linhas da origem, resultado {altura} × {largura})",
+            total_ms - conta_ms));
         self.alterado = true;
+        let meta_novo = lista[pos].clone();
+        self.seguir_graficos_dinamicos(destino, &meta_novo);
         self.folha = destino;
         self.linha_inicio = nova.r0;
         self.coluna_inicio = nova.c0;
@@ -287,6 +409,7 @@ mod testes {
         });
         app.fim_selecao=(3,2);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::Linha(1));
         app.evento_dinamica(Evento::Layout);
         app.evento_dinamica(Evento::Criar);
@@ -383,6 +506,7 @@ mod testes {
         });
         app.fim_selecao=(3,2);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::NomeCalculado("Receita".into()));
         app.evento_dinamica(Evento::FormulaCalculado("[Preço] * Quantidade".into()));
         app.evento_dinamica(Evento::AdicionarCalculado);
@@ -418,6 +542,7 @@ mod testes {
         });
         app.fim_selecao=(2,1);
         app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
         app.evento_dinamica(Evento::Criar);
         app.evento_dinamica(Evento::Editar);
         assert!(app.dinamica.as_ref().unwrap().editando.is_some());
@@ -426,4 +551,33 @@ mod testes {
         assert_eq!(app.workbook.aba(1).unwrap().sheet.dn.as_ref()
             .unwrap().contains("compacto"),true);
     }
+
+    #[test]
+    fn dinamica_com_atualizar_sozinha_acompanha_a_origem() {
+        let mut app = App::default();
+        app.workbook.editar(0, |s| {
+            s.set_cell(0, 0, "Região"); s.set_cell(0, 1, "Valor");
+            s.set_cell(1, 0, "Norte"); s.set_cell(1, 1, "10");
+            s.set_cell(2, 0, "Sul"); s.set_cell(2, 1, "30");
+        });
+        app.fim_selecao = (2, 1);
+        app.evento_dinamica(Evento::Abrir);
+        crate::app::dinamica_ui::campos_de_antes(&mut app);
+        app.evento_dinamica(Evento::AtualizarSozinha(true));
+        app.evento_dinamica(Evento::Criar);
+        app.dinamica = None;
+        let destino = app.folha;
+        let norte = |app: &App| {
+            let s = &app.workbook.aba(destino).unwrap().sheet;
+            (0..6).find(|&r| s.get_raw(r, 0) == "Norte").map(|r| s.get_raw(r, 1))
+        };
+        assert_eq!(norte(&app).as_deref(), Some("10"));
+        app.atualizar_dinamicas_sozinhas(); // primeira vez só anota a versão
+        app.folha = 0;
+        app.workbook.escrever_celula(0, 1, 1, "15".into());
+        app.atualizar_dinamicas_sozinhas();
+        assert_eq!(norte(&app).as_deref(), Some("15"));
+        assert_eq!(app.folha, 0, "não tira a pessoa da aba em que está");
+    }
 }
+

@@ -94,6 +94,13 @@ pub struct SheetJson {
     /// `sheetFormatPr/@defaultColWidth`, já em pixels.
     #[serde(skip)]
     pub largura_padrao: Option<i64>,
+    /// `sheetFormatPr zeroHeight="1"`: linhas não listadas no arquivo ficam
+    /// ocultas; vira "ocultas da linha seguinte à última visível até o fim".
+    #[serde(skip)]
+    pub linhas_ocultas_desde: Option<u32>,
+    /// `<col min=".." max="16384" hidden="1">`: ocultas até a última coluna.
+    #[serde(skip)]
+    pub colunas_ocultas_desde: Option<u32>,
     /// Estrutura de tópicos: `outlineLevel` e `collapsed` das linhas e colunas.
     #[serde(skip)]
     pub topicos: feathersheet_core::planilha::sheet::topicos::Topicos,
@@ -376,12 +383,14 @@ fn read_sheet_com_links_limite(
     // como arvore de XML (o maior pico de memoria no XLSX comprimido).
     let mut shared = HashMap::<String, SharedFormula>::new();
     let mut alturas = Vec::<AlturaLida>::new();
+    let mut ultima_visivel = -1_i64;
     let mut excedeu = false;
     let root = parse_xml_linhas(xml, &mut |row| {
         if excedeu { return; }
         let Some(row_index) = row.attr("r").and_then(|s| s.parse::<i64>().ok())
             .map(|r| r - 1) else { return };
         let hidden = matches!(row.attr("hidden"), Some("1") | Some("true"));
+        if !hidden { ultima_visivel = ultima_visivel.max(row_index); }
         let ht = row.attr("ht").and_then(|s| s.parse::<f64>().ok());
         let propria = matches!(row.attr("customHeight"), Some("1") | Some("true"));
         let (nivel, recolhida) = topico_do_no(row);
@@ -411,7 +420,7 @@ fn read_sheet_com_links_limite(
             limite,
         ));
     }
-    Ok(aplicar_metadados(&root, rels_da_aba, alturas, sheet, xfs))
+    Ok(aplicar_metadados(&root, rels_da_aba, alturas, ultima_visivel, sheet, xfs))
 }
 
 /// Finaliza os metadados sem exigir que todas as células fiquem num HashMap.
@@ -421,10 +430,11 @@ pub(super) fn ler_metadados(
     root: &XmlNode,
     rels_da_aba: &HashMap<String, String>,
     alturas: Vec<AlturaLida>,
+    ultima_visivel: i64,
     xfs: &[XfStyle],
 ) -> SheetJson {
     aplicar_metadados(
-        root, rels_da_aba, alturas,
+        root, rels_da_aba, alturas, ultima_visivel,
         SheetJson { name: nome.to_string(), ..Default::default() },
         xfs,
     )
@@ -434,6 +444,7 @@ fn aplicar_metadados(
     root: &XmlNode,
     rels_da_aba: &HashMap<String, String>,
     alturas: Vec<AlturaLida>,
+    ultima_visivel: i64,
     mut sheet: SheetJson,
     xfs: &[XfStyle],
 ) -> SheetJson {
@@ -452,7 +463,7 @@ fn aplicar_metadados(
     sheet.protecao = root.child("sheetProtection").and_then(ler_protecao);
     let (validacoes, fora) = super::validacoes::ler(root);
     if fora > 0 {
-        feathersheet_core::diario::anotar(format!("[abrir] {fora} validação(ões) de tipo ainda sem regra no FeatherSheet (tamanho do texto, hora ou personalizada) ficaram de fora"));
+        feathersheet_core::anotar!("[abrir] {fora} validação(ões) de tipo ainda sem regra no FeatherSheet (tamanho do texto, hora ou personalizada) ficaram de fora");
     }
     sheet.validacoes = validacoes;
 
@@ -462,6 +473,12 @@ fn aplicar_metadados(
         .and_then(|s| s.parse::<f64>().ok())
         .filter(|w| *w > 0.0)
         .map(widths_to_px);
+
+    // `zeroHeight`: o Excel lista toda linha visível; as demais, até o fim,
+    // estão ocultas ("ocultar da linha 30 até o fim").
+    if verdade(root.child("sheetFormatPr").and_then(|f| f.attr("zeroHeight"))) {
+        sheet.linhas_ocultas_desde = Some((ultima_visivel + 1).clamp(0, i64::from(feathersheet_core::MAX_ROWS) - 1) as u32);
+    }
 
     if let Some(cols) = root.child("cols") {
         for col in cols.children_named("col") {
@@ -479,6 +496,12 @@ fn aplicar_metadados(
             // Coluna oculta = largura 0 (como a linha oculta). O Excel oculta
             // de J até XFD numa linha só: aqui não há o teto de 1000.
             if verdade(col.attr("hidden")) {
+                // Até a última coluna: um número só, sem 16 mil larguras.
+                if max == MAX_COLS - 1 && min > 0 {
+                    let desde = min as u32;
+                    sheet.colunas_ocultas_desde = Some(sheet.colunas_ocultas_desde.map_or(desde, |d| d.min(desde)));
+                    continue;
+                }
                 for c in min.max(0)..=max {
                     sheet.col_widths.push((c, 0));
                 }
@@ -547,10 +570,10 @@ fn aplicar_metadados(
     // Formatação condicional: `<conditionalFormatting>` e o x14 do `<extLst>`.
     let condicional = super::condicional::ler(root, xfs);
     if !condicional.fora.is_empty() {
-        feathersheet_core::diario::anotar(format!(
+        feathersheet_core::anotar!(
             "[abrir] {} de {} regra(s) de formatação condicional ficaram de fora: {}",
             condicional.fora.len(), condicional.total, condicional.fora.join("; ")
-        ));
+        );
     }
     sheet.rules = condicional.regras;
 

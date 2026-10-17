@@ -52,70 +52,9 @@ impl Estado {
     }
 }
 
-/// Formatação pt-BR sem dependência adicional, agrupando milhares e até
-/// duas casas decimais (equivalente ao Intl.NumberFormat do TypeScript).
-fn formatar_numero(v: f64) -> String {
-    if !v.is_finite() {
-        return v.to_string();
-    }
-    // O Intl arredonda meio para longe de zero; o `{:.2}` do Rust arredonda
-    // meio para o par. Arredondar antes evita 0,125 virar "0,12".
-    let arredondado = (v.abs() * 100.0).round() / 100.0;
-    if arredondado == 0.0 {
-        return "0".into();
-    }
-    let positivo = format!("{:.2}", arredondado);
-    let (inteiro, dec) = positivo.split_once('.').unwrap_or((&positivo, "00"));
-    let mut milhar = String::with_capacity(inteiro.len() + inteiro.len() / 3);
-    for (i, c) in inteiro.chars().enumerate() {
-        if i > 0 && (inteiro.len() - i) % 3 == 0 {
-            milhar.push('.');
-        }
-        milhar.push(c);
-    }
-    let decimais = dec.trim_end_matches('0');
-    let prefixo = if v < 0. { "-" } else { "" };
-    if decimais.is_empty() {
-        format!("{prefixo}{milhar}")
-    } else {
-        format!("{prefixo}{milhar},{decimais}")
-    }
-}
-fn formatar_inteiro(v: u64) -> String {
-    let s = v.to_string();
-    let mut out = String::new();
-    for (i, c) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i) % 3 == 0 {
-            out.push('.');
-        }
-        out.push(c);
-    }
-    out
-}
-/// Texto do rodapé. Como no TS, a contagem vem sempre; soma, média, mín e máx
-/// só quando há números. Na barra estreita, as estatísticas da frente somem
-/// primeiro (adaptação de largura própria do Rust, para não cortar a tela).
-fn texto_resumo(c: &ContagemSelecao, largura: f32) -> String {
-    let qtd = trf!("Contagem: {}", formatar_inteiro(c.count));
-    if c.numbers == 0 {
-        return qtd;
-    }
-    let soma = trf!("Soma: {}", formatar_numero(c.sum));
-    if largura < 790. {
-        return qtd;
-    }
-    if largura < 1080. {
-        return format!("{soma}     {qtd}");
-    }
-    let media = trf!("Média: {}", formatar_numero(c.media().unwrap_or(0.)));
-    if largura < 1450. {
-        return format!("{soma}     {media}     {qtd}");
-    }
-    trf!(
-        "{soma}     {media}     Mín: {}     Máx: {}     {qtd}",
-        formatar_numero(c.min),
-        formatar_numero(c.max)
-    )
+/// Células da seleção (a área inteira, mesmo fora da parte usada).
+fn celulas_da_area(area: &Rect) -> u64 {
+    (area.r1 as u64 - area.r0 as u64 + 1) * (area.c1 as u64 - area.c0 as u64 + 1)
 }
 
 impl App {
@@ -227,6 +166,15 @@ impl App {
         }
     }
 
+    /// As contas da seleção atual e o número de células da área (para o
+    /// menu Personalizar barra de status mostrar os valores ao lado).
+    pub(super) fn contas_da_selecao(&self) -> (ContagemSelecao, u64) {
+        self.sincronizar_resumo();
+        let estado = self.resumo_selecao.borrow();
+        let celulas = estado.chave.as_ref().map_or(0, |c| celulas_da_area(&c.area));
+        (estado.conta.clone(), celulas)
+    }
+
     /// Resumo curto na barra existente de 36 px, à esquerda do zoom, com o
     /// aviso de erro da célula ativa à direita (clicar abre a explicação).
     pub(super) fn view_resumo_selecao(&self) -> Element<'_, Msg> {
@@ -235,24 +183,28 @@ impl App {
         {
             return container(text(tr!("Convertendo texto em colunas…")).size(11)
                 .color(COR_TEXTO_MUTED()))
-                .padding([0, 8]).width(Length::Fill).into();
+                .padding([0, 8]).into();
         }
         self.sincronizar_resumo();
         self.sincronizar_erro();
         let largura = self.tamanho_principal.width;
         let estado = self.resumo_selecao.borrow();
+        let celulas = estado.chave.as_ref().map_or(0, |c| celulas_da_area(&c.area));
+        let contas = barra_status::texto_contas(&estado.conta, &self.config.barra_status, celulas, largura);
         let texto = if estado.fora_da_area {
-            String::new()
+            // Fora da área usada não há o que contar; só as vazias, se pedidas.
+            if self.barra_status_mostra("vazias") {
+                trf!("Vazias: {}", barra_status::formatar_inteiro(celulas))
+            } else { String::new() }
         } else if estado.pendente {
-            trf!("Somando {}%…   {}", estado.porcentagem(),
-                texto_resumo(&estado.conta, largura))
+            trf!("Somando {}%…   {}", estado.porcentagem(), contas)
         } else {
-            texto_resumo(&estado.conta, largura)
+            contas
         };
         let resumo = text(texto).size(11).color(COR_TEXTO_MUTED())
-            .wrapping(text::Wrapping::None).width(Length::Fill);
+            .wrapping(text::Wrapping::None);
         let mut linha = row![resumo].spacing(8).align_y(Alignment::Center);
-        if let Some(erro) = estado.erro.as_ref() {
+        if let Some(erro) = estado.erro.as_ref().filter(|_| self.barra_status_mostra("aviso_erro")) {
             let aviso = button(text(erro.clone()).size(11).color(COR_ERRO)
                 .wrapping(text::Wrapping::None))
                 .padding([0, 4])
@@ -262,25 +214,13 @@ impl App {
                 container(aviso).max_width(largura * 0.52).clip(true)
             );
         }
-        container(linha).padding([0, 8]).width(Length::Fill).into()
+        container(linha).padding([0, 8]).into()
     }
 }
 
 #[cfg(test)]
 mod testes {
     use super::*;
-    #[test]
-    fn numeros_ptbr_e_adaptacao_de_largura() {
-        assert_eq!(formatar_numero(1234.5), "1.234,5");
-        assert_eq!(formatar_numero(-10000.25), "-10.000,25");
-        assert_eq!(formatar_numero(0.125), "0,13");
-        assert_eq!(formatar_numero(0.001), "0");
-        assert_eq!(formatar_inteiro(1002003), "1.002.003");
-        let c = ContagemSelecao { count: 4, numbers: 3, sum: 30., min: 5., max: 15. };
-        assert_eq!(texto_resumo(&c, 1600.),
-            "Soma: 30     Média: 10     Mín: 5     Máx: 15     Contagem: 4");
-        assert_eq!(texto_resumo(&c, 700.), "Contagem: 4");
-    }
     #[test]
     fn status_altera_com_selecao_e_edicao_mas_nao_com_redesenho() {
         let mut app = App::default();

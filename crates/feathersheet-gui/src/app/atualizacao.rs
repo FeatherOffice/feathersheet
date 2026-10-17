@@ -266,8 +266,10 @@ pub fn abrir_no_terminal(inst: Instalacao, versao: &str) -> Result<(), String> {
 
 /// Abre um endereço no navegador padrão (página de versões).
 pub fn abrir_endereco(url: &str) {
+    // `rundll32` abre no programa padrão sem piscar um console (o `cmd /C
+    // start` abria uma janela de cmd no Windows).
     let _ = if cfg!(windows) {
-        Command::new("cmd").args(["/C", "start", "", url]).spawn()
+        Command::new("rundll32").arg("url.dll,FileProtocolHandler").arg(url).spawn()
     } else if cfg!(target_os = "macos") {
         Command::new("open").arg(url).spawn()
     } else {

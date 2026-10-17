@@ -176,6 +176,11 @@ mod unix {
 
     /// Onde o aplicativo escuta: `$XDG_RUNTIME_DIR/feathersheet/mcp.sock` (ou uma pasta própria em `/tmp`).
     pub fn caminho_do_socket() -> PathBuf {
+        // Testes com duas janelas: cada uma com o seu canal, e o registro de
+        // vínculos (que usa o XDG_RUNTIME_DIR) continua o mesmo.
+        if let Some(proprio) = std::env::var_os("FEATHERSHEET_MCP_SOCKET") {
+            return PathBuf::from(proprio);
+        }
         let base = std::env::var_os("XDG_RUNTIME_DIR").map(PathBuf::from).unwrap_or_else(|| {
             let usuario = std::env::var("USER").unwrap_or_else(|_| "usuario".into());
             std::env::temp_dir().join(format!("feathersheet-{usuario}"))

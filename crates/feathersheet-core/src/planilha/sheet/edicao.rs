@@ -308,6 +308,8 @@ enum Passo {
     Dimensao { coluna: bool, indice: u32, antes: Option<u32>, depois: Option<u32> },
     /// Largura padrão das colunas da aba.
     LarguraPadrao { antes: Option<u32>, depois: Option<u32> },
+    /// Linhas (ou colunas) ocultas de um índice até o fim da planilha.
+    OcultasDesde { coluna: bool, antes: Option<u32>, depois: Option<u32> },
     /// Níveis da estrutura de tópicos (Agrupar), inteiros: são poucos.
     Topicos { antes: Box<super::topicos::Topicos>, depois: Box<super::topicos::Topicos> },
     /// Regiões mescladas da aba (JSON `mc`): não altera o conteúdo das células.
@@ -885,8 +887,35 @@ impl Sheet {
                 patch.insert("format".into(), Campo::Texto(f.into()));
                 Some(mesclar(atual.as_ref(), &patch))
             }
-            None => atual,
+            None => match raw.strip_prefix('=').and_then(|corpo| self.formato_herdado(corpo)) {
+                Some(patch) => Some(mesclar(atual.as_ref(), &patch)),
+                None => atual,
+            },
         }
+    }
+
+    /// Como o Excel: a fórmula sem formato próprio leva o formato de número
+    /// da primeira célula que cita (`=A1+2` com A1 data dá data). Só em
+    /// conta simples e em SOMA/MÍNIMO/MÁXIMO/MÉDIA: `=ANO(A1)` é número, e
+    /// referência a outra aba não conta.
+    fn formato_herdado(&self, corpo: &str) -> Option<EstiloParcial> {
+        use crate::formula::tokenizer::{tokenize, TokenType};
+        const MANTEM: [&str; 10] = ["SOMA", "SUM", "MÍNIMO", "MINIMO", "MIN", "MÁXIMO", "MAXIMO", "MAX", "MÉDIA", "AVERAGE"];
+        let tokens = tokenize(corpo).ok()?;
+        if tokens.iter().any(|t| t.kind == TokenType::Ident && !MANTEM.contains(&t.text.to_uppercase().as_str())) {
+            return None;
+        }
+        let primeira = tokens.iter().find(|t| t.kind == TokenType::Ref)?;
+        if primeira.text.contains('!') { return None; }
+        let (linha, coluna) = crate::celulas::refs::parse_cell_ref(&primeira.text)?;
+        let origem = self.estilo_mesclado(linha, coluna)?;
+        let nome = formato(Some(&origem)).filter(|f| f != "auto" && f != "general" && f != "text")?;
+        let mut patch = EstiloParcial::new();
+        patch.insert("format".into(), Campo::Texto(nome));
+        for chave in ["decimals", "numFmt"] {
+            if let Some(v) = origem.get(chave) { patch.insert(chave.into(), v.clone()); }
+        }
+        Some(patch)
     }
 
     /// Delete do Excel: apaga só o conteúdo (valor/fórmula) e mantém o
@@ -1196,6 +1225,23 @@ impl Sheet {
 
     // -------------------------------------------------------- dimensões
 
+    fn aplicar_ocultas_desde(&mut self, coluna: bool, valor: Option<u32>) {
+        if coluna { self.colunas_ocultas_desde = valor } else { self.linhas_ocultas_desde = valor }
+    }
+
+    /// Grava "ocultas a partir de `valor`" com um passo de desfazer.
+    fn definir_ocultas_desde(&mut self, coluna: bool, valor: Option<u32>) -> bool {
+        let antes = if coluna { self.colunas_ocultas_desde } else { self.linhas_ocultas_desde };
+        if antes == valor { return false; }
+        self.abrir_transacao();
+        if let Some(pendente) = self.hist.pendente.as_mut() {
+            pendente.push(Passo::OcultasDesde { coluna, antes, depois: valor });
+        }
+        self.aplicar_ocultas_desde(coluna, valor);
+        self.fechar_transacao();
+        true
+    }
+
     fn aplicar_dimensao(&mut self, coluna: bool, indice: u32, valor: Option<u32>) {
         let mapa = if coluna { &mut self.col_widths } else { &mut self.row_heights };
         if let Some(valor) = valor { mapa.insert(indice, valor); }
@@ -1273,15 +1319,48 @@ impl Sheet {
     pub fn alterar_visibilidade_dimensoes(
         &mut self, coluna: bool, ocultar: bool, a: u32, b: u32,
     ) -> Result<usize, String> {
+        // Uma transação só: reexibir a faixa do fim e as ocultas avulsas
+        // encostadas desfaz com um Ctrl+Z.
+        self.abrir_transacao();
+        let r = self.visibilidade_dimensoes(coluna, ocultar, a, b);
+        self.fechar_transacao();
+        r
+    }
+
+    fn visibilidade_dimensoes(
+        &mut self, coluna: bool, ocultar: bool, a: u32, b: u32,
+    ) -> Result<usize, String> {
         let limite_eixo = if coluna { MAX_COLS } else { MAX_ROWS };
         let inicio = a.min(b);
         let fim = a.max(b);
         if fim >= limite_eixo {
             return Err("O intervalo ultrapassa os limites da planilha".into());
         }
-        // Guardar milhões de dimensões avulsas e seus passos de undo na RAM
-        // não é adequado ao modelo HashMap legado. Não deixar travar a GUI.
-        const MAX_OPERACOES: u64 = 200_000;
+        // Até o fim da planilha (ex.: da linha 30 até a 100.000.000): um
+        // número só, sem laço. Excel também deixa ocultar tudo abaixo.
+        let desde_atual = if coluna { self.colunas_ocultas_desde } else { self.linhas_ocultas_desde };
+        if ocultar && fim == limite_eixo - 1 {
+            if inicio == 0 {
+                return Err("Mantenha ao menos uma linha ou coluna visível".into());
+            }
+            let novo = desde_atual.map_or(inicio, |n| n.min(inicio));
+            if desde_atual == Some(novo) { return Ok(0); }
+            self.definir_ocultas_desde(coluna, Some(novo));
+            return Ok((limite_eixo - novo) as usize);
+        }
+        // Reexibir encostado na faixa oculta do fim (selecionar a linha 29 e
+        // a de baixo, ou "tudo"): a faixa inteira volta.
+        let mut reexibidas_do_fim = 0usize;
+        if !ocultar {
+            if let Some(n) = desde_atual.filter(|&n| u64::from(fim) + 1 >= u64::from(n)) {
+                self.definir_ocultas_desde(coluna, None);
+                reexibidas_do_fim = (limite_eixo - n) as usize;
+            }
+        }
+        // Cada dimensão oculta é uma entrada no mapa e um passo de desfazer.
+        // 200 mil não deixava ocultar metade de uma planilha de 1 milhão de
+        // linhas (16/10); 2,1 milhões cobre a planilha inteira do Excel.
+        const MAX_OPERACOES: u64 = 2_100_000;
         let mapa = if coluna { &self.col_widths } else { &self.row_heights };
         let indices: Vec<u32> = if ocultar {
             if u64::from(fim) - u64::from(inicio) + 1 > MAX_OPERACOES {
@@ -1305,7 +1384,7 @@ impl Sheet {
             ocultos
         };
 
-        if indices.is_empty() { return Ok(0); }
+        if indices.is_empty() { return Ok(reexibidas_do_fim); }
         if ocultar {
             let restantes_ocultos = mapa.values().filter(|&&px| px == 0).count() as u64;
             if restantes_ocultos + indices.len() as u64 >= limite_eixo as u64 {
@@ -1325,7 +1404,7 @@ impl Sheet {
             self.aplicar_dimensao(coluna, *indice, depois);
         }
         self.fechar_transacao();
-        Ok(indices.len())
+        Ok(indices.len() + reexibidas_do_fim)
     }
 
     // ------------------------------------------------------------ desfazer
@@ -1611,6 +1690,7 @@ impl Sheet {
                         Passo::Imagens { .. } | Passo::Botoes { .. } | Passo::Tinta { .. } | Passo::Objetos { .. } | Passo::Graficos { .. }
                         | Passo::LarguraPadrao { .. }
                         | Passo::Topicos { .. } => [0, 0, 0, 0],
+                        Passo::OcultasDesde { .. } => [0, 0, 0, 0],
                     })
                     .collect()
             })
@@ -1655,6 +1735,7 @@ impl Sheet {
             Passo::Imagens { antes, .. } => self.im = antes.clone(),
             Passo::LarguraPadrao { antes, .. } => self.largura_padrao = *antes,
             Passo::Topicos { antes, .. } => self.topicos = (**antes).clone(),
+            Passo::OcultasDesde { coluna, antes, .. } => self.aplicar_ocultas_desde(*coluna, *antes),
             Passo::Botoes { antes, .. } => self.bt = antes.clone(),
             Passo::Tinta { antes, .. } => self.tn = antes.clone(),
             Passo::Objetos { antes, .. } => self.ob = antes.clone(),
@@ -1668,7 +1749,7 @@ impl Sheet {
                     self.desfazer_passo(p);
                 }
                 if self.alguma_formula_le() { self.invalidar_todos_calculos(); }
-                crate::diario::anotar(format!("[desfazer] texto para colunas · {:.2} s", t.elapsed().as_secs_f64()));
+                crate::anotar!("[desfazer] texto para colunas · {:.2} s", t.elapsed().as_secs_f64());
             }
         }
     }
@@ -1702,6 +1783,7 @@ impl Sheet {
             Passo::Imagens { depois, .. } => self.im = depois.clone(),
             Passo::LarguraPadrao { depois, .. } => self.largura_padrao = *depois,
             Passo::Topicos { depois, .. } => self.topicos = (**depois).clone(),
+            Passo::OcultasDesde { coluna, depois, .. } => self.aplicar_ocultas_desde(*coluna, *depois),
             Passo::Botoes { depois, .. } => self.bt = depois.clone(),
             Passo::Tinta { depois, .. } => self.tn = depois.clone(),
             Passo::Objetos { depois, .. } => self.ob = depois.clone(),
@@ -1711,7 +1793,7 @@ impl Sheet {
             Passo::Divisao { refazer, .. } => {
                 let t = std::time::Instant::now();
                 (refazer.0)(self);
-                crate::diario::anotar(format!("[refazer] texto para colunas · {:.2} s", t.elapsed().as_secs_f64()));
+                crate::anotar!("[refazer] texto para colunas · {:.2} s", t.elapsed().as_secs_f64());
             }
         }
     }
@@ -1854,6 +1936,58 @@ impl Sheet {
     }
 
     /// Esvazia a área sem histórico (o desfazer do [`Passo::Divisao`]).
+    /// `r0..=r1` da coluna `col` sem nada: nem dado, nem fórmula, nem
+    /// célula especial. É a condição do [`Self::preencher_faixa_vazia`].
+    pub fn faixa_vazia(&self, col: u32, r0: u32, r1: u32) -> bool {
+        let dentro = |k: &CellKey| key_col(*k) == col && (r0..=r1).contains(&key_row(*k));
+        if self.data.pode_ter_na_faixa(col, r0, r1)
+            || self.cells.keys().chain(self.externas.iter()).chain(self.textos.iter().map(|(k, _)| k)).any(dentro) {
+            return false;
+        }
+        let mut formula = false;
+        self.formulas.for_each_in_range(r0, r1, col, col, |_, _| formula = true);
+        !formula
+    }
+
+    /// O valor que [`Self::preencher_faixa_vazia`] grava para `raw`, ou
+    /// `None` quando ele não vai por lá (fórmula, erro, vazio, formato
+    /// detectado — data, moeda, % — ou texto que não volta igual).
+    pub fn valor_de_faixa(raw: &str) -> Option<Value> {
+        if raw.is_empty() || raw.starts_with('=') { return None; }
+        let analisado = crate::celulas::input::parse_literal(raw);
+        let simples = analisado.format.is_none()
+            && !matches!(analisado.value, Value::Error(_) | Value::Empty)
+            && round_trips(raw, &analisado.value, None);
+        simples.then_some(analisado.value)
+    }
+
+    /// Cola o valor `raw` (não fórmula) em `r0..=r1` da coluna `col`, que
+    /// tem de estar vazia ([`Self::faixa_vazia`]), bloco a bloco: colar A1
+    /// em A2:A100000000 eram 100 milhões de `set_cell` (17/10/2026). Um
+    /// passo de Ctrl+Z (o do Texto para Colunas: desfazer limpa a faixa).
+    /// `false` quando o valor não vai por aqui (fórmula, erro, formato
+    /// detectado como data ou texto que não volta igual): use o caminho
+    /// de sempre.
+    pub fn preencher_faixa_vazia(&mut self, col: u32, r0: u32, r1: u32, raw: &str) -> bool {
+        if r0 > r1 { return false; }
+        let Some(valor) = Self::valor_de_faixa(raw) else { return false };
+        let refazer = Refazer(Arc::new(move |s: &mut Sheet| {
+            if s.data.preencher_faixa(col, r0, r1, &valor, &mut s.pool) {
+                s.cresce_limites(r0, col);
+                s.cresce_limites(r1, col);
+            }
+            s.rastro.borrow_mut().desconhecer();
+            if s.alguma_formula_le() { s.invalidar_todos_calculos(); }
+        }));
+        self.abrir_transacao();
+        if let Some(pendente) = self.hist.pendente.as_mut() {
+            pendente.push(Passo::Divisao { area: [r0, col, r1, col], antes: Vec::new(), refazer: refazer.clone() });
+        }
+        (refazer.0)(self);
+        self.fechar_transacao();
+        true
+    }
+
     fn limpar_area_sem_registro(&mut self, area: [u32; 4]) {
         let [r0, c0, r1, c1] = area;
         let dentro = |k: &CellKey| {
@@ -1875,6 +2009,11 @@ impl Sheet {
         for c in c0..=c1 {
             self.data.limpar_faixa(c, r0, r1);
         }
+        // A última linha usada pode ter subido: desfazer o colar de 100
+        // milhões de linhas deixava `max_row` lá, e o próximo colar "até a
+        // última linha com dados" ia até o fim (17/10/2026).
+        self.bounds_dirty = true;
+        self.acertar_limites();
         self.rastro.borrow_mut().desconhecer();
     }
 
@@ -2081,7 +2220,9 @@ impl Sheet {
             Passo::Divisao { area: a, .. } => area(a),
             Passo::Permutacao { first, c0, c1, ordem } => pede(P::Classificar)
                 .or_else(|| area(&[*first, *c0, first + ordem.len() as u32 - 1, *c1])),
-            Passo::Dimensao { coluna: true, .. } | Passo::LarguraPadrao { .. } => pede(P::FormatarColunas),
+            Passo::Dimensao { coluna: true, .. } | Passo::LarguraPadrao { .. }
+            | Passo::OcultasDesde { coluna: true, .. } => pede(P::FormatarColunas),
+            Passo::OcultasDesde { coluna: false, .. } => pede(P::FormatarLinhas),
             // O filtro também esconde linhas.
             Passo::Dimensao { coluna: false, .. } => (!prot.permite(P::AutoFiltro)).then(|| pede(P::FormatarLinhas)).flatten(),
             Passo::Mesclas { .. } | Passo::Condicionais { .. } => pede(P::FormatarCelulas),

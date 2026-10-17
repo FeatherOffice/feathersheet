@@ -45,6 +45,15 @@ pub(super) fn icone_borda(opcao: &str, tamanho: f32) -> iced::widget::svg::Svg<'
     })
 }
 
+/// Nome do estilo da linha na tela. "Média" aqui é espessura (Medium), não a
+/// conta (Average) que a mesma palavra traduz no resto da interface.
+pub(crate) fn nome_estilo_linha(estilo: &str) -> &str {
+    if estilo == "Média" && crate::idioma::lingua() != crate::idioma::Lingua::Pt {
+        return tr!("Média (espessura de linha)");
+    }
+    tr!(estilo)
+}
+
 /// Amostra do estilo da linha da caneta de borda (Fina, Média, Grossa, Tracejada).
 fn desenho_estilo_linha(estilo: &str) -> String {
     let (largura, traco) = match estilo {
@@ -134,7 +143,7 @@ impl App {
                 button(icone_estilo_linha(estilo)).padding([4, 3])
                     .style(estilo_botao_pequeno(estilo_atual == estilo))
                     .on_press(Msg::BordaDesenho(Evento::Estilo(estilo))),
-                estilo,
+                nome_estilo_linha(estilo),
             ));
         }
         coluna = coluna.push(container(text(tr!("Estilo da linha")).size(11.5).color(COR_TEXTO_MUTED())).padding([6, 10]));

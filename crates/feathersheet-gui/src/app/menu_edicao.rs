@@ -20,10 +20,10 @@ fn itens(tipo: &str) -> Vec<Item> {
         "autosoma" => vec![
             Titulo(tr!("INSERIR FUNÇÃO")),
             Acao(tr!("Soma"), "sum", Msg::AutoSoma),
-            Acao(tr!("Média"), "math-function", Msg::InserirFuncao("MÉDIA".into())),
-            Acao(tr!("Contagem"), "list-numbers", Msg::InserirFuncao("COUNT".into())),
-            Acao(tr!("Máximo"), "sort-descending", Msg::InserirFuncao("MAX".into())),
-            Acao(tr!("Mínimo"), "sort-ascending", Msg::InserirFuncao("MIN".into())),
+            Acao(tr!("Média"), "math-function", Msg::AutoConta("MÉDIA")),
+            Acao(tr!("Contagem"), "list-numbers", Msg::AutoConta("CONT.NÚM")),
+            Acao(tr!("Máximo"), "sort-descending", Msg::AutoConta("MÁXIMO")),
+            Acao(tr!("Mínimo"), "sort-ascending", Msg::AutoConta("MÍNIMO")),
         ],
         "preencher" => vec![
             Titulo(tr!("PREENCHER CÉLULAS")),
@@ -118,6 +118,7 @@ fn itens(tipo: &str) -> Vec<Item> {
         "pg_area" => vec![
             Titulo(tr!("ÁREA DE IMPRESSÃO")),
             Acao(tr!("Definir área de impressão"), "area_impressao", Msg::Impressao(EventoImpressao::DefinirArea)),
+            Acao(tr!("Adicionar à área de impressão"), "plus", Msg::Impressao(EventoImpressao::AdicionarArea)),
             Acao(tr!("Limpar área de impressão"), "limpar_tudo", Msg::Impressao(EventoImpressao::LimparArea)),
         ],
         "pg_escala" => vec![

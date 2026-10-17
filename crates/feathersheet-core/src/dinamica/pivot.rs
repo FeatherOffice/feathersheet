@@ -69,6 +69,15 @@ pub struct DinamicaConfig {
     pub agrupar_data: Option<AgruparData>,
 }
 
+/// [`parse_date_key`] de um valor já lido (dono): o texto comum vira a
+/// chave sem cópia — é o caso de quase toda célula de rótulo.
+pub(crate) fn chave_de(val: Value, group_mode: Option<AgruparData>) -> String {
+    match (group_mode, val) {
+        (None, Value::Text(t)) if !t.trim().is_empty() => t,
+        (_, val) => parse_date_key(&val, group_mode),
+    }
+}
+
 pub(crate) fn parse_date_key(val: &Value, group_mode: Option<AgruparData>) -> String {
     if matches!(val, Value::Empty) {
         return "(Vazio)".to_string();
@@ -215,8 +224,21 @@ pub(crate) fn montar_dinamica_filtrada(
     config: &DinamicaConfig,
     aceita: impl Fn(usize) -> bool,
 ) -> Matrix {
+    montar_dinamica_com_chaves(total_linhas, valor, config, aceita).0
+}
+
+/// [`montar_dinamica_filtrada`] devolvendo também as chaves de Linhas (uma
+/// por linha de item, na ordem da saída) e de Colunas (uma por grupo de
+/// medidas; `[[]]` sem campo em Colunas): o duplo clique (Detalhes) acha as
+/// linhas da origem sem montar a dinâmica de novo.
+pub(crate) fn montar_dinamica_com_chaves(
+    total_linhas: usize,
+    valor: impl Fn(usize, usize) -> Value,
+    config: &DinamicaConfig,
+    aceita: impl Fn(usize) -> bool,
+) -> (Matrix, Vec<Vec<String>>, Vec<Vec<String>>) {
     if total_linhas <= 1 {
-        return Matrix::new(vec![vec![]]);
+        return (Matrix::new(vec![vec![]]), Vec::new(), Vec::new());
     }
     let DinamicaConfig { origem, linhas, colunas, valores, agrupar_data } = config;
     let c0 = origem.c0 as usize;
@@ -230,31 +252,45 @@ pub(crate) fn montar_dinamica_filtrada(
         } else { texto });
     }
 
-    // Só há Vec<f64> de linha atual. As agregações são armazenadas como
-    // acumuladores compactos por grupo, por linha, por coluna e pelo total.
-    let mut grupos: HashMap<(Vec<String>,Vec<String>), Vec<super::acumulador::Acumulador>> = HashMap::new();
-    let mut por_linha: HashMap<Vec<String>, Vec<super::acumulador::Acumulador>> = HashMap::new();
-    let mut por_coluna: HashMap<Vec<String>, Vec<super::acumulador::Acumulador>> = HashMap::new();
+    // Só há Vec<f64> de linha atual. Cada texto distinto de um campo vira um
+    // código uma vez só, e os grupos somam por código: antes eram ~12 cópias
+    // de texto por linha (0,48 s em 1 milhão de linhas, 17/10/2026).
+    let mut codigos_l: Vec<HashMap<String, u32>> = vec![HashMap::new(); linhas.len()];
+    let mut codigos_c: Vec<HashMap<String, u32>> = vec![HashMap::new(); colunas.len()];
+    let mut combos_l: HashMap<Vec<u32>, usize> = HashMap::new();
+    let mut combos_c: HashMap<Vec<u32>, usize> = HashMap::new();
+    let mut grupos: HashMap<(usize, usize), Vec<super::acumulador::Acumulador>> = HashMap::new();
+    let mut por_linha: Vec<Vec<super::acumulador::Acumulador>> = Vec::new();
+    let mut por_coluna: Vec<Vec<super::acumulador::Acumulador>> = Vec::new();
     let mut total_geral = acumuladores(valores);
-    let mut unicas_linhas = std::collections::BTreeSet::new();
-    let mut unicas_colunas = std::collections::BTreeSet::new();
-    let mut partes: Vec<String> = Vec::new();
     let mut medidas = Vec::with_capacity(valores.len());
+    let mut ids: Vec<u32> = Vec::new();
+    let codigo = |mapa: &mut HashMap<String, u32>, chave: String| -> u32 {
+        if let Some(&k) = mapa.get(&chave) { return k; }
+        let k = mapa.len() as u32;
+        mapa.insert(chave, k);
+        k
+    };
+    let combo = |mapa: &mut HashMap<Vec<u32>, usize>, ids: &[u32], somas: &mut Vec<Vec<super::acumulador::Acumulador>>| -> usize {
+        if let Some(&k) = mapa.get(ids) { return k; }
+        let k = mapa.len();
+        mapa.insert(ids.to_vec(), k);
+        somas.push(acumuladores(valores));
+        k
+    };
 
     for r in 1..total_linhas {
         if !aceita(r) { continue; }
-        partes.clear();
-        for &col in linhas {
-            partes.push(parse_date_key(&valor(r, col.saturating_sub(c0)), *agrupar_data));
+        ids.clear();
+        for (d, &col) in linhas.iter().enumerate() {
+            ids.push(codigo(&mut codigos_l[d], chave_de(valor(r, col.saturating_sub(c0)), *agrupar_data)));
         }
-        // Chave estrutural: rótulos contendo " | " ou "Total" não são
-        // confundidos com separadores, totais ou dimensões adicionais.
-        let chave_linha = partes.clone();
-        partes.clear();
-        for &col in colunas {
-            partes.push(parse_date_key(&valor(r, col.saturating_sub(c0)), *agrupar_data));
+        let li = combo(&mut combos_l, &ids, &mut por_linha);
+        ids.clear();
+        for (d, &col) in colunas.iter().enumerate() {
+            ids.push(codigo(&mut codigos_c[d], chave_de(valor(r, col.saturating_sub(c0)), *agrupar_data)));
         }
-        let chave_coluna = partes.clone();
+        let ci = combo(&mut combos_c, &ids, &mut por_coluna);
         medidas.clear();
         for medida in valores {
             let atual = valor(r, medida.coluna.saturating_sub(c0));
@@ -263,21 +299,33 @@ pub(crate) fn montar_dinamica_filtrada(
                 _ => to_number(&atual).unwrap_or(0.),
             });
         }
-        if !linhas.is_empty() { unicas_linhas.insert(chave_linha.clone()); }
-        if !colunas.is_empty() { unicas_colunas.insert(chave_coluna.clone()); }
-        acumular(grupos.entry((chave_linha.clone(), chave_coluna.clone()))
-            .or_insert_with(|| acumuladores(valores)), &medidas);
-        acumular(por_linha.entry(chave_linha)
-            .or_insert_with(|| acumuladores(valores)), &medidas);
-        acumular(por_coluna.entry(chave_coluna)
-            .or_insert_with(|| acumuladores(valores)), &medidas);
+        acumular(grupos.entry((li, ci)).or_insert_with(|| acumuladores(valores)), &medidas);
+        acumular(&mut por_linha[li], &medidas);
+        acumular(&mut por_coluna[ci], &medidas);
         acumular(&mut total_geral, &medidas);
     }
 
-    let mut chaves_linhas: Vec<_> = unicas_linhas.into_iter().collect();
-    let mut chaves_colunas: Vec<_> = unicas_colunas.into_iter().collect();
-    if chaves_linhas.is_empty() { chaves_linhas.push(Vec::new()); }
-    if chaves_colunas.is_empty() { chaves_colunas.push(Vec::new()); }
+    // De volta aos textos, na ordem de antes (BTreeSet = ordem do texto).
+    fn textos(codigos: &[HashMap<String, u32>]) -> Vec<Vec<&str>> {
+        codigos.iter().map(|m| {
+            let mut v = vec![""; m.len()];
+            for (t, &k) in m { v[k as usize] = t.as_str(); }
+            v
+        }).collect()
+    }
+    let (textos_l, textos_c) = (textos(&codigos_l), textos(&codigos_c));
+    let ordenar = |combos: HashMap<Vec<u32>, usize>, textos: &[Vec<&str>]| -> Vec<(Vec<String>, usize)> {
+        let mut v: Vec<(Vec<String>, usize)> = combos.into_iter().map(|(ids, k)| {
+            (ids.iter().enumerate().map(|(d, &i)| textos[d][i as usize].to_owned()).collect(), k)
+        }).collect();
+        v.sort();
+        v
+    };
+    // Campo vazio: uma combinação só (a vazia), como antes.
+    let mut chaves_linhas = ordenar(combos_l, &textos_l);
+    let mut chaves_colunas = ordenar(combos_c, &textos_c);
+    if chaves_linhas.is_empty() { chaves_linhas.push((Vec::new(), usize::MAX)); }
+    if chaves_colunas.is_empty() { chaves_colunas.push((Vec::new(), usize::MAX)); }
     let com_dimensao_coluna = !colunas.is_empty();
     let vazio = acumuladores(valores);
 
@@ -290,7 +338,7 @@ pub(crate) fn montar_dinamica_filtrada(
             .get(col.saturating_sub(c0)).cloned()
             .unwrap_or_else(|| format!("Coluna {}", col+1))));
     }
-    for chave_coluna in &chaves_colunas {
+    for (chave_coluna, _) in &chaves_colunas {
         for medida in valores {
             let nome = cabecalhos.get(medida.coluna.saturating_sub(c0))
                 .cloned().unwrap_or_else(|| format!("Val {}",medida.coluna+1));
@@ -309,33 +357,33 @@ pub(crate) fn montar_dinamica_filtrada(
         }
     }
     let mut linhas_saida = vec![cabecalho];
-    for chave_linha in &chaves_linhas {
-        let mut saida: Vec<Value> = if linhas.is_empty() {
-            vec![Value::Text("Total".to_owned())]
-        } else {
-            chave_linha.iter().cloned().map(Value::Text).collect()
-        };
-        for chave_coluna in &chaves_colunas {
-            let grupo = grupos.get(&(chave_linha.clone(), chave_coluna.clone())).unwrap_or(&vazio);
+    // Sem campo em Linhas a única linha seria igual ao Total Geral: fica só
+    // ele, como no Excel (tirar o último campo de Linhas mostra o total).
+    for (chave_linha, li) in chaves_linhas.iter().filter(|_| !linhas.is_empty()) {
+        let mut saida: Vec<Value> = chave_linha.iter().cloned().map(Value::Text).collect();
+        for (_, ci) in &chaves_colunas {
+            let grupo = grupos.get(&(*li, *ci)).unwrap_or(&vazio);
             saida.extend(grupo.iter().map(|acc| Value::Number(acc.resultado())));
         }
         if com_dimensao_coluna {
-            let totais = por_linha.get(chave_linha).unwrap_or(&vazio);
+            let totais = por_linha.get(*li).unwrap_or(&vazio);
             saida.extend(totais.iter().map(|acc| Value::Number(acc.resultado())));
         }
         linhas_saida.push(saida);
     }
     let mut total = vec![Value::Text(String::new()); linhas.len().max(1)];
     total[0] = Value::Text("Total Geral".to_owned());
-    for chave_coluna in &chaves_colunas {
-        let acumulados = por_coluna.get(chave_coluna).unwrap_or(&vazio);
+    for (_, ci) in &chaves_colunas {
+        let acumulados = por_coluna.get(*ci).unwrap_or(&vazio);
         total.extend(acumulados.iter().map(|acc| Value::Number(acc.resultado())));
     }
     if com_dimensao_coluna {
         total.extend(total_geral.iter().map(|acc| Value::Number(acc.resultado())));
     }
     linhas_saida.push(total);
-    Matrix::new(linhas_saida)
+    if linhas.is_empty() { chaves_linhas.clear(); }
+    let so_textos = |v: Vec<(Vec<String>, usize)>| v.into_iter().map(|(t, _)| t).collect();
+    (Matrix::new(linhas_saida), so_textos(chaves_linhas), so_textos(chaves_colunas))
 }
 
 #[cfg(test)]
@@ -429,6 +477,25 @@ mod testes {
                 vec!["Total Geral", "870"],
             ],
         );
+    }
+
+    #[test]
+    fn sem_campo_em_linhas_sai_so_o_total_geral() {
+        let data: Vec<Vec<Value>> = vec![
+            vec![Value::Text("Região".into()), Value::Text("Valor".into())],
+            vec![Value::Text("Sul".into()), Value::Number(10.)],
+            vec![Value::Text("Norte".into()), Value::Number(6.)],
+        ];
+        let config = DinamicaConfig {
+            origem: Rect::new(0, 0, 2, 1),
+            linhas: vec![], colunas: vec![],
+            valores: vec![MedidaDinamica { coluna: 1, op: AgregacaoOp::Soma }],
+            agrupar_data: None,
+        };
+        let m = montar_dinamica(&data, &config);
+        assert_eq!(m.height(), 2, "cabeçalho e Total Geral, sem a linha \"Total\" repetida");
+        assert_eq!(m.at(1, 0), &Value::Text("Total Geral".to_owned()));
+        assert_eq!(m.at(1, 1), &Value::Number(16.));
     }
 
     #[test]
@@ -539,10 +606,11 @@ mod testes {
         };
         let m = montar_dinamica(&dados, &config);
         assert_eq!(m.width(), 4);
-        assert_eq!(m.height(), 3);
+        // Cabeçalho e Total Geral (sem a linha "Total" igual a ele).
+        assert_eq!(m.height(), 2);
         assert!(m.rows().iter().all(|r| r.len() == 4));
         assert_eq!(m.at(0, 0), &Value::Text("Rótulos de Linha".into()));
-        assert_eq!(m.at(2, 0), &Value::Text("Total Geral".into()));
+        assert_eq!(m.at(1, 0), &Value::Text("Total Geral".into()));
     }
 
     #[test]
@@ -560,8 +628,8 @@ mod testes {
             |r| r >= 4,
         );
         assert_eq!(result.width(),4);
-        assert_eq!(result.height(),3);
-        assert_eq!(result.at(2,3),&Value::Number(420.));
+        assert_eq!(result.height(),2);
+        assert_eq!(result.at(1,3),&Value::Number(420.));
     }
 
     #[test]
@@ -629,5 +697,63 @@ mod testes {
             &config,
         );
         println!("MEDIDA dinamica {n} linhas: {} ms ({} linhas no resultado)", t.elapsed().as_millis(), m.rows().len());
+    }
+
+    /// Conferência independente da varredura por códigos: dados variados
+    /// (vazios, números como texto, rótulos repetidos), cada célula somada à
+    /// mão pelas linhas de origem.
+    #[test]
+    fn cada_celula_bate_com_a_soma_feita_a_mao() {
+        let mut semente = 7u64;
+        let mut sorteio = |n: u64| { semente = semente.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); (semente >> 33) % n };
+        let mut dados = vec![vec![Value::Text("A".into()), Value::Text("B".into()), Value::Text("C".into()), Value::Text("V".into())]];
+        for _ in 0..3000 {
+            let a = ["x", "y", "z", "", "10"][sorteio(5) as usize];
+            let b = sorteio(7);
+            let c = ["p", "q"][sorteio(2) as usize];
+            let rot = |t: &str| if t.is_empty() { Value::Empty } else { Value::Text(t.into()) };
+            dados.push(vec![rot(a), Value::Number(b as f64), rot(c), Value::Number(sorteio(100) as f64)]);
+        }
+        let texto = |v: &Value| parse_date_key(v, None);
+        for (linhas, colunas) in [(vec![0, 1], vec![2]), (vec![1], vec![]), (vec![], vec![0, 2])] {
+            let config = DinamicaConfig {
+                origem: Rect::new(0, 0, dados.len() as u32 - 1, 3),
+                linhas: linhas.clone(), colunas: colunas.clone(),
+                valores: vec![MedidaDinamica { coluna: 3, op: AgregacaoOp::Soma }],
+                agrupar_data: None,
+            };
+            let (m, chaves_l, chaves_c) = montar_dinamica_com_chaves(dados.len(),
+                |r, c| dados[r].get(c).cloned().unwrap_or(Value::Empty), &config, |_| true);
+            let mut ordenadas = chaves_l.clone();
+            ordenadas.sort();
+            ordenadas.dedup();
+            assert_eq!(ordenadas, chaves_l, "linhas distintas e em ordem");
+            let soma = |l: Option<&Vec<String>>, c: Option<&Vec<String>>| -> f64 {
+                dados[1..].iter().filter(|d| {
+                    l.is_none_or(|l| linhas.iter().zip(l).all(|(&i, t)| texto(&d[i]) == *t))
+                        && c.is_none_or(|c| colunas.iter().zip(c).all(|(&i, t)| texto(&d[i]) == *t))
+                }).map(|d| to_number(&d[3]).unwrap()).sum()
+            };
+            let n = linhas.len().max(1);
+            let com_total = !colunas.is_empty();
+            let corpo = if linhas.is_empty() { 0 } else { chaves_l.len() };
+            assert_eq!(m.height(), corpo + 2);
+            for (i, l) in chaves_l.iter().enumerate().take(corpo) {
+                let linha = &m.rows()[i + 1];
+                for (j, c) in chaves_c.iter().enumerate() {
+                    assert_eq!(linha[n + j], Value::Number(soma(Some(l), Some(c))), "{l:?} × {c:?}");
+                }
+                if com_total {
+                    assert_eq!(linha[n + chaves_c.len()], Value::Number(soma(Some(l), None)));
+                }
+            }
+            let total = m.rows().last().unwrap();
+            for (j, c) in chaves_c.iter().enumerate() {
+                assert_eq!(total[n + j], Value::Number(soma(None, Some(c))));
+            }
+            if com_total {
+                assert_eq!(total[n + chaves_c.len()], Value::Number(soma(None, None)));
+            }
+        }
     }
 }

@@ -60,7 +60,7 @@ impl App {
         }
         // Nos testes não: o diário é global e outro teste do console o confere.
         if !cfg!(test) {
-            feathersheet_core::diario::anotar(format!("[evento] {evento} da aba {aba}{}",
+            feathersheet_core::diario::anotar(trf!("[evento] {evento} da aba {aba}{}",
                 alvo.map(|a| trf!(" em {a}")).unwrap_or_default()));
         }
         if let Some(r) = self.rodar_macro(historico_macros::GatilhoMacro::Evento {

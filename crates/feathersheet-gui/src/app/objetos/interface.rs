@@ -746,7 +746,7 @@ impl App {
                 ItemMenu::Separador,
                 ItemMenu::acao(tr!("Excluir"), "trash", g(G::Remover(id))).com_atalho(tr!("Delete")),
             ]);
-            base = menu_contexto::sobrepor(base, &itens, None, |_| g(G::FecharContexto), g(G::FecharContexto), (x, y), janela);
+            base = menu_contexto::sobrepor(base, &itens, None, |_| g(G::PassouNoMenu), g(G::FecharContexto), (x, y), janela);
         }
         if let Some(dialogo) = self.dialogo_macro() {
             base = stack![

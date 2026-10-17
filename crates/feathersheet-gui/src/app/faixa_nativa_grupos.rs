@@ -233,7 +233,8 @@ impl App {
                 ]),
                     ]),
                     self.faixa_grande_seta(tr!("Mapas"), "chart-map", None, false),
-                    self.faixa_grande_seta(tr!("Gráfico dinâmico"), "chart-pivot", None, false),
+                    self.faixa_grande_seta(tr!("Gráfico dinâmico"), "chart-pivot",
+                        Some(Msg::Dinamica(dinamica_ui::Evento::GraficoDinamico)), false),
                 ])));
                 grupos.push(self.faixa_grupo(tr!("Minigráficos"), self.faixa_linha(vec![
                     em_breve(self.faixa_grande(tr!("Linha"), "sparkline-line", None, false), tr!("Em breve: minigráfico de linha")),
@@ -241,7 +242,8 @@ impl App {
                     em_breve(self.faixa_grande("Ganhos/Perdas", "sparkline-winloss", None, false), tr!("Em breve: minigráfico de ganhos e perdas")),
                 ])));
                 grupos.push(self.faixa_grupo(tr!("Filtros"), self.faixa_linha(vec![
-                    em_breve(self.faixa_grande(tr!("Segmentação de dados"), "slicer", None, false), tr!("Em breve: segmentação de dados (filtro visual)")),
+                    self.faixa_grande(tr!("Segmentação de dados"), "slicer",
+                        Some(Msg::Dinamica(dinamica_ui::Evento::SegmentacaoInserir)), false),
                     em_breve(self.faixa_grande(tr!("Linha do tempo"), "timeline", None, false), tr!("Em breve: linha do tempo de datas")),
                 ])));
                 grupos.push(self.faixa_grupo(tr!("Links"), self.faixa_linha(vec![
@@ -349,7 +351,14 @@ impl App {
                 grupos.push(self.faixa_grupo(tr!("Consultas"), self.faixa_linha(vec![
                     self.faixa_grande("OpenQuery", "table", Some(Msg::OpenQuery(EventoOpenQuery::Abrir)), self.openquery.is_some()),
                     self.faixa_grande(tr!("Tabela dinâmica"), "pivot-table", Some(Msg::Dinamica(dinamica_ui::Evento::Abrir)), self.dinamica.is_some()),
-                    self.faixa_grande(tr!("Atualizar vínculos"), "refresh", None, false),
+                    // Referências a outros arquivos (`=[Vendas.fshz]Dados!A1`, vinculos.rs).
+                    self.faixa_pilha(vec![
+                        self.faixa_pequeno(tr!("Atualizar vínculos"), "refresh",
+                            self.workbook.tem_vinculos_externos()
+                                .then_some(Msg::Vinculos(vinculos::Evento::AtualizarValores(None))), false),
+                        self.faixa_pequeno(tr!("Editar links"), "link",
+                            Some(Msg::Vinculos(vinculos::Evento::EditarAbrir)), self.vinculos.editar_aberto),
+                    ]),
                 ])));
             }
             AbaFaixa::Exibir => {
@@ -411,6 +420,15 @@ impl App {
                 ])));
                 grupos.push(self.faixa_grupo(tr!("Planilha"), self.faixa_grande(tr!("Botão de macro"), "code", Some(Msg::BotaoMacroNovo), false)));
                 grupos.push(self.faixa_grupo(tr!("Ajuda"), self.faixa_grande(tr!("Guia das funções"), "guia_funcoes", Some(Msg::Ajuda), false)));
+            }
+            AbaFaixa::Dinamica => {
+                let dinamica = self.grupos_faixa_dinamica();
+                if dinamica.is_empty() {
+                    grupos.push(self.faixa_grupo(tr!("Tabela Dinâmica"),
+                        text(tr!("Selecione uma célula de uma tabela dinâmica.")).size(12).into()));
+                } else {
+                    grupos.extend(dinamica);
+                }
             }
             AbaFaixa::Tabela => {
                 // Paridade de src/ui/barras/ribbon-tabela.ts.

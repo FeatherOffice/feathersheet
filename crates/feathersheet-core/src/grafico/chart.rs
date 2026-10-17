@@ -20,7 +20,7 @@
 //! motor para motor, então não há o que traduzir: aqui só as duas formas
 //! explícitas viram data. Ver `data_em_texto_livre_nao_vira_data`.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -95,9 +95,18 @@ pub enum AggregateFn {
     Max,
     Stddev,
     Mode,
+    /// Quantos valores diferentes há na categoria (célula vazia não conta).
+    /// Serve para série de texto, onde soma e média não têm sentido.
+    #[serde(rename = "countDistinct")]
+    CountDistinct,
 }
 
 impl AggregateFn {
+    /// As contas que fazem sentido numa série de texto: só contar.
+    pub fn serve_para_texto(self) -> bool {
+        matches!(self, AggregateFn::Count | AggregateFn::CountDistinct)
+    }
+
     /// O nome de cada uma, para o painel e para a legenda (`AGGREGATE_LABELS`).
     pub fn rotulo(self) -> &'static str {
         match self {
@@ -108,6 +117,7 @@ impl AggregateFn {
             AggregateFn::Max => "Máximo",
             AggregateFn::Stddev => "Desvio padrão",
             AggregateFn::Mode => "Moda",
+            AggregateFn::CountDistinct => "Contagem distinta",
         }
     }
 }
@@ -254,7 +264,8 @@ const MAX_VALORES_MODA: usize = 1_000_000;
 // ------------------------------------------------------------- acumulador
 
 /// O que se guarda por série e por categoria ao agrupar: cinco números bastam
-/// para qualquer conta, menos a moda, que guarda a frequência de cada valor.
+/// para qualquer conta, menos a moda, que guarda a frequência de cada valor,
+/// e a contagem distinta, que guarda a marca de cada valor visto.
 #[derive(Clone, Debug)]
 struct Acumulador {
     n: u64,
@@ -263,6 +274,9 @@ struct Acumulador {
     min: f64,
     max: f64,
     freq: Option<Frequencia>,
+    /// Marca (hash de 64 bits) de cada valor diferente, só na contagem
+    /// distinta: guardar o texto inteiro de um milhão de linhas pesaria.
+    distintos: Option<HashSet<u64>>,
 }
 
 /// Frequência com a ordem de chegada, que é o que decide o empate da moda
@@ -285,8 +299,26 @@ fn chave_do_numero(v: f64) -> u64 {
     }
 }
 
+/// A marca de uma célula para a contagem distinta. O tipo da célula entra
+/// na marca: `"12"` escrito como texto e o número `12` são valores
+/// diferentes. Maiúscula e minúscula também ("Ana" e "ana" contam dois).
+/// Vazio não é valor: `None`.
+fn chave_distinta(v: &Value) -> Option<u64> {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    match v {
+        Value::Empty => return None,
+        Value::Number(n) => (0u8, chave_do_numero(*n)).hash(&mut h),
+        Value::Text(t) if t.is_empty() => return None,
+        Value::Text(t) => (1u8, t.as_str()).hash(&mut h),
+        Value::Bool(b) => (2u8, *b).hash(&mut h),
+        Value::Error(e) => (3u8, e.code.as_str()).hash(&mut h),
+    }
+    Some(h.finish())
+}
+
 impl Acumulador {
-    fn novo(moda: bool) -> Self {
+    fn novo(moda: bool, distintos: bool) -> Self {
         Acumulador {
             n: 0,
             soma: 0.0,
@@ -294,6 +326,14 @@ impl Acumulador {
             min: f64::INFINITY,
             max: f64::NEG_INFINITY,
             freq: moda.then(Frequencia::default),
+            distintos: distintos.then(HashSet::new),
+        }
+    }
+
+    /// Anota a marca de um valor para a contagem distinta (se ela é a conta).
+    fn anotar_distinto(&mut self, chave: Option<u64>) {
+        if let (Some(conjunto), Some(chave)) = (self.distintos.as_mut(), chave) {
+            conjunto.insert(chave);
         }
     }
 
@@ -374,6 +414,7 @@ impl Acumulador {
                 }
                 melhor
             }
+            AggregateFn::CountDistinct => self.distintos.as_ref().map_or(0.0, |d| d.len() as f64),
             AggregateFn::Sum => self.soma,
         }
     }
@@ -480,6 +521,15 @@ fn texto_da_celula(v: &Value) -> String {
         Value::Text(t) => t.clone(),
         Value::Bool(b) => b.to_string(),
         Value::Error(e) => e.code.as_str().to_string(),
+    }
+}
+
+/// [`texto_da_celula`] consumindo o valor: o texto sai sem cópia (agrupar
+/// lê a coluna de categoria inteira, até um milhão de linhas).
+fn texto_movido(v: Value) -> String {
+    match v {
+        Value::Text(t) => t,
+        outro => texto_da_celula(&outro),
     }
 }
 
@@ -631,18 +681,17 @@ pub fn extract_chart_data_with(celula: &dyn Fn(u32, u32) -> Value, config: &Char
     let com_hierarquia = hierarquia != DateHierarchy::None;
 
     let str_de = |r: u32, c: u32| texto_da_celula(&celula(r, c));
-    let num_de = |r: u32, c: u32| numero_da_celula(&celula(r, c));
-    // A categoria de uma célula, passando pela hierarquia de datas.
-    let categoria = |r: u32, c: u32, reserva: String| -> String {
+    // A categoria de uma célula, passando pela hierarquia de datas. A célula
+    // vazia vira "Item {item}" — montado só quando precisa, não a cada linha.
+    let categoria = |r: u32, c: u32, item: u32| -> String {
         let valor = celula(r, c);
-        let bruto = texto_da_celula(&valor);
-        let mut cat = if bruto.is_empty() { reserva } else { bruto };
         if com_hierarquia {
             if let Some(data) = parse_category_date(&valor) {
-                cat = format_category_date(data, hierarquia);
+                return format_category_date(data, hierarquia);
             }
         }
-        cat
+        let bruto = texto_movido(valor);
+        if bruto.is_empty() { format!("Item {item}") } else { bruto }
     };
     let nome_da_coluna = |c: u32| {
         let reserva = format!("Série {}", c - c0 + 1);
@@ -751,7 +800,7 @@ pub fn extract_chart_data_with(celula: &dyn Fn(u32, u32) -> Value, config: &Char
         let mut desistiu = false;
 
         for r in data_row_start..=r1 {
-            let cat = categoria(r, cat_col, format!("Item {}", r - data_row_start + 1));
+            let cat = categoria(r, cat_col, r - data_row_start + 1);
             let at = match indice.get(&cat) {
                 Some(&i) => i,
                 None => {
@@ -763,13 +812,21 @@ pub fn extract_chart_data_with(celula: &dyn Fn(u32, u32) -> Value, config: &Char
                     indice.insert(cat.clone(), i);
                     nomes.push(cat);
                     for (k, linha) in acc.iter_mut().enumerate() {
-                        linha.push(Acumulador::novo(contas[k] == AggregateFn::Mode && !moda_estourou[k]));
+                        linha.push(Acumulador::novo(
+                            contas[k] == AggregateFn::Mode && !moda_estourou[k],
+                            contas[k] == AggregateFn::CountDistinct,
+                        ));
                     }
                     i
                 }
             };
             for (k, &c) in colunas.iter().enumerate() {
-                if acc[k][at].acumular(num_de(r, c)) {
+                // Uma leitura da célula serve ao número e à contagem distinta.
+                let valor = celula(r, c);
+                if contas[k] == AggregateFn::CountDistinct {
+                    acc[k][at].anotar_distinto(chave_distinta(&valor));
+                }
+                if acc[k][at].acumular(numero_da_celula(&valor)) {
                     distintos[k] += 1;
                     if distintos[k] > MAX_VALORES_MODA {
                         // Solta a memória da moda desta série de uma vez.
@@ -822,8 +879,8 @@ pub fn extract_chart_data_with(celula: &dyn Fn(u32, u32) -> Value, config: &Char
         anotar_amostra((r1 + 1).saturating_sub(data_row_start) as usize, linhas.len());
 
         for &r in &linhas {
-            let reserva = format!("Item {}", r - data_row_start + 1);
-            categories.push(if use_cat { categoria(r, cat_col, reserva) } else { reserva });
+            let item = r - data_row_start + 1;
+            categories.push(if use_cat { categoria(r, cat_col, item) } else { format!("Item {item}") });
         }
         for c in c0..=c1 {
             if use_cat && c == cat_col {
@@ -874,8 +931,8 @@ pub fn extract_chart_data_with(celula: &dyn Fn(u32, u32) -> Value, config: &Char
         anotar_amostra((r1 + 1).saturating_sub(data_row_start) as usize, linhas_serie.len());
 
         for &c in &colunas {
-            let reserva = format!("Item {}", c - data_col_start + 1);
-            categories.push(if use_cat { categoria(cat_row, c, reserva) } else { reserva });
+            let item = c - data_col_start + 1;
+            categories.push(if use_cat { categoria(cat_row, c, item) } else { format!("Item {item}") });
         }
         for &r in &linhas_serie {
             if use_cat && r == cat_row {
@@ -957,10 +1014,16 @@ pub fn extract_chart_data_with(celula: &dyn Fn(u32, u32) -> Value, config: &Char
                 .zip(&ordens)
                 .map(|(s, &ordem)| {
                     let conta = conta_da_serie(config, ordem);
+                    let distinta = conta == AggregateFn::CountDistinct;
                     let mut acc: Vec<Acumulador> =
-                        (0..unicas.len()).map(|_| Acumulador::novo(conta == AggregateFn::Mode)).collect();
+                        (0..unicas.len()).map(|_| Acumulador::novo(conta == AggregateFn::Mode, distinta)).collect();
                     for (i, &d) in destino.iter().enumerate() {
-                        acc[d].acumular(s.values.get(i).copied().unwrap_or(0.0));
+                        let v = s.values.get(i).copied().unwrap_or(0.0);
+                        if distinta {
+                            // Aqui só há números (NaN = célula sem número).
+                            acc[d].anotar_distinto((!v.is_nan()).then(|| chave_do_numero(v)));
+                        }
+                        acc[d].acumular(v);
                     }
                     ChartSeries {
                         name: nome_com_conta(config, ordem, s.name),

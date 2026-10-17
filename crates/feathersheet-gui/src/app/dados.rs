@@ -384,13 +384,24 @@ impl App {
         self.status = trf!("Espaços aparados em {quantidade} célula(s)");
     }
 
-    pub(super) fn autosoma(&mut self) {
-        self.confirmar();
-        if let Some(formula) = ops::formula_da_autosoma(self.linha,self.coluna,
-            |r,c| self.workbook.valor(self.folha,r,c)) {
-            self.edicao = formula;
-            self.confirmar();
-        } else { self.status = tr!("Não há números acima ou à esquerda para somar").into(); }
+    /// AutoSoma (e Média, Contagem, Máximo, Mínimo do menu dele): grava a
+    /// fórmula na célula já confirmada, como se tivesse dado Enter. Antes só
+    /// punha o texto na barra fx e esperava o Enter (o `confirmar` não grava
+    /// com o editor fechado).
+    pub(super) fn autosoma(&mut self, funcao: &str) {
+        if !self.confirmar() { return; }
+        let Some(formula) = ops::formula_da_autosoma(self.linha,self.coluna,
+            |r,c| self.workbook.valor(self.folha,r,c)) else {
+            self.status = tr!("Não há números acima ou à esquerda para somar").into();
+            return;
+        };
+        let formula = formula.replacen("=SOMA(", &format!("={funcao}("), 1);
+        let (folha, linha, coluna) = (self.folha, self.linha, self.coluna);
+        self.workbook.escrever_celula(folha, linha, coluna, formula);
+        self.edicao = self.workbook.aba(folha).map(|a| a.sheet.get_raw(linha, coluna)).unwrap_or_default();
+        self.alterado = true;
+        self.status = trf!("{} atualizado", cell_name(linha, coluna));
+        self.atualizar_circulos();
     }
 
     /// Janela "Localizar e substituir" no modelo do Excel: flutua sobre a

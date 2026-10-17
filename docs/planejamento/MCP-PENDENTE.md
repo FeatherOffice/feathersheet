@@ -39,12 +39,18 @@ O que mais se pede depois de dados e fórmulas.
 - [x] **`sheet_mesclar`** (14/10): mesclar, centralizar, através, desmesclar. A regra e o JSON do
       `sheet.mc` saíram da interface para `feathersheet_io::mesclas`; o autoajuste foi para
       `feathersheet_core::operacoes::autoajuste`.
-- [ ] **`sheet_ordenar` / `sheet_filtrar`**: ordenar por uma ou mais chaves (com cabeçalho),
-      AutoFiltro por critério, remover filtro. Hoje só existe via OpenQuery, que grava em outra aba.
-- [ ] **`sheet_mover` / `sheet_copiar`**: mover um bloco (o motor já reescreve as referências em
-      `mover_intervalo`) e copiar/colar com as opções do Colar especial (valores, formatos,
-      transpor, operação).
-- [ ] **`sheet_substituir`**: o `sheet_localizar` não substitui; o motor já tem substituir com desfazer.
+- [x] **`sheet_ordenar`** (16/10, `src/edicao.rs`): níveis por letra ou título do cabeçalho,
+      decrescente, lista personalizada; um Ctrl+Z; funciona sem o app.
+- [x] **`sheet_filtrar`** (16/10): aplicar/limpar/remover/listar o AutoFiltro, com os critérios do
+      `filtro_json` (lista, CONT.SE, regras, 10 primeiros, dinâmico, cor). **Só ao vivo**: a regra de
+      tabelas e filtros ainda mora em `app/tabelas/migracao.rs`; sem o app, explica e indica
+      `sheet_consulta`. Levar `migracao.rs` para o io destrava o modo arquivo (e o `sheet_estrutura`).
+- [x] **`sheet_mover`** (16/10): mesma aba, pelo `mover_intervalo` (fórmulas da pasta seguem o bloco).
+- [x] **`sheet_copiar`** (16/10): entre abas, Colar especial (tudo, valores, formatos, fórmulas,
+      valores e formatos), transpor, operação (`colagem::combinar`), pular vazias; matriz derramada
+      sem a âncora vai como valor, como no app.
+- [x] **`sheet_substituir`** (16/10): no intervalo, na aba ou em todas; nos valores ou nas fórmulas;
+      um Ctrl+Z por aba.
 
 ## Falta — objetos da planilha (prioridade média)
 
@@ -104,8 +110,9 @@ O que mais se pede depois de dados e fórmulas.
 ## Ordem sugerida
 
 1. ~~`sheet_formatar`, `sheet_estrutura`, `sheet_mesclar`~~ — feitos em 14/10.
-2. `sheet_ordenar`/`sheet_filtrar`, `sheet_substituir`, `sheet_mover`/`sheet_copiar`; levar o
-   reflow das tabelas para fora da interface (destrava `sheet_estrutura` sem o app em aba com tabela).
+2. ~~`sheet_ordenar`/`sheet_filtrar`, `sheet_substituir`, `sheet_mover`/`sheet_copiar`~~ — feitos
+   em 16/10. Falta levar o reflow e o filtro das tabelas para fora da interface (destrava
+   `sheet_filtrar` e `sheet_estrutura` sem o app em aba com tabela).
 3. Gráfico, tabela dinâmica e formatação condicional (reaproveitam o motor que já existe).
 4. Transporte comum da suíte (antes de o Docs/Slide ganharem MCP ao vivo).
 5. O restante, conforme o uso pedir.

@@ -3,6 +3,7 @@ use super::*;
 pub(in crate::app) mod editor_visual;
 pub(super) mod atalhos;
 pub(in crate::app) mod codigo;
+pub(in crate::app) mod organizacao;
 pub use codigo::EventoCodigo;
 
 /// Estado exclusivamente visual do editor de macros, inspirado na UI TS/VBE.
@@ -19,6 +20,28 @@ pub(super) struct EstadoVisual {
     pub(super) console: bool,
     /// Busca no projeto, Localizar/Substituir, desfazer e rolagem do código.
     pub(super) codigo: codigo::EstadoCodigo,
+    /// Evento escolhido no código de eventos da planilha ("aoMudar"…).
+    pub(super) evento_planilha: &'static str,
+    /// Nome em edição no Renomear das Propriedades.
+    pub(super) renomeando: Option<String>,
+    /// Alturas escolhidas nas divisórias (None = proporção padrão).
+    pub(super) altura_explorador: Option<f32>,
+    pub(super) altura_console: Option<f32>,
+    /// Divisória sendo arrastada: qual, e (y do início, altura no início)
+    /// depois do primeiro movimento.
+    pub(super) arrasto: Option<(Divisoria, Option<(f32, f32)>)>,
+    /// Alturas desenhadas no último quadro (base do arraste).
+    pub(super) desenhado_explorador: std::cell::Cell<f32>,
+    pub(super) desenhado_console: std::cell::Cell<f32>,
+}
+
+/// As divisórias arrastáveis do editor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Divisoria {
+    /// Entre o Explorador de projeto e as Propriedades.
+    Lateral,
+    /// Entre o código e a Janela Imediata.
+    Console,
 }
 
 impl Default for EstadoVisual {
@@ -33,6 +56,13 @@ impl Default for EstadoVisual {
             propriedades: true,
             console: true,
             codigo: Default::default(),
+            evento_planilha: "aoMudar",
+            renomeando: None,
+            altura_explorador: None,
+            altura_console: None,
+            arrasto: None,
+            desenhado_explorador: std::cell::Cell::new(0.),
+            desenhado_console: std::cell::Cell::new(0.),
         }
     }
 }
@@ -60,17 +90,34 @@ pub enum EventoVisual {
     HistoricoLimpar,
     /// Busca, Localizar/Substituir e desfazer do código (`codigo.rs`).
     Codigo(EventoCodigo),
+    /// Código de eventos da planilha: qual evento editar.
+    EventoPlanilha(&'static str),
+    /// Pastas e Renomear (organizacao.rs).
+    NovaPasta,
+    RenomearInicio,
+    RenomearTexto(String),
+    RenomearConfirmar,
+    RenomearCancelar,
+    /// Arrastar uma divisória: apertar, mover (y na janela) e soltar.
+    DivisoriaInicio(Divisoria),
+    DivisoriaMover(f32),
+    DivisoriaFim,
 }
 
 impl App {
     pub(super) fn executar_macro(&mut self) {
-        if !self.macro_visual.documento.starts_with("modulo:") {
-            self.macro_saida = tr!("Abra um módulo JavaScript para executar. Os eventos e formulários ainda são visuais.").into();
+        let doc = &self.macro_visual.documento;
+        if !doc.starts_with("modulo:") && !doc.starts_with("planilha:") {
+            self.macro_saida = tr!("Abra um módulo JavaScript para executar.").into();
             return;
         }
         self.confirmar();
         let codigo = self.macro_codigo.text();
-        let nome = self.macro_visual.documento.trim_start_matches("modulo:").to_owned();
+        // Módulo: o nome do documento; evento da planilha: Eventos/<aba>/<evento>.
+        let nome = match self.macro_visual.documento.strip_prefix("modulo:") {
+            Some(n) => n.to_owned(),
+            None => self.macro_nome.clone(),
+        };
         let Some(resultado) = self.rodar_macro(historico_macros::GatilhoMacro::manual(tr!("Executar macro")), &nome, &codigo, Vec::new()) else {
             self.macro_saida = tr!("A macro fez uma pergunta: responda na janela.").into();
             return;
@@ -109,6 +156,7 @@ impl App {
             Ok((json, validado)) => {
                 self.workbook.macros = (!validado.macros.is_empty()).then_some(json);
                 self.macro_catalogo = validado;
+                self.sincronizar_eventos();
                 self.alterado = true;
                 self.macro_saida = trf!("{status}. Guardado nesta planilha (salve o arquivo para gravar).");
                 true
@@ -126,6 +174,7 @@ impl App {
         self.macro_catalogo = self.workbook.macros.as_deref()
             .and_then(|t| feather_macros::Catalogo::importar_json(t).ok())
             .unwrap_or_default();
+        self.sincronizar_eventos();
     }
 
     /// Gera um nome não utilizado, sem depender do código aberto no editor.
@@ -175,6 +224,10 @@ impl App {
     }
 
     pub(super) fn guardar_modulo_macro(&mut self) {
+        if self.macro_visual.documento.starts_with("planilha:") {
+            self.guardar_evento_planilha();
+            return;
+        }
         let nome = self.macro_nome.trim().to_owned();
         if nome.is_empty() {
             self.macro_saida = tr!("Informe o nome do módulo.").into();
@@ -275,13 +328,16 @@ impl App {
                     } else if modulo != self.macro_nome {
                         return;
                     }
+                } else if let Some(aba) = nome.strip_prefix("planilha:") {
+                    if !self.workbook.nomes().iter().any(|n| n == aba) { return; }
+                    let aba = aba.to_owned();
+                    self.macro_visual.renomeando = None;
+                    self.abrir_evento_planilha(&aba);
+                    return;
                 } else if nome != "pasta" && nome != "componente:previsao" {
-                    if !nome.strip_prefix("planilha:").is_some_and(|nome| {
-                        self.workbook.nomes().iter().any(|n| n == nome)
-                    }) {
-                        return;
-                    }
+                    return;
                 }
+                self.macro_visual.renomeando = None;
                 self.macro_visual.documento = nome;
             }
             EventoVisual::Painel(p) if p <= editor_visual::PAINEL_HISTORICO => {
@@ -305,6 +361,48 @@ impl App {
                 self.evento_macro_visual(EventoVisual::Documento(format!("modulo:{nome}")));
             }
             EventoVisual::HistoricoLimpar => self.historico_macros.limpar(),
+            EventoVisual::EventoPlanilha(e) => {
+                self.macro_visual.evento_planilha = e;
+                if let Some(aba) = self.macro_visual.documento.strip_prefix("planilha:").map(str::to_owned) {
+                    self.abrir_evento_planilha(&aba);
+                }
+            }
+            EventoVisual::NovaPasta => self.nova_pasta_macro(),
+            EventoVisual::RenomearInicio => {
+                if self.macro_visual.documento.starts_with("modulo:") {
+                    self.macro_visual.renomeando = Some(self.macro_nome.clone());
+                }
+            }
+            EventoVisual::RenomearTexto(t) => {
+                if self.macro_visual.renomeando.is_some() { self.macro_visual.renomeando = Some(t); }
+            }
+            EventoVisual::RenomearCancelar => self.macro_visual.renomeando = None,
+            EventoVisual::RenomearConfirmar => {
+                if let Some(novo) = self.macro_visual.renomeando.clone() {
+                    match self.renomear_modulo(&novo) {
+                        Ok(()) => self.macro_visual.renomeando = None,
+                        Err(e) => { self.macro_saida = e; self.macro_visual.console = true; }
+                    }
+                }
+            }
+            EventoVisual::DivisoriaInicio(d) => self.macro_visual.arrasto = Some((d, None)),
+            EventoVisual::DivisoriaFim => self.macro_visual.arrasto = None,
+            EventoVisual::DivisoriaMover(y) => {
+                let v = &mut self.macro_visual;
+                match v.arrasto {
+                    Some((d, None)) => {
+                        let atual = match d {
+                            Divisoria::Lateral => v.desenhado_explorador.get(),
+                            Divisoria::Console => v.desenhado_console.get(),
+                        };
+                        v.arrasto = Some((d, Some((y, atual))));
+                    }
+                    // O limite de cada lado é aplicado no desenho (editor_visual).
+                    Some((Divisoria::Lateral, Some((y0, h0)))) => v.altura_explorador = Some(h0 + y - y0),
+                    Some((Divisoria::Console, Some((y0, h0)))) => v.altura_console = Some(h0 - (y - y0)),
+                    None => {}
+                }
+            }
             _ => {}
         }
     }
@@ -318,6 +416,9 @@ impl App {
             && mods == keyboard::Modifiers::default()
         {
             if self.macro_visual.menu.take().is_some() {
+                return Some(Task::none());
+            }
+            if self.macro_visual.renomeando.take().is_some() {
                 return Some(Task::none());
             }
             // Depois do menu: a barra Localizar, depois a busca do Explorador.
@@ -337,6 +438,7 @@ impl App {
         // formulário de prévia estiver selecionado.
         if matches!(acao, Msg::MacroExecutar | Msg::MacroGuardarModulo | Msg::MacroSalvar)
             && !self.macro_visual.documento.starts_with("modulo:")
+            && !self.macro_visual.documento.starts_with("planilha:")
         {
             self.macro_saida = tr!("Abra um módulo JavaScript para executar ou guardar o código.").into();
             return Some(Task::none());

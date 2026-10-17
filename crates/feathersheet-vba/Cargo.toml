@@ -28,4 +28,3 @@ cognitive_complexity = "deny"
 feathersheet-macros = { path = "../feathersheet-macros" }
 feathersheet-core = { path = "../feathersheet-core" }
 feathersheet-io = { path = "../feathersheet-io" }
-

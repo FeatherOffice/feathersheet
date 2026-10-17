@@ -118,6 +118,12 @@ pub struct AbaBruta {
     /// Comentários das células: `[{r, c, a (autor), t (texto), v (visível)}]`.
     #[serde(default)]
     pub cm: Option<Json>,
+    /// Linhas ocultas da linha `lo` até o fim da aba (ocultar até o fim).
+    #[serde(default)]
+    pub lo: Option<u32>,
+    /// Colunas ocultas da coluna `co` até o fim da aba.
+    #[serde(default)]
+    pub co: Option<u32>,
     #[serde(default)]
     pub w: Vec<(u32, u32)>,
     #[serde(default)]
@@ -212,6 +218,10 @@ pub struct PastaBruta {
     /// Catálogo de macros da pasta.
     #[serde(default)]
     pub mc: Option<Json>,
+    /// Valores guardados das pastas externas citadas pelas fórmulas
+    /// (`=[Vendas.fshz]Dados!A1`): ver [`crate::externos_guardados`].
+    #[serde(default)]
+    pub ex: Option<Json>,
     pub sheets: Vec<AbaBruta>,
 }
 
@@ -260,6 +270,10 @@ struct AbaMeta<'a> {
     pt: Option<Json>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cm: Option<Json>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    lo: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    co: Option<u32>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     w: Vec<(u32, u32)>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -329,6 +343,8 @@ struct LivroMeta<'a> {
     pr: Option<Json>,
     #[serde(skip_serializing_if = "Option::is_none")]
     mc: Option<Json>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ex: Option<Json>,
     t: Vec<Json>,
     s: Vec<AbaMeta<'a>>,
 }
@@ -513,6 +529,8 @@ fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<
         tp: aba.tp.clone(),
         pt: aba.pt.clone(),
         cm: aba.cm.clone(),
+        lo: aba.lo,
+        co: aba.co,
         w: aba.w.clone(),
         h: aba.h.clone(),
         g: aba.g.clone(),
@@ -657,6 +675,7 @@ fn montar_partes(pasta: &PastaBruta) -> Result<(LivroMeta<'_>, Vec<Vec<u8>>), St
         es: pasta.es.clone(),
         pr: pasta.pr.clone(),
         mc: pasta.mc.clone(),
+        ex: pasta.ex.clone(),
         t: estilos.valores,
         s: abas_meta,
     };
@@ -760,6 +779,7 @@ mod testes {
             es: None,
             pr: None,
             mc: None,
+            ex: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -768,6 +788,8 @@ mod testes {
                 tp: None,
                 pt: None,
                 cm: None,
+                lo: None,
+                co: None,
                 w: vec![],
                 h: vec![],
                 g: None,
@@ -822,6 +844,7 @@ mod testes {
             es: None,
             pr: None,
             mc: None,
+            ex: None,
             sheets: vec![AbaBruta {
                 n: "Dados".into(),
                 tc: None,
@@ -830,6 +853,8 @@ mod testes {
                 tp: None,
                 pt: None,
                 cm: None,
+                lo: None,
+                co: None,
                 w: vec![],
                 h: vec![],
                 g: None,
@@ -893,6 +918,7 @@ mod testes {
             es: None,
             pr: None,
             mc: None,
+            ex: None,
             sheets: vec![AbaBruta {
                 n: "Dados".into(),
                 tc: None,
@@ -901,6 +927,8 @@ mod testes {
                 tp: None,
                 pt: None,
                 cm: None,
+                lo: None,
+                co: None,
                 w: vec![],
                 h: vec![],
                 g: None,
@@ -949,6 +977,7 @@ mod testes {
             es: None,
             pr: None,
             mc: None,
+            ex: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -957,6 +986,8 @@ mod testes {
                 tp: None,
                 pt: None,
                 cm: None,
+                lo: None,
+                co: None,
                 w: vec![],
                 h: vec![],
                 g: None,
@@ -1016,6 +1047,7 @@ mod testes {
             es: None,
             pr: None,
             mc: None,
+            ex: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -1024,6 +1056,8 @@ mod testes {
                 tp: None,
                 pt: None,
                 cm: None,
+                lo: None,
+                co: None,
                 w: vec![],
                 h: vec![],
                 g: None,
@@ -1088,6 +1122,7 @@ mod testes {
             es: None,
             pr: None,
             mc: None,
+            ex: None,
             sheets: vec![AbaBruta {
                 n: "Planilha1".into(),
                 tc: None,
@@ -1096,6 +1131,8 @@ mod testes {
                 tp: None,
                 pt: None,
                 cm: None,
+                lo: None,
+                co: None,
                 w: vec![],
                 h: vec![],
                 g: None,

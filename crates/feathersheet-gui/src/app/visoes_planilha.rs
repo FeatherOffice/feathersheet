@@ -276,6 +276,7 @@ impl App {
             opcoes_coluna: self.lista_coluna.as_deref(),
             areas_extras: &self.selecoes_extras,
             impressao: self.impressao_visual(),
+            copiada: self.marca_copia.as_ref().filter(|(aba, _)| *aba == self.folha).map(|(_, area)| area.clone()),
             setas: self.setas_visiveis(),
             comentarios: self.visao_comentarios(),
             circulos_validacao: self.circulos_visiveis(),

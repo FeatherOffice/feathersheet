@@ -7,6 +7,7 @@
 //! O que só existe com a janela aberta — selecionar, comandos da faixa e
 //! atalhos, foto da janela — é implementado aqui, no [`HospedeApp`].
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -41,39 +42,82 @@ impl PedidoMcp {
 }
 
 static RECEPTOR: OnceLock<Mutex<Option<canal::UnboundedReceiver<PedidoMcp>>>> = OnceLock::new();
+static ENVIO: OnceLock<Mutex<canal::UnboundedSender<PedidoMcp>>> = OnceLock::new();
+
+/// Configurações → IA (MCP): ligado e somente leitura. Lidos pela thread do
+/// canal a cada pedido; desligado, ninguém chega à planilha.
+static ATIVO: AtomicBool = AtomicBool::new(false);
+static SO_LEITURA: AtomicBool = AtomicBool::new(false);
+/// O canal está escutando (o ponto de conexão existe).
+static ESCUTANDO: AtomicBool = AtomicBool::new(false);
+/// Pedidos atendidos nesta sessão (mostrado nas Configurações).
+static PEDIDOS: AtomicU64 = AtomicU64::new(0);
 
 /// Quanto a thread do canal espera o aplicativo (abrir arquivo grande demora).
 const ESPERA: Duration = Duration::from_secs(120);
 
-/// Liga o canal. Fica desligado nos testes, no modo de captura e com
-/// `FEATHERSHEET_MCP=0`; um segundo FeatherSheet aberto não toma o canal do primeiro.
-pub(super) fn iniciar() -> Option<String> {
-    if std::env::var("FEATHERSHEET_MCP").is_ok_and(|v| v == "0")
-        || std::env::var_os("FEATHERSHEET_CAPTURAR").is_some() {
-        return None;
+fn recusa(id: Json, texto: &str) -> Json {
+    json!({ "jsonrpc": "2.0", "id": id, "result": { "isError": true, "content": [{ "type": "text", "text": texto }] } })
+}
+
+pub(super) fn somente_leitura(sim: bool) { SO_LEITURA.store(sim, Ordering::Relaxed); }
+pub(super) fn pedidos() -> u64 { PEDIDOS.load(Ordering::Relaxed) }
+pub(super) fn escutando() -> bool { ESCUTANDO.load(Ordering::Relaxed) }
+
+/// Liga ou desliga o canal (abertura do app e Configurações). Ligar cria o
+/// ponto de conexão local; desligar o remove, e um pedido que ainda chegue é
+/// recusado. Fica desligado nos testes, na captura e com `FEATHERSHEET_MCP=0`;
+/// um segundo FeatherSheet aberto não toma o canal do primeiro.
+pub(super) fn ligar(ativo: bool) -> String {
+    ATIVO.store(ativo, Ordering::Relaxed);
+    if !ativo {
+        if ESCUTANDO.swap(false, Ordering::Relaxed) { ao_vivo::encerrar(); }
+        return tr!("MCP desligado: nenhuma IA alcança a planilha.").into();
     }
-    let (tx, rx) = canal::unbounded::<PedidoMcp>();
-    RECEPTOR.set(Mutex::new(Some(rx))).ok()?;
-    let tx = Mutex::new(tx);
+    if std::env::var("FEATHERSHEET_MCP").is_ok_and(|v| v == "0")
+        || std::env::var_os("FEATHERSHEET_CAPTURAR").is_some() || cfg!(test) {
+        return tr!("MCP indisponível neste modo de execução.").into();
+    }
+    if ESCUTANDO.load(Ordering::Relaxed) {
+        return trf!("MCP ao vivo escutando em {}", ao_vivo::onde_escuta().display());
+    }
+    if ENVIO.get().is_none() {
+        let (tx, rx) = canal::unbounded::<PedidoMcp>();
+        let _ = RECEPTOR.set(Mutex::new(Some(rx)));
+        let _ = ENVIO.set(Mutex::new(tx));
+    }
     let tratar = move |msg: Json| -> Option<Json> {
         let id = msg.get("id")?.clone();
         if msg.get("method").and_then(Json::as_str) == Some(ao_vivo::METODO_INSTANCIA) {
             return Some(json!({ "jsonrpc": "2.0", "id": id, "result": { "ok": false } }));
         }
+        if !ATIVO.load(Ordering::Relaxed) {
+            return Some(recusa(id, "O MCP está desligado no FeatherSheet (Configurações → IA (MCP))."));
+        }
+        if SO_LEITURA.load(Ordering::Relaxed) && msg.get("method").and_then(Json::as_str) == Some("tools/call") {
+            let nome = msg["params"]["name"].as_str().unwrap_or("");
+            if !feathersheet_mcp::permissoes::so_le(nome, &msg["params"]["arguments"]) {
+                return Some(recusa(id, &format!("{nome}: o FeatherSheet está em somente leitura para a IA (Configurações → IA (MCP)).")));
+            }
+        }
+        PEDIDOS.fetch_add(1, Ordering::Relaxed);
         let (rtx, rrx) = mpsc::channel();
-        tx.lock().ok()?.unbounded_send(PedidoMcp(Arc::new((msg, Mutex::new(Some(rtx)))))).ok()?;
-        Some(rrx.recv_timeout(ESPERA).unwrap_or_else(|_| json!({ "jsonrpc": "2.0", "id": id,
-            "result": { "isError": true, "content": [{ "type": "text", "text": "O FeatherSheet não respondeu a tempo (ocupado ou com um diálogo aberto)." }] } })))
+        ENVIO.get()?.lock().ok()?.unbounded_send(PedidoMcp(Arc::new((msg, Mutex::new(Some(rtx)))))).ok()?;
+        Some(rrx.recv_timeout(ESPERA).unwrap_or_else(|_| recusa(id,
+            "O FeatherSheet não respondeu a tempo (ocupado ou com um diálogo aberto).")))
     };
     match ao_vivo::servir(tratar) {
-        Ok(true) => Some(format!("MCP ao vivo escutando em {}", ao_vivo::onde_escuta().display())),
-        Ok(false) => Some("MCP ao vivo: outro FeatherSheet já atende o canal".into()),
-        Err(e) => Some(format!("MCP ao vivo indisponível: {e}")),
+        Ok(true) => {
+            ESCUTANDO.store(true, Ordering::Relaxed);
+            trf!("MCP ao vivo escutando em {}", ao_vivo::onde_escuta().display())
+        }
+        Ok(false) => tr!("MCP ao vivo: outro FeatherSheet já atende o canal").into(),
+        Err(e) => trf!("MCP ao vivo indisponível: {e}"),
     }
 }
 
 pub(super) fn encerrar() {
-    if RECEPTOR.get().is_some() { ao_vivo::encerrar(); }
+    if ESCUTANDO.swap(false, Ordering::Relaxed) { ao_vivo::encerrar(); }
 }
 
 fn fluxo() -> iced::futures::stream::BoxStream<'static, Msg> {
@@ -84,6 +128,8 @@ fn fluxo() -> iced::futures::stream::BoxStream<'static, Msg> {
 }
 
 pub(super) fn assinatura() -> Subscription<Msg> {
+    // O receptor é criado na primeira vez que o MCP liga; a assinatura
+    // segue de pé mesmo se ele for desligado depois (o canal só recusa).
     if RECEPTOR.get().is_some() { Subscription::run(fluxo) } else { Subscription::none() }
 }
 
@@ -278,6 +324,78 @@ impl Hospede for HospedeApp<'_> {
         }
     }
     fn reflui_tabelas(&self) -> bool { true }
+
+    /// O mesmo caminho das setas do cabeçalho (`tabelas::filtrar`): o
+    /// AutoFiltro guardado na aba, linhas escondidas e um Ctrl+Z.
+    fn filtrar(&mut self, aba: usize, area: Rect, acao: &str, coluna: Option<u32>, criterio: Option<Json>) -> Result<String, String> {
+        use feathersheet_core::celulas::refs::{cell_name, col_name};
+        let w = &mut self.app.workbook;
+        let area_da = |t: &Json| -> Option<Rect> {
+            let a = &t["area"];
+            let n = |k: &str| a[k].as_u64().and_then(|v| u32::try_from(v).ok());
+            Some(Rect::new(n("r0")?, n("c0")?, n("r1")?, n("c1")?))
+        };
+        let nome = |r: &Rect| format!("{}:{}", cell_name(r.r0, r.c0), cell_name(r.r1, r.c1));
+        let existente = tabelas::sob_qualquer(w, aba, area.r0, area.c0);
+        let texto = match acao {
+            "listar" => match existente {
+                None => format!("Sem AutoFiltro nem tabela em {}.", cell_name(area.r0, area.c0)),
+                Some(t) => {
+                    let a = area_da(&t).ok_or("Área do filtro inválida.")?;
+                    let filtros = t["filtros"].as_array().cloned().unwrap_or_default();
+                    let linhas: Vec<String> = filtros.iter().map(|f| format!("  coluna {}: {}",
+                        col_name(a.c0 + f["col"].as_u64().unwrap_or(0) as u32), f["criterio"])).collect();
+                    format!("{} em {}{}", if t["soFiltro"] == true { "AutoFiltro" } else { "Tabela" }, nome(&a),
+                        if linhas.is_empty() { ", sem critérios.".into() } else { format!(":\n{}", linhas.join("\n")) })
+                }
+            },
+            "aplicar" => {
+                let coluna = coluna.ok_or("Falta `coluna`.")?;
+                let criterio = criterio.ok_or("Falta `criterio`.")?;
+                let t = match existente {
+                    Some(t) => t,
+                    None => {
+                        tabelas::alternar_auto_filtro(w, aba, area.clone(), area.r0, area.c0)?;
+                        tabelas::sob_qualquer(w, aba, area.r0, area.c0).ok_or("Não consegui ligar o AutoFiltro nesse intervalo.")?
+                    }
+                };
+                let a = area_da(&t).ok_or("Área do filtro inválida.")?;
+                if coluna < a.c0 || coluna > a.c1 {
+                    return Err(format!("A coluna {} está fora do filtro ({}).", col_name(coluna), nome(&a)));
+                }
+                let id = t["id"].as_str().unwrap_or("").to_string();
+                let escondidas = tabelas::filtrar(w, aba, &id, coluna - a.c0, Some(criterio.clone()))?;
+                format!("Filtro em {} (coluna {}: {criterio}): {escondidas} linha(s) escondida(s). Um Ctrl+Z desfaz.", nome(&a), col_name(coluna))
+            }
+            "limpar" => {
+                let t = existente.ok_or("Não há AutoFiltro nem tabela nesse intervalo.")?;
+                let a = area_da(&t).ok_or("Área do filtro inválida.")?;
+                let id = t["id"].as_str().unwrap_or("").to_string();
+                match coluna {
+                    Some(c) if c >= a.c0 && c <= a.c1 => {
+                        tabelas::filtrar(w, aba, &id, c - a.c0, None)?;
+                        format!("Critério da coluna {} removido; as linhas dela voltaram.", col_name(c))
+                    }
+                    Some(c) => return Err(format!("A coluna {} está fora do filtro ({}).", col_name(c), nome(&a))),
+                    None => format!("{} critério(s) removido(s) de {}; todas as linhas à vista.", tabelas::limpar_todos_filtros(w, aba, &id)?, nome(&a)),
+                }
+            }
+            "remover" => {
+                let t = existente.ok_or("Não há AutoFiltro nesse intervalo.")?;
+                if t["soFiltro"] != true {
+                    return Err("Isso é uma tabela (Ctrl+T): o filtro faz parte dela. Use acao=limpar para tirar os critérios.".into());
+                }
+                let id = t["id"].as_str().unwrap_or("").to_string();
+                tabelas::limpar_todos_filtros(w, aba, &id)?;
+                tabelas::alternar_auto_filtro(w, aba, area.clone(), area.r0, area.c0)?
+            }
+            outra => return Err(format!("`acao` desconhecida: {outra}. Use aplicar, limpar, remover ou listar.")),
+        };
+        if acao != "listar" && aba == self.app.folha {
+            self.app.trocar_selecao(self.app.linha, self.app.coluna);
+        }
+        Ok(texto)
+    }
 
     fn comando(&mut self, nome: &str, args: &Json) -> Result<String, String> {
         use formulas_ui::Evento as F;
@@ -497,6 +615,28 @@ mod testes {
         assert_eq!(app.faixa_ativa, AbaFaixa::Formulas);
         let (_, t) = chamar(&mut app, "sheet_comando", json!({ "comando": "listar" }));
         assert!(t.contains("rastrear_dependentes"));
+    }
+
+    /// sheet_filtrar ao vivo: liga o AutoFiltro, esconde as linhas como as
+    /// setas do cabeçalho, lista, limpa e remove.
+    #[test]
+    fn filtrar_pelo_mcp_usa_o_autofiltro_da_tela() {
+        let mut app = App::default();
+        let (erro, t) = chamar(&mut app, "sheet_escrever", json!({ "celula": "A1", "valores": [
+            ["Nome", "UF"], ["Bia", "SP"], ["Ana", "RJ"], ["Caio", "SP"], ["Davi", "MG"]] }));
+        assert!(!erro, "{t}");
+        let oculta = |app: &App, r: u32| app.workbook.aba(0).unwrap().sheet.row_heights.get(&r) == Some(&0);
+        let (erro, t) = chamar(&mut app, "sheet_filtrar", json!({ "intervalo": "A1:B5", "coluna": "UF", "criterio": ["SP"] }));
+        assert!(!erro && t.contains("2 linha(s) escondida(s)"), "{t}");
+        assert!(!oculta(&app, 1) && oculta(&app, 2) && !oculta(&app, 3) && oculta(&app, 4));
+        let (_, t) = chamar(&mut app, "sheet_filtrar", json!({ "intervalo": "A1", "acao": "listar" }));
+        assert!(t.contains("AutoFiltro em A1:B5") && t.contains("coluna B"), "{t}");
+        let (erro, t) = chamar(&mut app, "sheet_filtrar", json!({ "intervalo": "A1", "acao": "limpar" }));
+        assert!(!erro && !oculta(&app, 2), "{t}");
+        let (erro, t) = chamar(&mut app, "sheet_filtrar", json!({ "intervalo": "A1", "acao": "remover" }));
+        assert!(!erro, "{t}");
+        let (_, t) = chamar(&mut app, "sheet_filtrar", json!({ "intervalo": "A1", "acao": "listar" }));
+        assert!(t.starts_with("Sem AutoFiltro"), "{t}");
     }
 
     #[test]

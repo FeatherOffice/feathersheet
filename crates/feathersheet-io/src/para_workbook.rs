@@ -74,6 +74,10 @@ pub fn para_workbook(lida: &PastaLida) -> Workbook {
         pasta.propriedades = propriedades_de_json(pr);
     }
     pasta.macros = lida.mc.as_ref().map(|v| v.to_string());
+    // Os últimos valores das pastas externas: valem até a origem abrir.
+    if let Some(ex) = &lida.ex {
+        pasta.instalar_externos_guardados(crate::externos_guardados::de_json(ex));
+    }
     pasta
 }
 
@@ -205,6 +209,8 @@ fn carregar_aba(sheet: &mut feathersheet_core::planilha::sheet::Sheet, aba: &Aba
     if let Some(tp) = &aba.tp { sheet.topicos = topicos_de_json(tp); }
     sheet.protecao = aba.pt.as_ref().and_then(protecao_de_json);
     sheet.comentarios = aba.cm.as_ref().map(comentarios_de_json).unwrap_or_default();
+    sheet.linhas_ocultas_desde = aba.lo;
+    sheet.colunas_ocultas_desde = aba.co;
     sheet.g = aba.g.as_ref().map(|v| v.to_string());
     sheet.pr = aba.pr.as_ref().map(|v| v.to_string());
     sheet.r = aba.r.as_ref().map(|v| v.to_string());
@@ -626,6 +632,7 @@ mod testes {
             es: None,
             pr: None,
             mc: None,
+            ex: None,
             sheets: vec![AbaLida {
                 estilos: Default::default(),
                 n: "Planilha1".into(),
@@ -635,6 +642,8 @@ mod testes {
                 tp: None,
                 pt: None,
                 cm: None,
+                lo: None,
+                co: None,
                 avulsas: vec![],
                 estilos_diretos: vec![],
                 estilos_faixa: vec![],
@@ -720,6 +729,7 @@ mod testes {
             es: None,
             pr: None,
             mc: None,
+            ex: None,
             sheets: vec![AbaLida {
                 estilos: Default::default(),
                 n: "Planilha1".into(),
@@ -729,6 +739,8 @@ mod testes {
                 tp: None,
                 pt: None,
                 cm: None,
+                lo: None,
+                co: None,
                 avulsas: vec![],
                 estilos_diretos: vec![],
                 estilos_faixa: vec![],

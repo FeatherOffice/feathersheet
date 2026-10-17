@@ -9,6 +9,10 @@ pub(crate) struct Visual {
     tema: String,
     tipos: Vec<char>,
     marcas: Vec<Vec<Marca>>,
+    /// Filtros de relatório acima da tabela (campo | item) e, por linha, se
+    /// o filtro esconde algo (funil cheio).
+    filtros: Option<Rect>,
+    filtrados: Vec<bool>,
 }
 #[derive(Clone)]
 struct Marca {
@@ -54,6 +58,10 @@ struct PivotDeArquivo {
     tema: Option<String>,
     #[serde(default)]
     mapa: Option<MapaCompacto>,
+    #[serde(default, rename = "areaFiltros")]
+    area_filtros: Option<Rect>,
+    #[serde(default, rename = "filtrosPagina")]
+    filtros_pagina: Vec<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -79,9 +87,10 @@ pub(crate) fn visuais(sheet: &Sheet) -> Vec<Visual> {
                 Marca { coluna, caminho, recolhido }
             }).collect()
         }).collect();
+        let filtrados = v.filtros_pagina;
         Some(Visual {
             area, tema: v.tema.unwrap_or_else(|| "padrao".to_string()),
-            tipos, marcas,
+            tipos, marcas, filtros: v.area_filtros, filtrados,
         })
     }).collect()
 }
@@ -145,6 +154,18 @@ pub(crate) fn recolhida(lista:&[Visual],row:u32,col:u32)->Option<bool> {
     let rel_coluna = col - visual.area.c0;
     visual.marcas.get(indice)?.iter().find(|m| m.coluna == rel_coluna)
         .map(|m|m.recolhido)
+}
+
+/// A célula do item de um filtro de relatório (a da direita, onde fica o
+/// funil): o índice do filtro e se ele esconde algo.
+pub(crate) fn filtro_na_grade(lista:&[Visual],row:u32,col:u32)->Option<(usize,bool)> {
+    lista.iter().find_map(|v| {
+        let f = v.filtros.as_ref()?;
+        (col == f.c0 + 1 && row >= f.r0 && row <= f.r1).then(|| {
+            let i = (row - f.r0) as usize;
+            (i, v.filtrados.get(i).copied().unwrap_or(false))
+        })
+    })
 }
 
 pub(crate) fn destaque(lista:&[Visual],row:u32,col:u32)->bool {

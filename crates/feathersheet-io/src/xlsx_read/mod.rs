@@ -11,6 +11,7 @@
 
 mod format;
 mod formas;
+mod imagens_celula;
 mod desenho_objetos;
 mod graficos_ancora;
 pub use formas::{ler_formas, Forma};
@@ -265,6 +266,9 @@ fn anexar_elementos(
         _fields: Vec<String>,
         /// O agrupamento de cada campo (`fieldGroup`), já no formato `Agrupamento` do core.
         grupos: Vec<Option<serde_json::Value>>,
+        /// Os itens (`sharedItems`) de cada campo, como chave do filtro do
+        /// painel: resolvem itens ocultos, recolhidos e o item base.
+        itens: Vec<Vec<String>>,
     }
     let mut pivot_caches: std::collections::HashMap<String, CacheInfo> = std::collections::HashMap::new();
     // O `cacheId` da dinâmica é o do `<pivotCache cacheId r:id>` do
@@ -295,11 +299,13 @@ fn anexar_elementos(
                     }
                     let mut fields = Vec::new();
                     let mut grupos: Vec<Option<serde_json::Value>> = Vec::new();
+                    let mut itens: Vec<Vec<String>> = Vec::new();
                     if let Some(cf_node) = c_node.child("cacheFields") {
                         for cf in cf_node.children_named("cacheField") {
                             let fname = cf.attr("name").map(str::to_string).unwrap_or_else(|| format!("Campo{}", fields.len() + 1));
                             fields.push(fname);
                             grupos.push(agrupamento_do_campo(cf));
+                            itens.push(chaves_dos_itens(cf));
                         }
                     }
                     let num_str = fname.find("pivotCacheDefinition").and_then(|pos| {
@@ -308,7 +314,7 @@ fn anexar_elementos(
                     }).unwrap_or(1);
                     let info = || CacheInfo {
                         aba: cache_sheet.clone(), area: cache_area, tabela: cache_tabela.clone(),
-                        _fields: fields.clone(), grupos: grupos.clone(),
+                        _fields: fields.clone(), grupos: grupos.clone(), itens: itens.clone(),
                     };
                     let ids: Vec<String> = caminho_do_cache.iter()
                         .filter(|(_, caminho)| caminho.as_str() == fname.as_str())
@@ -357,7 +363,7 @@ fn anexar_elementos(
                 let pvt_node = if root.name == "pivotTableDefinition" { Some(&root) } else { root.child("pivotTableDefinition") };
                 if let Some(p_node) = pvt_node {
                     let cache_id = p_node.attr("cacheId").unwrap_or("0");
-                    let default_info = CacheInfo { aba: None, area: (0, 0, 9, 1), tabela: None, _fields: Vec::new(), grupos: Vec::new() };
+                    let default_info = CacheInfo { aba: None, area: (0, 0, 9, 1), tabela: None, _fields: Vec::new(), grupos: Vec::new(), itens: Vec::new() };
                     let cache = pivot_caches.get(cache_id).or_else(|| pivot_caches.get("0")).unwrap_or(&default_info);
                     let (fonte_aba, fonte_area) = match cache.tabela.as_deref()
                         .map(str::to_lowercase)
@@ -455,7 +461,7 @@ fn anexar_elementos(
                         }
                     }
 
-                    let extras = extras_da_dinamica(p_node, &p_fields, &linhas, &colunas, &cache.grupos);
+                    let extras = extras_da_dinamica(p_node, &p_fields, &linhas, &colunas, &cache.grupos, &cache.itens);
                     // Layout do Excel: `compact="0"` é o de estrutura de
                     // tópicos ou o tabular (uma coluna por campo), que aqui
                     // é o tabular; o padrão é o compacto.
@@ -465,6 +471,41 @@ fn anexar_elementos(
                     // (o padrão) em algum campo de linha que não o último.
                     let subtotais = linhas.len() > 1 && linhas[..linhas.len() - 1].iter()
                         .any(|&x| p_fields.get(x as usize).is_none_or(|f| !desligado(f, "defaultSubtotal")));
+                    // "Repetir rótulos dos itens" (x14 `fillDownLabels`) só
+                    // existe no tabular.
+                    let repetir = tabular && linhas.iter()
+                        .any(|&x| p_fields.get(x as usize).is_some_and(|f| rotulos_repetidos(f)));
+                    // Filtros no formato do painel (`{col, valores, excluir}`,
+                    // valores = chaves que saem): os campos de `pageFields`
+                    // primeiro, na ordem deles, e os itens ocultos (`h="1"`)
+                    // de qualquer outro campo.
+                    let paginas: Vec<(usize, Option<usize>)> = p_node.child("pageFields")
+                        .map(|pf| pf.children_named("pageField").filter_map(|f| Some((
+                            f.attr("fld")?.parse::<usize>().ok()?,
+                            f.attr("item").and_then(|v| v.parse::<usize>().ok()),
+                        ))).collect())
+                        .unwrap_or_default();
+                    let mut filtros: Vec<serde_json::Value> = Vec::new();
+                    let demais = (0..p_fields.len()).filter(|i| !paginas.iter().any(|(f, _)| f == i)).map(|i| (i, None));
+                    for (idx, escolhido) in paginas.iter().copied().chain(demais) {
+                        let pagina = paginas.iter().any(|(f, _)| *f == idx);
+                        let saem = itens_ocultos(p_fields.get(idx).copied(), cache.itens.get(idx), escolhido);
+                        if pagina || !saem.is_empty() {
+                            filtros.push(serde_json::json!({ "col": base_col + idx as i64, "valores": saem, "excluir": true }));
+                        }
+                    }
+                    // Grupos recolhidos (`sd="0"`) do campo de fora: o caminho
+                    // do painel nesse nível é a chave do item.
+                    let recolhidos: Vec<String> = match linhas.first() {
+                        Some(&x) if linhas.len() > 1 => p_fields.get(x as usize)
+                            .and_then(|f| f.child("items"))
+                            .map(|itens| itens.children_named("item")
+                                .filter(|it| matches!(it.attr("sd"), Some("0") | Some("false")))
+                                .filter_map(|it| cache.itens.get(x as usize)?.get(it.attr("x")?.parse::<usize>().ok()?).cloned())
+                                .collect())
+                            .unwrap_or_default(),
+                        _ => Vec::new(),
+                    };
                     // No `.fshz` os campos são colunas ABSOLUTAS da aba de
                     // origem (o painel da dinâmica trabalha assim); no
                     // `.xlsx` são posições dentro da origem.
@@ -483,11 +524,11 @@ fn anexar_elementos(
                         "datas": [],
                         "extras": extras,
                         "layout": if tabular { "tabular" } else { "compacto" },
-                        "repetirRotulos": false,
+                        "repetirRotulos": repetir,
                         "subtotais": subtotais,
                         "tema": "padrao",
-                        "recolhidos": [],
-                        "filtros": [],
+                        "recolhidos": recolhidos,
+                        "filtros": filtros,
                         "atualizarAoAbrir": matches!(p_node.attr("refreshOnLoad"), Some("1") | Some("true")),
                     });
                     if let Some((r0, c0, r1, c1)) = area_resultado {
@@ -733,17 +774,87 @@ fn agrupamento_do_campo(cf: &xml::XmlNode) -> Option<serde_json::Value> {
     }
 }
 
+/// A chave do filtro do painel (a do `parse_date_key` do core, sem agrupar)
+/// de cada item do `sharedItems` de um `cacheField`: o texto da célula, com
+/// `(Vazio)` para a vazia.
+fn chaves_dos_itens(cf: &xml::XmlNode) -> Vec<String> {
+    use feathersheet_core::celulas::values::{to_text, Value};
+    let Some(compartilhados) = cf.child("sharedItems") else { return Vec::new() };
+    compartilhados.children.iter().map(|item| {
+        let v = item.attr("v").unwrap_or("");
+        let valor = match item.name.as_str() {
+            "m" => Value::Empty,
+            "n" => v.parse::<f64>().map(Value::Number).unwrap_or(Value::Empty),
+            "b" => Value::Bool(v == "1" || v.eq_ignore_ascii_case("true")),
+            _ => Value::Text(v.to_string()),
+        };
+        let texto = to_text(&valor);
+        if texto.trim().is_empty() { "(Vazio)".to_string() } else { texto }
+    }).collect()
+}
+
+/// As chaves dos itens que um campo da dinâmica deixa de fora: os ocultos
+/// (`h="1"`) ou, com `escolhido` (`pageField item`, filtro de um item só),
+/// todos menos ele. Ordenadas e sem repetição, como o painel grava.
+fn itens_ocultos(campo: Option<&xml::XmlNode>, chaves: Option<&Vec<String>>, escolhido: Option<usize>) -> Vec<String> {
+    let (Some(campo), Some(chaves)) = (campo, chaves) else { return Vec::new() };
+    let itens: Vec<&xml::XmlNode> = campo.child("items").map(|i| i.children_named("item").collect()).unwrap_or_default();
+    let chave = |item: &xml::XmlNode| -> Option<String> {
+        if item.attr("t").is_some_and(|t| t != "data") {
+            return None; // subtotal, total...
+        }
+        chaves.get(item.attr("x")?.parse::<usize>().ok()?).cloned()
+    };
+    let mut saem: Vec<String> = match escolhido.and_then(|i| itens.get(i)).and_then(|item| chave(item)) {
+        Some(fica) => chaves.iter().filter(|c| **c != fica).cloned().collect(),
+        None => itens.iter()
+            .filter(|item| matches!(item.attr("h"), Some("1") | Some("true")))
+            .filter_map(|item| chave(item))
+            .collect(),
+    };
+    saem.sort();
+    saem.dedup();
+    saem
+}
+
+/// O campo repete os rótulos dos itens (x14 `fillDownLabels`)?
+fn rotulos_repetidos(campo: &xml::XmlNode) -> bool {
+    campo.child("extLst").is_some_and(|lista| lista.children_named("ext").any(|ext| {
+        ext.child("pivotField").is_some_and(|p| matches!(p.attr("fillDownLabels"), Some("1") | Some("true")))
+    }))
+}
+
+/// O nome do item base (`baseItem`, índice nos `items` do campo base).
+fn nome_do_item(campo: Option<&xml::XmlNode>, chaves: Option<&Vec<String>>, indice: usize) -> Option<String> {
+    let chaves = chaves?;
+    let x = match campo.and_then(|c| c.child("items")) {
+        Some(itens) => itens.children_named("item").nth(indice)?.attr("x")?.parse::<usize>().ok()?,
+        None => indice,
+    };
+    chaves.get(x).cloned()
+}
+
+/// A medida da ordem "por valor" (`autoSortScope` apontando para o
+/// pseudo-campo Valores, 4294967294 = −2).
+fn medida_da_ordem(campo: &xml::XmlNode) -> Option<usize> {
+    campo.child("autoSortScope")?.child("pivotArea")?.child("references")?
+        .children_named("reference").find(|r| r.attr("field") == Some("4294967294"))?
+        .child("x")?.attr("v")?.parse().ok()
+}
+
 /// O que a dinâmica do Excel tem além de linhas/colunas/valores, já no
 /// formato `Extras` do core (`dinamica::exibicao`): `showDataAs` de cada
 /// `dataField`, `rowGrandTotals`/`colGrandTotals`, `sortType` e `fieldGroup`
 /// dos campos de linha e coluna. O item base nomeado (`baseItem` por índice)
-/// ainda não é resolvido; só "anterior"/"seguinte".
+/// sai pelos itens do cache (`itens`); a classificação e o % do total
+/// acumulado vêm do x14 `pivotShowAs`; a ordem "por valor", do `autoSortScope`.
 fn extras_da_dinamica(
     p_node: &xml::XmlNode,
     p_fields: &[&xml::XmlNode],
     linhas: &[u32],
     colunas: &[u32],
     grupos: &[Option<serde_json::Value>],
+    itens: &[Vec<String>],
 ) -> serde_json::Value {
     let campo_base = |idx: u32| -> Option<serde_json::Value> {
         if let Some(p) = linhas.iter().position(|&c| c == idx) {
@@ -754,19 +865,38 @@ fn extras_da_dinamica(
     let mut valores = Vec::new();
     if let Some(df_node) = p_node.child("dataFields") {
         for df in df_node.children_named("dataField") {
-            let campo = df.attr("baseField").and_then(|v| v.parse::<u32>().ok()).and_then(campo_base);
+            let base = df.attr("baseField").and_then(|v| v.parse::<u32>().ok());
+            let campo = base.and_then(campo_base);
             let item = match df.attr("baseItem").and_then(|v| v.parse::<u32>().ok()) {
                 Some(1048828) => Some(serde_json::json!({"tipo": "anterior"})),
                 Some(1048829) => Some(serde_json::json!({"tipo": "seguinte"})),
-                _ => None,
+                Some(i) => base
+                    .and_then(|f| nome_do_item(p_fields.get(f as usize).copied(), itens.get(f as usize), i as usize))
+                    .map(|nome| serde_json::json!({"tipo": "item", "nome": nome})),
+                None => None,
             };
-            let modo = match df.attr("showDataAs").unwrap_or("normal") {
+            // Excel 2010+: classificação e % do total acumulado moram no
+            // `x14:dataField pivotShowAs` e valem mais que o `showDataAs`.
+            let x14 = df.child("extLst")
+                .and_then(|l| l.children_named("ext").find_map(|e| e.child("dataField")?.attr("pivotShowAs")));
+            let modo = match x14.or(df.attr("showDataAs")).unwrap_or("normal") {
                 "percentOfTotal" => serde_json::json!({"tipo": "perc_total_geral"}),
                 "percentOfCol" => serde_json::json!({"tipo": "perc_total_coluna"}),
                 "percentOfRow" => serde_json::json!({"tipo": "perc_total_linha"}),
                 "index" => serde_json::json!({"tipo": "indice"}),
                 "runTotal" => match campo {
                     Some(c) => serde_json::json!({"tipo": "total_acumulado_em", "campo": c}),
+                    None => serde_json::json!({"tipo": "normal"}),
+                },
+                kind @ ("percentOfRunningTotal" | "rankAscending" | "rankDescending") => match campo {
+                    Some(c) => {
+                        let tipo = match kind {
+                            "percentOfRunningTotal" => "perc_total_acumulado_em",
+                            "rankAscending" => "classificar_menor_maior",
+                            _ => "classificar_maior_menor",
+                        };
+                        serde_json::json!({"tipo": tipo, "campo": c})
+                    }
                     None => serde_json::json!({"tipo": "normal"}),
                 },
                 kind @ ("percent" | "difference" | "percentDiff") => match (campo, item) {
@@ -785,18 +915,25 @@ fn extras_da_dinamica(
             valores.push(modo);
         }
     }
+    let n_valores = valores.len();
     let por_campo = |lista: &[u32]| -> Vec<serde_json::Value> {
         lista
             .iter()
             .map(|&idx| {
-                let ordenacao = match p_fields.get(idx as usize).and_then(|f| f.attr("sortType")) {
-                    Some("ascending") => "crescente",
-                    Some("descending") => "decrescente",
-                    _ => "padrao",
+                let campo = p_fields.get(idx as usize);
+                let tipo = campo.and_then(|f| f.attr("sortType"));
+                let por_valor = campo.and_then(|f| medida_da_ordem(f)).filter(|&m| m < n_valores);
+                let ordenacao = match (tipo, por_valor) {
+                    (Some(t @ ("ascending" | "descending")), Some(m)) => {
+                        serde_json::json!({"tipo": "por_valor", "medida": m, "crescente": t == "ascending"})
+                    }
+                    (Some("ascending"), _) => serde_json::json!({"tipo": "crescente"}),
+                    (Some("descending"), _) => serde_json::json!({"tipo": "decrescente"}),
+                    _ => serde_json::json!({"tipo": "padrao"}),
                 };
                 serde_json::json!({
                     "agrupamento": grupos.get(idx as usize).cloned().flatten(),
-                    "ordenacao": {"tipo": ordenacao},
+                    "ordenacao": ordenacao,
                 })
             })
             .collect()
@@ -1014,7 +1151,7 @@ mod extras_dinamica_testes {
         .unwrap();
         let grupos = vec![agrupamento_do_campo(&cache), None];
         let campos: Vec<&xml::XmlNode> = raiz.child("pivotFields").unwrap().children_named("pivotField").collect();
-        let json = extras_da_dinamica(&raiz, &campos, &[0], &[], &grupos);
+        let json = extras_da_dinamica(&raiz, &campos, &[0], &[], &grupos, &[]);
         let e: Extras = serde_json::from_value(json).unwrap();
         assert!(!e.totais_gerais_linhas && e.totais_gerais_colunas);
         assert_eq!(e.valores[0], MostrarComo::PercTotalColuna);
