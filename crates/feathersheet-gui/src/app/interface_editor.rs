@@ -289,6 +289,7 @@ impl App {
             // Aviso temporário ao lado das guias (antes cobria as abas).
             self.view_aviso_abas().unwrap_or_else(|| Space::with_width(0).into()),
             self.view_progresso_abertura(),
+            self.view_progresso_dinamica(),
             status,
         ].spacing(5).padding([0, 8]).height(Length::Fixed(36.0))
             .align_y(Alignment::Center);
@@ -526,6 +527,7 @@ impl App {
         let base = self.sobrepor_congelar(base);
         let base = self.sobrepor_menu_tinta(base);
         let base = self.sobrepor_menu_formas(base);
+        let base = self.sobrepor_menu_imagem(base);
         let base = self.sobrepor_menu_formulas(base);
         let base = self.sobrepor_criar_nomes(base);
         let base = self.sobrepor_avaliar(base);
@@ -690,6 +692,19 @@ impl App {
                         None,
                     ]);
                 }
+                // Imagem: tirar da célula, pôr a solta selecionada na célula,
+                // ou escolher um arquivo para a célula ativa.
+                use imagem_na_celula::Evento as Img;
+                if self.celula_tem_imagem() {
+                    opcoes.push(Some((tr!("Colocar imagem sobre as células").into(), Msg::ImagemCelula(Img::ColocarSobre))));
+                }
+                if self.imagem_selecionada.is_some() {
+                    opcoes.push(Some((tr!("Colocar imagem na célula").into(), Msg::ImagemCelula(Img::ColocarNaCelula))));
+                }
+                opcoes.extend([
+                    Some((tr!("Inserir imagem na célula…").into(), Msg::ImagemCelula(Img::Inserir))),
+                    None,
+                ]);
                 opcoes.extend([
                     Some((tr!("Limpar conteúdo").into(), Msg::Limpar)),
                     None,

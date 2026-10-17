@@ -1,5 +1,6 @@
 //! Edição e atualização de dinâmicas persistidas na aba.
 use super::*;
+use feathersheet_core::dinamica::dinamica_layout::Resultado;
 use serde_json::{json, Value as Json};
 
 /// Lê índices do legado TypeScript: -1 = primeira coluna calculada.
@@ -19,7 +20,7 @@ fn lista_indices(v: &Json, origem: &Rect, n: usize) -> Option<Vec<usize>> {
     v.as_array()?.iter().map(|item| indice(item, origem, n)).collect()
 }
 
-fn agregacao(como: &str) -> Option<AgregacaoOp> {
+pub(super) fn agregacao(como: &str) -> Option<AgregacaoOp> {
     Some(match como.to_ascii_lowercase().as_str() {
         "soma" | "sum" => AgregacaoOp::Soma,
         "contagem" | "conta" | "contar" | "count" | "contarvalores" => AgregacaoOp::Contagem,
@@ -68,7 +69,7 @@ pub(super) fn ler_estado(app: &App, destino: usize, meta: &Json) -> Result<Estad
                 op: agregacao(v.get("como").or_else(|| v.get("op"))?.as_str()?)?,
             })
         }).collect::<Option<Vec<_>>>()
-        .ok_or(tr!("Medidas não reconhecidas pelo motor Rust."))?;
+        .ok_or(tr!("Medidas da dinâmica não reconhecidas."))?;
     let (layout,repetir_rotulos,subtotais,recolhidos,filtros) = avancado::opcoes_de_json(meta);
     let mut grupos: Vec<String> = meta["mapa"]["linhas"].as_array()
         .map(|itens| itens.iter().flat_map(|linha| {
@@ -237,7 +238,17 @@ impl App {
         }
     }
 
+    /// Recalcula e grava a dinâmica. Origem grande vai para a conta de
+    /// fundo ([`super::fundo`]) e grava quando terminar.
     pub(super) fn aplicar_estado_na_dinamica(&mut self, destino: usize, e: &Estado) -> Result<(), String> {
+        if Self::dinamica_vai_para_fundo(e) {
+            return self.iniciar_dinamica_fundo(destino, e);
+        }
+        self.aplicar_com_resultado(destino, e, None)
+    }
+
+    /// Grava a dinâmica; sem `pronto`, faz a conta aqui mesmo.
+    pub(super) fn aplicar_com_resultado(&mut self, destino: usize, e: &Estado, pronto: Option<Resultado>) -> Result<(), String> {
         avancado::conferir_nomes_calculados(e)?;
         let origem_nome = self.workbook.aba(e.folha_origem)
             .ok_or(tr!("Aba de origem não encontrada."))?.sheet.name.clone();
@@ -252,7 +263,10 @@ impl App {
         let antigo = retangulo_json(&lista[pos]["areaResultado"])
             .ok_or(tr!("Área do resultado anterior inválida."))?;
         let inicio = std::time::Instant::now();
-        let resultado = avancado::calcular(self,e)?;
+        let resultado = match pronto {
+            Some(r) => r,
+            None => avancado::calcular(self,e)?,
+        };
         let conta_ms = inicio.elapsed().as_millis();
         let altura = resultado.matriz.height();
         let largura = resultado.matriz.rows().iter().map(Vec::len).max().unwrap_or(0);

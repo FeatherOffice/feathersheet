@@ -1,6 +1,6 @@
 [package]
 name = "feathersheet-gui"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Interface nativa FeatherSheet em Rust/Iced usando o template FeatherOffice"
 
@@ -25,7 +25,7 @@ pbkdf2 = "0.12"
 sha2 = "0.10"
 unicode-normalization = "0.1"
 getrandom = "0.2"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "bmp", "webp"] }
 # Apenas representacao/algoritmos de borda no Canvas; engine colunar permanece no core.
 feather-tables = { git = "https://github.com/FeatherOffice/feather-io", tag = "v0.1.1" }
 feathersheet-core = { path = "../feathersheet-core" }

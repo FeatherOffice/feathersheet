@@ -116,12 +116,13 @@ pub fn fn_switch(args: &[Node], ev: &Evaluator<'_>) -> Computed {
     if let Value::Error(e) = target {
         return Computed::Scalar(Value::Error(e));
     }
-    let target_txt = to_text(&target);
-
+    // Como no Excel: texto sem ligar para maiúscula, e número só casa com
+    // número (`PARÂMETRO(1; "1"; …)` não casa). Antes comparava o texto dos
+    // dois lados, e era o contrário nos dois casos (17/10/2026).
     let mut i = 1;
     while i < args.len() - 1 {
         let case_val = ev.value(&args[i]);
-        if !matches!(case_val, Value::Error(_)) && to_text(&case_val) == target_txt {
+        if crate::funcoes::fn_helpers::valores_iguais(&target, &case_val) {
             return Computed::Scalar(ev.eval(&args[i + 1]));
         }
         i += 2;
@@ -522,6 +523,20 @@ mod tests {
         // SES(1>2; "A"; 3>2; "B") = "B"
         sheet.set_cell_raw(2, 0, "=SES(1>2; \"A\"; 3>2; \"B\")".into(), None);
         assert_eq!(sheet.get_value(2, 0), Value::Text("B".into()));
+
+        // PARÂMETRO / SWITCH: caso, padrão, sem padrão, maiúsculas, tipo.
+        for (formula, esperado) in [
+            ("=PARÂMETRO(2; 1; \"um\"; 2; \"dois\"; \"outro\")", Value::Text("dois".into())),
+            ("=PARÂMETRO(9; 1; \"um\"; 2; \"dois\"; \"outro\")", Value::Text("outro".into())),
+            ("=SWITCH(\"b\"; \"A\"; 1; \"B\"; 2)", Value::Number(2.0)),
+            ("=PARÂMETRO(1; \"1\"; \"texto\"; \"número\")", Value::Text("número".into())),
+        ] {
+            sheet.set_cell_raw(10, 5, formula.into(), None);
+            assert_eq!(sheet.get_value(10, 5), esperado, "{formula}");
+        }
+        sheet.set_cell_raw(10, 5, "=PARÂMETRO(9; 1; \"um\")".into(), None);
+        assert!(matches!(sheet.get_value(10, 5), Value::Error(e) if e.code == ErrorCode::Na));
+        sheet.set_cell_raw(10, 5, String::new(), None);
 
         // ESCOLHER(2; "X"; "Y"; "Z") = "Y"
         sheet.set_cell_raw(3, 0, "=ESCOLHER(2; \"X\"; \"Y\"; \"Z\")".into(), None);

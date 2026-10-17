@@ -18,7 +18,7 @@
 use std::io::{BufReader, Cursor};
 use std::io::Read;
 
-use arrow::array::{Array, Float64Array, Int32Array, RecordBatch};
+use arrow::array::{Array, Int32Array, RecordBatch};
 use arrow::ipc::reader::FileReader;
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
@@ -284,56 +284,33 @@ fn tabela_de(arrow_bytes: &[u8]) -> Result<Vec<RecordBatch>, String> {
     leitor.collect::<Result<Vec<_>, _>>().map_err(|e| format!("Não consegui ler a tabela Arrow: {e}"))
 }
 
-/// Lê uma coluna `Float64` pelo nome do campo, juntando blocos se houver mais
-/// de um `RecordBatch`. `None` quando o campo não existe na tabela.
-fn coluna_float(batches: &[RecordBatch], campo: &str, linhas: u32) -> Option<(Vec<f64>, Vec<u8>)> {
-    let mut values = vec![0.0f64; linhas as usize];
-    let mut bitmap = vec![0u8; ((linhas as usize) + 7) >> 3];
-    let mut r = 0usize;
-    let mut achou = false;
-    for batch in batches {
-        let Some(coluna) = batch.column_by_name(campo) else { continue };
-        let Some(arr) = coluna.as_any().downcast_ref::<Float64Array>() else { continue };
-        achou = true;
-        for i in 0..arr.len() {
-            if r >= linhas as usize {
-                break;
-            }
-            if arr.is_valid(i) {
-                values[r] = arr.value(i);
-                bitmap[r >> 3] |= 1 << (r & 7);
-            }
-            r += 1;
-        }
+/// As colunas Arrow da aba, já em vetores (ver [`crate::arrow_fluxo`]).
+type ColunasArrow = std::collections::HashMap<String, crate::arrow_fluxo::ColunaArrow>;
+
+fn tirar_float(colunas: &mut ColunasArrow, campo: &str) -> Option<(Vec<f64>, Vec<u8>)> {
+    match colunas.remove(campo)? {
+        crate::arrow_fluxo::ColunaArrow::Float(v, m) => Some((v, m)),
+        crate::arrow_fluxo::ColunaArrow::Int(..) => None,
     }
-    achou.then_some((values, bitmap))
 }
 
-/// A mesma ideia de [`coluna_float`], para `Int32`.
-fn coluna_int(batches: &[RecordBatch], campo: &str, linhas: u32) -> Option<(Vec<i32>, Vec<u8>)> {
-    let mut values = vec![0i32; linhas as usize];
-    let mut bitmap = vec![0u8; ((linhas as usize) + 7) >> 3];
-    let mut r = 0usize;
-    let mut achou = false;
-    for batch in batches {
-        let Some(coluna) = batch.column_by_name(campo) else { continue };
-        let Some(arr) = coluna.as_any().downcast_ref::<Int32Array>() else { continue };
-        achou = true;
-        for i in 0..arr.len() {
-            if r >= linhas as usize {
-                break;
-            }
-            if arr.is_valid(i) {
-                values[r] = arr.value(i);
-                bitmap[r >> 3] |= 1 << (r & 7);
-            }
-            r += 1;
-        }
+fn tirar_int(colunas: &mut ColunasArrow, campo: &str) -> Option<(Vec<i32>, Vec<u8>)> {
+    match colunas.remove(campo)? {
+        crate::arrow_fluxo::ColunaArrow::Int(v, m) => Some((v, m)),
+        crate::arrow_fluxo::ColunaArrow::Float(..) => None,
     }
-    achou.then_some((values, bitmap))
 }
 
-fn montar_aba_lida(aba: AbaMetaLida, estilos: &std::sync::Arc<Vec<Json>>, arrow_bytes: &[u8]) -> Result<AbaLida, String> {
+/// As colunas do bloco Arrow da aba, de uma fatia já na memória (FSH2 antigo).
+fn colunas_da_fatia(aba: &AbaMetaLida, arrow_bytes: &[u8]) -> Result<ColunasArrow, String> {
+    let (Some((off, len)), Some(linhas)) = (aba.ar, aba.len) else { return Ok(Default::default()) };
+    let fatia = arrow_bytes
+        .get(off..off.checked_add(len).ok_or("Fatia Arrow excede o intervalo")?)
+        .ok_or_else(|| format!("Fatia Arrow fora dos limites na aba \"{}\"", aba.n))?;
+    crate::arrow_fluxo::ler_colunas(fatia, len, linhas)
+}
+
+fn montar_aba_lida(aba: AbaMetaLida, estilos: &std::sync::Arc<Vec<Json>>, mut arrow: ColunasArrow) -> Result<AbaLida, String> {
     let existe = |i: &usize| *i < estilos.len();
     let avulsas = aba
         .c
@@ -345,20 +322,16 @@ fn montar_aba_lida(aba: AbaMetaLida, estilos: &std::sync::Arc<Vec<Json>>, arrow_
     let mut colunas_txt = Vec::new();
     let mut colunas_formula = Vec::new();
 
-    if let (Some(cols), Some((off, len)), Some(linhas)) = (aba.cols, aba.ar, aba.len) {
-        let fatia = arrow_bytes
-            .get(off..off.checked_add(len).ok_or("Fatia Arrow excede o intervalo")?)
-            .ok_or_else(|| format!("Fatia Arrow fora dos limites na aba \"{}\"", aba.n))?;
-        let batches = tabela_de(fatia)?;
+    if let (Some(cols), Some(_), Some(linhas)) = (aba.cols, aba.ar, aba.len) {
         for col in cols {
             match col.k.as_str() {
                 "num" => {
-                    if let Some((values, bitmap)) = coluna_float(&batches, &col.f, linhas) {
+                    if let Some((values, bitmap)) = tirar_float(&mut arrow, &col.f) {
                         colunas_num.push(ColunaNumLida { col: col.c, values, bitmap });
                     }
                 }
                 "txt" => {
-                    if let Some((mut indices, bitmap)) = coluna_int(&batches, &col.f, linhas) {
+                    if let Some((mut indices, bitmap)) = tirar_int(&mut arrow, &col.f) {
                         let original = col.d.unwrap_or_default();
                         let dict = crate::fshz_write::dicionario_local(&mut indices, &bitmap, |id| original.get(id as usize).map(String::as_str).unwrap_or_default())
                             .into_iter().map(str::to_owned).collect();
@@ -371,13 +344,13 @@ fn montar_aba_lida(aba: AbaMetaLida, estilos: &std::sync::Arc<Vec<Json>>, arrow_
                     }
                 }
                 "fx" => {
-                    if let Some((ids, bitmap)) = coluna_int(&batches, &col.f, linhas) {
+                    if let Some((ids, bitmap)) = tirar_int(&mut arrow, &col.f) {
                         let (slots, payload) = match &col.fv {
                             // Formato de hoje: o campo `f` já traz o slot
                             // empacotado (padrão nos 24 bits altos, tipo do
                             // valor nos 8 baixos); `fv` traz o valor calculado.
                             Some(fv) => {
-                                let payload = coluna_float(&batches, fv, linhas)
+                                let payload = tirar_float(&mut arrow, fv)
                                     .map(|(v, _)| v)
                                     .unwrap_or_else(|| vec![0.0; linhas as usize]);
                                 (ids, payload)
@@ -463,7 +436,10 @@ fn montar_aba_lida(aba: AbaMetaLida, estilos: &std::sync::Arc<Vec<Json>>, arrow_
 fn montar_pasta_lida(livro: LivroMetaLida, arrow_bytes: &[u8]) -> Result<PastaLida, String> {
     let tabela = std::sync::Arc::new(livro.t);
     let sheets =
-        livro.s.into_iter().map(|aba| montar_aba_lida(aba, &tabela, arrow_bytes)).collect::<Result<Vec<_>, _>>()?;
+        livro.s.into_iter().map(|aba| {
+            let colunas = colunas_da_fatia(&aba, arrow_bytes)?;
+            montar_aba_lida(aba, &tabela, colunas)
+        }).collect::<Result<Vec<_>, _>>()?;
     Ok(PastaLida { v: livro.v, a: livro.a, names: livro.names, es: livro.es, pr: livro.pr, mc: livro.mc, ex: livro.ex, sheets })
 }
 
@@ -517,17 +493,16 @@ fn ler_fluxo<R: Read>(origem: R, versao: u32) -> Result<PastaLida, String> {
     let mut deslocamento = 0usize;
     let tabela = std::sync::Arc::new(livro.t);
     let mut sheets = Vec::with_capacity(livro.s.len());
-    for mut aba in livro.s {
-        let mut bloco = Vec::new();
+    for aba in livro.s {
+        let mut colunas = ColunasArrow::default();
         if let Some((off, len)) = aba.ar {
             if off != deslocamento { return Err("Blocos Arrow FSH3 fora de ordem".into()); }
-            bloco = ler_bloco(&mut leitor, len)
+            // Direto do gzip para as colunas, sem o bloco inteiro na memória.
+            colunas = crate::arrow_fluxo::ler_colunas(&mut leitor, len, aba.len.unwrap_or(0))
                 .map_err(|e| format!("Bloco Arrow FSH3 inválido: {e}"))?;
-            if bloco.len() != len { return Err("Bloco Arrow FSH3 truncado".into()); }
             deslocamento = deslocamento.checked_add(len).ok_or("Blocos Arrow grandes demais")?;
-            aba.ar = Some((0, len));
         }
-        sheets.push(montar_aba_lida(aba, &tabela, &bloco)?);
+        sheets.push(montar_aba_lida(aba, &tabela, colunas)?);
     }
     // Verifica o checksum gzip inclusive quando não há colunas Arrow.
     let mut extra = [0];

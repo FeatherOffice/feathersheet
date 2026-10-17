@@ -191,9 +191,9 @@ pub struct PatternRef {
 /// padrão da coluna lê "mesma linha, duas colunas à esquerda", então mexer
 /// em B7 suja D7 — e isso se calcula na hora, sem um `Set` por célula.
 ///
-/// Intervalos locais continuam no grafo por blocos. Intervalos qualificados
-/// conservam as duas pontas e o nome da aba: a pasta invalida esses padrões
-/// após uma edição, sem registrar uma dependência por célula.
+/// Intervalos locais ficam de fora: são de `faixas_do_padrao`. Intervalos
+/// qualificados conservam as duas pontas e o nome da aba: a pasta invalida
+/// esses padrões após uma edição, sem registrar uma dependência por célula.
 pub fn refs_of_pattern(pattern: &str) -> Option<Vec<PatternRef>> {
     let mut refs = Vec::new();
     let mut i = 0usize;
@@ -210,9 +210,14 @@ pub fn refs_of_pattern(pattern: &str) -> Option<Vec<PatternRef>> {
         let r = decode_ref(&pattern[i + 1..end], 0, 0);
         // A segunda ponta de `Produtos!A1:A9` herda a aba da primeira.
         if pattern.as_bytes().get(end + 1) == Some(&b':') && pattern.as_bytes().get(end + 2) == Some(&MARK_BYTE) {
-            let sheet = r.sheet.clone()?;
             let start2 = end + 3;
             let end2 = start2 + pattern[start2..].find(MARK)?;
+            // Intervalo local (`A2:A10`): fica com `faixas_do_padrao`
+            // (`modelo_padrao.rs`), que sabe a área inteira, não só as pontas.
+            let Some(sheet) = r.sheet.clone() else {
+                i = end2 + 1;
+                continue;
+            };
             let mut r2 = decode_ref(&pattern[start2..end2], 0, 0);
             r2.sheet = Some(sheet);
             refs.push(PatternRef { row: r.row, col: r.col, row_lock: r.row_lock, col_lock: r.col_lock, sheet: r.sheet });
@@ -318,9 +323,11 @@ mod tests {
     }
 
     #[test]
-    fn intervalo_faz_refs_of_pattern_devolver_none() {
-        let pattern = pattern_for("=SOMA(A1:A9)", 0, 0).unwrap();
-        assert_eq!(refs_of_pattern(&pattern), None);
+    fn intervalo_local_fica_fora_das_refs() {
+        // Desde 17/10/2026 o intervalo local é de `faixas_do_padrao`.
+        let pattern = pattern_for("=SOMA(A1:A9)+B1", 0, 2).unwrap();
+        let refs = refs_of_pattern(&pattern).unwrap();
+        assert_eq!(refs.len(), 1, "só B1");
     }
 
     #[test]

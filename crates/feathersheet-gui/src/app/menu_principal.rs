@@ -235,7 +235,7 @@ impl App {
             Pagina::Exportar => self.menu_exportar(),
             Pagina::Comandos => iced::widget::column![
                 text(tr!("Comandos")).size(24),
-                text(tr!("Ferramentas e submenus do TypeScript preservados."))
+                text(tr!("Todas as ferramentas e submenus num lugar só."))
                     .size(12).color(COR_TEXTO_MUTED()),
                 self.view_menu_typescript(),
             ].spacing(12).into(),

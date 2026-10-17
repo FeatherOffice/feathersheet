@@ -169,7 +169,10 @@ pub(crate) fn pattern_check(raw: &str) -> bool {
     let mut precisa_do_grafo = false;
     let mut qualificadas = 0;
     ast.walk(&mut |n| match n {
-        Node::Name(_) | Node::Range { sheet: None, .. } => precisa_do_grafo = true,
+        // Intervalo local (`AO:AO`, `A2:A10`) mora na coluna empacotada desde
+        // 17/10/2026 (`FaixaPadrao`): `MÍNIMOSES(AO:AO;A:A;A2;…)` em 13,7
+        // milhões de linhas não cabia no caminho de uma fórmula por célula.
+        Node::Name(_) => precisa_do_grafo = true,
         // Outro arquivo (`[Vendas.fshz]Dados!A1`): fica avulsa, onde a
         // atualização que chega de fora acha quem lê cada célula
         // (`vinculo_externo.rs`) e onde o cálculo em paralelo não vai.
@@ -289,6 +292,9 @@ pub struct Sheet {
     /// As células tocadas desde a última vez que alguém perguntou — ver
     /// [`Rastro`]. `RefCell` porque a cascata de "sujo" roda com `&self`.
     pub rastro: RefCell<Rastro>,
+    /// Escrita em lote ([`Self::adiar_cascata`]): as células escritas
+    /// esperam aqui e sujam os dependentes numa cascata só, no fim.
+    cascata_adiada: RefCell<Option<Vec<CellKey>>>,
     /// Algo saiu da borda do retângulo usado: recalcular antes de responder.
     pub(crate) bounds_dirty: bool,
     /// Fórmulas avulsas que leem outra aba ou um nome. As compactas guardam
@@ -368,6 +374,7 @@ impl Sheet {
             textos: TextosCrus::new(),
             hist: edicao::Historico::default(),
             rastro: RefCell::new(Rastro::default()),
+            cascata_adiada: RefCell::new(None),
             bounds_dirty: false,
             externas: HashSet::new(),
             deps: DependencyGraph::new(),
@@ -813,20 +820,22 @@ impl Sheet {
         if calc.cache.is_empty() || limite == 0 {
             return 0;
         }
-        let mut movidos = 0usize;
         let (formulas, pool, dirty, evaluating) = (&mut self.formulas, &mut self.pool, &calc.dirty, &calc.evaluating);
-        calc.cache.retain(|&k, v| {
-            if movidos >= limite || dirty.contains(&k) || evaluating.contains(&k) {
-                return true;
+        // `extract_if` para assim que a cota enche: o `retain` de antes
+        // percorria o cache inteiro a cada chamada (13,7 milhões de entradas
+        // para mover 500 mil — o colar de 13 milhões de fórmulas pesava a
+        // cada segundo, 17/10/2026).
+        let movidos = calc.cache.extract_if(|&k, v| {
+            if dirty.contains(&k) || evaluating.contains(&k) {
+                return false;
             }
             let (row, col) = Self::key_to_coord(k);
             if !formulas.has(row, col) {
-                return true;
+                return false;
             }
             formulas.store(row, col, v, pool);
-            movidos += 1;
-            false
-        });
+            true
+        }).take(limite).count();
         if calc.cache.len() < calc.cache.capacity() / 4 {
             calc.cache.shrink_to_fit();
         }
@@ -903,8 +912,35 @@ impl Sheet {
     /// dele (direta ou por intervalo), e quem depende dessas, e assim por
     /// diante.
     fn mark_dirty_cascade(&self, k: CellKey) {
+        if let Some(adiadas) = self.cascata_adiada.borrow_mut().as_mut() {
+            adiadas.push(k);
+            return;
+        }
         self.sujar_volateis();
         self.sujar_cascata(k);
+    }
+
+    /// Começa uma escrita em lote: até [`Self::soltar_cascata`], cada célula
+    /// escrita só é anotada. Regravar as fórmulas de uma coluna acumulada
+    /// (`=K1+I2`, `=K2+I3`…) ao inserir uma coluna fazia, a cada célula, a
+    /// cascata percorrer a cadeia inteira até o fim: quadrático (2 mil
+    /// linhas = 3,3 s; 1 milhão, mais de 13 min).
+    pub fn adiar_cascata(&self) {
+        let mut adiadas = self.cascata_adiada.borrow_mut();
+        if adiadas.is_none() {
+            *adiadas = Some(Vec::new());
+        }
+    }
+
+    /// Fim da escrita em lote: uma cascata só, com uma memória de visitadas
+    /// para todas as células anotadas.
+    pub fn soltar_cascata(&self) {
+        let Some(adiadas) = self.cascata_adiada.borrow_mut().take() else { return };
+        if adiadas.is_empty() {
+            return;
+        }
+        self.sujar_volateis();
+        self.sujar_cascata_de(adiadas);
     }
 
     /// Um recálculo da pasta (edição, F9, abrir) sorteia de novo as
@@ -926,6 +962,11 @@ impl Sheet {
     }
 
     fn sujar_cascata(&self, k: CellKey) {
+        self.sujar_cascata_de(vec![k]);
+    }
+
+    /// A cascata a partir de várias células, cada dependente visitado uma vez.
+    fn sujar_cascata_de(&self, inicio: Vec<CellKey>) {
         self.tocar();
         // Não há fórmula na aba que possa depender desta escrita.
         // Anteriormente cada literal de uma importação/conversão era colocado
@@ -933,20 +974,26 @@ impl Sheet {
         // muita RAM e HashSet/hash por célula. Uma célula que deixou de ser
         // fórmula ainda precisa descartar seu cache individual.
         if self.deps.dependents.is_empty()
-            && self.deps.range_index.is_empty()
+            && self.deps.range_deps.is_empty()
             && self.formulas.size() == 0
             && self.deps.array_cells.is_empty()
             && self.derrame.borrow().vazio()
         {
             let mut calc = self.calc.borrow_mut();
-            calc.cache.remove(&k);
-            calc.dirty.remove(&k);
+            for k in &inicio {
+                calc.cache.remove(k);
+                calc.dirty.remove(k);
+            }
             drop(calc);
-            self.rastro.borrow_mut().anotar(k);
+            let mut rastro = self.rastro.borrow_mut();
+            for k in inicio {
+                rastro.anotar(k);
+            }
             return;
         }
-        let mut queue = vec![k];
+        let mut queue = inicio;
         let mut visited = std::collections::HashSet::new();
+        let mut colunas_inteiras = std::collections::HashSet::new();
         // Sem matriz dinâmica na aba, o passo 0 abaixo não custa nada.
         let tem_derrame = !self.deps.array_cells.is_empty() || !self.derrame.borrow().vazio();
 
@@ -999,16 +1046,27 @@ impl Sheet {
                 }
             });
 
-            // 2) Dependentes de padrões colunares em FormulaTable
+            // 2) Dependentes de padrões colunares em FormulaTable. O que
+            // suja a coluna inteira (`A:A`, `$B$1`) vai por coluna, no fim:
+            // enfileirar 13 milhões de células uma a uma era o travamento.
             self.step_pattern_dependents(curr, &mut |dep| {
                 if !visited.contains(&dep) {
                     queue.push(dep);
                 }
-            });
+            }, Some(&mut colunas_inteiras));
+        }
+        if !colunas_inteiras.is_empty() {
+            self.rastro.borrow_mut().desconhecer();
+            let usos = self.formulas.columns_in_use();
+            self.invalidar_colunas_e_dependentes(colunas_inteiras, &usos);
         }
     }
 
-    fn step_pattern_dependents(&self, k: CellKey, marcar: &mut impl FnMut(CellKey)) {
+    /// As fórmulas empacotadas que leem `k`. Com `inteiras`, quando a coluna
+    /// inteira do padrão lê `k` (referência ou intervalo de linhas fixas),
+    /// a coluna vai para lá em vez de cada célula ir para `marcar`.
+    fn step_pattern_dependents(&self, k: CellKey, marcar: &mut impl FnMut(CellKey),
+        mut inteiras: Option<&mut std::collections::HashSet<u32>>) {
         if self.formulas.size() == 0 {
             return;
         }
@@ -1016,6 +1074,45 @@ impl Sheet {
         for col_use in self.formulas.columns_in_use() {
             let col = col_use.col;
             for uso in col_use.usos {
+                for faixa in &uso.faixas {
+                    let Some((c0, c1)) = faixa.colunas_em(col) else { continue };
+                    if alvo_col < c0 || alvo_col > c1 {
+                        continue;
+                    }
+                    if faixa.linhas_fixas() {
+                        let Some((r0, _, r1, _)) = faixa.rect_em(0, col) else { continue };
+                        if alvo_linha < r0 || alvo_linha > r1 {
+                            continue;
+                        }
+                        match inteiras.as_deref_mut() {
+                            Some(set) => { set.insert(col); }
+                            None => self.formulas.for_each_with_pattern(col, uso.id, |r| marcar(Self::cell_key(r, col))),
+                        }
+                        continue;
+                    }
+                    // Janela que anda com a linha (`B1:B3` descendo): só as
+                    // linhas cuja janela alcança a célula. Varrer a coluna a
+                    // cada escrita era quadrático (CSV com `=SOMA(B1:B3)`).
+                    if let Some((menor, maior)) = faixa.janela_relativa().filter(|(a, b)| b - a <= 4096) {
+                        let de = (alvo_linha as i64 - maior).max(0);
+                        let ate = alvo_linha as i64 - menor;
+                        for r in de..=ate {
+                            if self.formulas.uses_pattern(r as u32, col, uso.id) {
+                                marcar(Self::cell_key(r as u32, col));
+                            }
+                        }
+                        continue;
+                    }
+                    // Uma ponta fixa (`$B$1:B2`) ou janela enorme: a coluna toda.
+                    match inteiras.as_deref_mut() {
+                        Some(set) => { set.insert(col); }
+                        None => self.formulas.for_each_with_pattern(col, uso.id, |r| {
+                            if faixa.rect_em(r, col).is_some_and(|(r0, _, r1, _)| alvo_linha >= r0 && alvo_linha <= r1) {
+                                marcar(Self::cell_key(r, col));
+                            }
+                        }),
+                    }
+                }
                 for ref_ in &uso.refs {
                     // `Dados!A1` escrito dentro da própria Dados é local.
                     if ref_.sheet.as_deref().is_some_and(|s| !mesmo_nome(s, &self.name)) {
@@ -1029,7 +1126,10 @@ impl Sheet {
                         if ref_.row as u32 != alvo_linha {
                             continue;
                         }
-                        self.formulas.for_each_with_pattern(col, uso.id, |r| marcar(Self::cell_key(r, col)));
+                        match inteiras.as_deref_mut() {
+                            Some(set) => { set.insert(col); }
+                            None => self.formulas.for_each_with_pattern(col, uso.id, |r| marcar(Self::cell_key(r, col))),
+                        }
                         continue;
                     }
                     let linha = alvo_linha as i32 - ref_.row;
@@ -1224,12 +1324,15 @@ impl Sheet {
     }
 
     /// Esquece as faixas lidas (ver [`Self::faixa_lida`]): servem enquanto
-    /// muitas fórmulas leem as mesmas colunas; depois são só memória.
+    /// muitas fórmulas leem as mesmas colunas; depois são só memória. Os
+    /// agregados dos `*SES` ficam: são do tamanho dos grupos, não da coluna,
+    /// e caem sozinhos quando a aba muda. Soltá-los a cada pulso do monitor
+    /// (1 s) refazia o índice do `MÍNIMOSES` de 13,7 milhões de linhas
+    /// (1,9 s) a cada segundo — o app "meio lerdo" de 17/10/2026.
     pub fn soltar_faixas(&self) {
         let mut faixas = self.faixas.borrow_mut();
         faixas.mapa = Default::default();
         faixas.celulas = 0;
-        self.agregados.borrow_mut().mapa = Default::default();
     }
 
     /// O agregado por critério das faixas (todas desta aba, de mesmo
@@ -1286,14 +1389,17 @@ impl Sheet {
         let colunas = (colunas as u32).min(usado.c1 - primeiro.c0 + 1);
         // O empréstimo do mapa fica solto aqui: ler pode calcular fórmulas.
         let texto = |id: i32| self.pool.get(id);
-        let mut leitor = crate::planilha::agregado::LeitorChaves::novo(&texto);
+        let leitor = std::cell::RefCell::new(crate::planilha::agregado::LeitorChaves::novo(&texto));
         let agregado = Agregado::montar(criterios.len(), soma.is_some(), linhas, colunas,
             |i, r, c| {
                 let (row, col) = (criterios[i].r0 + r, criterios[i].c0 + c);
                 match self.cru_rapido(row, col) {
-                    Rapido::Cru(cru, literal) => leitor.do_cru(cru, literal),
+                    Rapido::Cru(cru, literal) => leitor.borrow_mut().do_cru(cru, literal),
                     Rapido::Vazia => Ok(None),
-                    Rapido::Lento => crate::planilha::agregado::ChaveCriterio::da_celula(&self.get_value_em(row, col, host)),
+                    Rapido::Lento => {
+                        let v = self.get_value_em(row, col, host);
+                        leitor.borrow_mut().da_celula(&v)
+                    }
                 }
             },
             |r, c| {
@@ -1308,6 +1414,7 @@ impl Sheet {
                     },
                 }
             },
+            || std::mem::take(&mut leitor.borrow_mut().chaves),
         )?;
         if corrente::voltando() {
             return None;

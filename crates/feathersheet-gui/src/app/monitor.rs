@@ -8,6 +8,9 @@ use iced::Element;
 impl App {
     /// Métricas que o motor anotou (abrir, desfazer…) vão para o Console.
     pub(super) fn recolher_diario_motor(&mut self) {
+        for linha in crate::vigia::recolher() {
+            self.monitor.registrar(Nivel::Aviso, "Tela", &linha);
+        }
         for (modelo, linha) in feathersheet_core::diario::recolher_com_modelo() {
             let linha = match modelo {
                 Some(modelo) => crate::idioma::traduzir_formatado(modelo, linha),

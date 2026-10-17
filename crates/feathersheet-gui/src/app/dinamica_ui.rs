@@ -19,6 +19,8 @@ mod detalhes;
 mod grafico_dinamico;
 mod segmentacao;
 mod faixa;
+mod mcp;
+pub(in crate::app) mod fundo;
 #[cfg(test)]
 mod testes_arrasto;
 pub(super) use segmentacao::Segmentacoes;
@@ -31,6 +33,10 @@ pub enum EixoDinamica { Linhas, Colunas, Valores }
 
 #[derive(Debug, Clone)]
 pub enum Evento {
+    /// Conta de fundo: mais um pedaço da leitura da origem (pulso).
+    FundoPasso,
+    /// Conta de fundo terminou (geração, resultado).
+    FundoPronto(u64, fundo::Pronto),
     Abrir,
     Recomendadas,
     Preset(u8),
@@ -387,6 +393,12 @@ pub(in crate::app) fn campos_de_antes(app: &mut App) {
 const ORIGEM_GRANDE: u32 = 100_000;
 
 impl App {
+    /// O painel lateral "Campos da Tabela Dinâmica" está aberto (a janela
+    /// de escolher a origem não conta: ela fica no meio da tela).
+    pub(in crate::app) fn dinamica_lateral_aberta(&self) -> bool {
+        self.dinamica.as_ref().is_some_and(|e| e.fase != Fase::Origem)
+    }
+
     pub(super) fn evento_dinamica(&mut self, evento: Evento) -> Task<Msg> {
         let ao_vivo = Self::evento_atualiza_ao_vivo(&evento);
         let medir = ao_vivo || matches!(evento, Evento::Criar | Evento::NaFaixa(..));
@@ -525,7 +537,12 @@ impl App {
                 e.origem_texto = texto;
             },
             Evento::OrigemAplicar => self.aplicar_nova_origem_dinamica(),
-            Evento::Fechar => self.dinamica = None,
+            Evento::Fechar => {
+                self.dinamica = None;
+                self.dinamica_fundo.soltar();
+            }
+            Evento::FundoPasso => return self.passo_dinamica_fundo(),
+            Evento::FundoPronto(geracao, pronto) => self.dinamica_fundo_pronta(geracao, pronto),
             Evento::Linha(i) => {
                 if let Some(e) = &mut self.dinamica {
                     if i < e.nomes.len() { marcar(&mut e.linhas, e.origem.c0 as usize + i); }

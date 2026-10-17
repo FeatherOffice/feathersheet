@@ -496,6 +496,14 @@ impl Hospede for HospedeApp<'_> {
         Some(s)
     }
 
+    fn dinamica(&mut self, args: &Json) -> Result<String, String> {
+        let origem = match args.get("origem").and_then(Json::as_str) {
+            Some(_) => Some(feathersheet_mcp::texto::intervalo(self, args, "origem")?),
+            None => None,
+        };
+        self.app.dinamica_pelo_mcp(args, origem)
+    }
+
     fn macros_mudaram(&mut self) {
         // O MCP grava as macros na própria pasta (`Workbook::macros`).
         self.app.recarregar_macros();

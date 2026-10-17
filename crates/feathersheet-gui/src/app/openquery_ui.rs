@@ -753,7 +753,7 @@ impl App {
                 if origem.starts_with("Arquivo: ") {
                     return self.evento_openquery(Evento::ReimportarArquivo);
                 }
-                if origem == "Entrada manual" || origem == "Snapshot TypeScript" {
+                if origem == "Entrada manual" || origem == tr!("Consulta salva") || origem == "Snapshot TypeScript" {
                     return self.evento_openquery(Evento::Atualizar);
                 }
                 if origem.is_empty() {

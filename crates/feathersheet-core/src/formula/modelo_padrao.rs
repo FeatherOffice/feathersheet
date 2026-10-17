@@ -116,6 +116,113 @@ impl ModeloPadrao {
     }
 }
 
+/// Um intervalo **local** que o padrão lê (`AO:AO`, `A2:A10`, `$A$1:A5`),
+/// como a coluna empacotada precisa para saber quem suja quem sem guardar
+/// uma dependência por célula. Cada ponta `[r0, c0, r1, c1]` é
+/// `(anda, valor)`: deslocamento em relação à célula da fórmula quando anda
+/// com ela, posição fixa quando não anda (cifrão, ou `A:A`, que o padrão
+/// textual guarda sem marcador).
+#[derive(Debug, Clone, PartialEq)]
+pub struct FaixaPadrao {
+    pontas: [(bool, i64); 4],
+}
+
+impl FaixaPadrao {
+    fn ponta(&self, i: usize, base: u32) -> Option<u32> {
+        let (anda, v) = self.pontas[i];
+        let p = if anda { base as i64 + v } else { v };
+        u32::try_from(p).ok()
+    }
+
+    /// O retângulo `(r0, c0, r1, c1)` que a fórmula da célula (`row`, `col`)
+    /// lê. `None` se sair da planilha.
+    pub fn rect_em(&self, row: u32, col: u32) -> Option<(u32, u32, u32, u32)> {
+        let (r0, c0, r1, c1) = (self.ponta(0, row)?, self.ponta(1, col)?, self.ponta(2, row)?, self.ponta(3, col)?);
+        Some((r0.min(r1), c0.min(c1), r0.max(r1), c0.max(c1)))
+    }
+
+    /// As colunas que a fórmula da coluna `col` lê (não dependem da linha).
+    pub fn colunas_em(&self, col: u32) -> Option<(u32, u32)> {
+        let (c0, c1) = (self.ponta(1, col)?, self.ponta(3, col)?);
+        Some((c0.min(c1), c0.max(c1)))
+    }
+
+    /// As linhas lidas não dependem da linha da fórmula (`A:A`, `$A$2:$A$9`):
+    /// mexer dentro delas suja a coluna inteira do padrão.
+    pub fn linhas_fixas(&self) -> bool {
+        !self.pontas[0].0 && !self.pontas[2].0
+    }
+
+    /// Quando as duas pontas de linha andam com a fórmula: os deslocamentos
+    /// (menor, maior). A fórmula da linha `R` lê `R + menor ..= R + maior`.
+    pub fn janela_relativa(&self) -> Option<(i64, i64)> {
+        let (a, b) = (self.pontas[0], self.pontas[2]);
+        (a.0 && b.0).then(|| (a.1.min(b.1), a.1.max(b.1)))
+    }
+
+    /// Deslocamentos de linha das pontas que andam (para conferir se a
+    /// fórmula cabe numa linha nova).
+    pub fn deslocamentos_de_linha(&self) -> impl Iterator<Item = i64> + '_ {
+        [self.pontas[0], self.pontas[2]].into_iter().filter(|p| p.0).map(|p| p.1)
+    }
+
+    /// As pontas como referências de célula, para quem só sabe consertar
+    /// referência em edição estrutural.
+    pub fn pontas_como_refs(&self) -> [crate::formula::formula_pattern::PatternRef; 2] {
+        let r = |a: usize, b: usize| crate::formula::formula_pattern::PatternRef {
+            row: self.pontas[a].1 as i32,
+            col: self.pontas[b].1 as i32,
+            row_lock: !self.pontas[a].0,
+            col_lock: !self.pontas[b].0,
+            sheet: None,
+        };
+        [r(0, 1), r(2, 3)]
+    }
+}
+
+/// Onde o padrão é analisado para achar os intervalos: no meio da planilha,
+/// para referências relativas para cima ou para a esquerda não saírem dela.
+const BASE_LINHA: u32 = 50_000_000;
+const BASE_COLUNA: u32 = 8_000;
+
+/// Os intervalos locais do padrão, na ordem do `walk`. Compara a árvore em
+/// duas células vizinhas na diagonal, como [`ModeloPadrao::montar`]: a
+/// coordenada que anda 1 é relativa, a que fica é fixa. `None` quando o
+/// padrão tem intervalo local e a comparação não fecha.
+pub fn faixas_do_padrao(padrao: &str) -> Option<Vec<FaixaPadrao>> {
+    fn locais(arvore: &Node) -> Vec<[u32; 4]> {
+        let mut v = Vec::new();
+        arvore.walk(&mut |n| {
+            if let Node::Range { r0, c0, r1, c1, sheet: None } = n {
+                v.push([*r0, *c0, *r1, *c1]);
+            }
+        });
+        v
+    }
+    let Some(a) = analisar(padrao, BASE_LINHA, BASE_COLUNA) else {
+        // Sem `:` não há intervalo; a análise pode falhar por outro motivo
+        // (referência longe demais), que não é assunto daqui.
+        return (!padrao.contains(':')).then(Vec::new);
+    };
+    let b = analisar(padrao, BASE_LINHA + 1, BASE_COLUNA + 1)?;
+    let (a, b) = (locais(&a), locais(&b));
+    if a.len() != b.len() {
+        return None;
+    }
+    a.iter().zip(&b).map(|(pa, pb)| {
+        let mut pontas = [(false, 0i64); 4];
+        for i in 0..4 {
+            let base = if i % 2 == 0 { BASE_LINHA } else { BASE_COLUNA } as i64;
+            pontas[i] = match pb[i] as i64 - pa[i] as i64 {
+                0 => (false, pa[i] as i64),
+                1 => (true, pa[i] as i64 - base),
+                _ => return None,
+            };
+        }
+        Some(FaixaPadrao { pontas })
+    }).collect()
+}
+
 /// As duas árvores são iguais fora as coordenadas das referências.
 fn mesma_forma(a: &Node, b: &Node) -> bool {
     match (a, b) {
@@ -137,6 +244,25 @@ fn mesma_forma(a: &Node, b: &Node) -> bool {
 mod testes {
     use super::*;
     use crate::formula::formula_pattern::pattern_for;
+
+    #[test]
+    fn faixas_do_padrao_separa_fixa_de_relativa() {
+        let p = pattern_for("=MÍNIMOSES(AO:AO;A:A;A2;C:C;C2;AP2:AP9;$B$1:B2)", 1, 46).unwrap();
+        let f = faixas_do_padrao(&p).unwrap();
+        assert_eq!(f.len(), 5, "AO:AO, A:A, C:C, AP2:AP9, $B$1:B2");
+        // AO:AO na coluna AU, linha 2: fixa, coluna 40 inteira.
+        assert!(f[0].linhas_fixas());
+        assert_eq!(f[0].rect_em(1, 46), Some((0, 40, MAX_ROWS - 1, 40)));
+        assert_eq!(f[0].rect_em(900, 46), Some((0, 40, MAX_ROWS - 1, 40)));
+        // AP2:AP9 anda com a linha.
+        assert!(!f[3].linhas_fixas());
+        assert_eq!(f[3].rect_em(1, 46), Some((1, 41, 8, 41)));
+        assert_eq!(f[3].rect_em(11, 46), Some((11, 41, 18, 41)));
+        // $B$1:B2: uma ponta fixa, a outra anda.
+        assert_eq!(f[4].rect_em(10, 46), Some((0, 1, 10, 1)));
+        assert_eq!(f[4].colunas_em(46), Some((1, 1)));
+        assert_eq!(faixas_do_padrao(&pattern_for("=A2*2", 1, 3).unwrap()), Some(vec![]));
+    }
 
     fn confere(raw: &str, row: u32, col: u32, outra: (u32, u32)) {
         let padrao = pattern_for(raw, row as i32, col as i32).expect("padrão");

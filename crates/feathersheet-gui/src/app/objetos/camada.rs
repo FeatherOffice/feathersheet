@@ -637,7 +637,9 @@ impl Camada {
         (Retangulo::entre(a.x, a.y, bx.max(0.0), by.max(0.0)), espelhar)
     }
 
-    fn desenhar_forma(frame: &mut Frame, it: &ItemTela, ajustes: &[f32], forma: &str, r: Rectangle, giro: f32, z: f32, com_texto: bool) {
+    /// `visivel`: a parte da tela onde o objeto pode aparecer (a figura é
+    /// recortada à mão nela; o resto do desenho, pelo `with_clip`).
+    fn desenhar_forma(frame: &mut Frame, it: &ItemTela, ajustes: &[f32], forma: &str, r: Rectangle, giro: f32, z: f32, com_texto: bool, visivel: Rectangle) {
         let c = r.center();
         if let Some(wa) = &it.wordart {
             // O texto é o próprio desenho (não sai centrado por cima, como o da forma).
@@ -666,9 +668,22 @@ impl Camada {
             if let Some(s) = &it.sombra {
                 desenhar_sombra(f, if it.linha { &tracos } else { &cheia }, s, z, it.linha);
             }
-            if let Some((_, h)) = &it.imagem {
+            if let Some((k, h)) = &it.imagem {
                 let local = Rectangle { x: -r.width / 2.0, y: -r.height / 2.0, width: r.width, height: r.height };
-                f.draw_image(local, cv::Image::new(h.clone()));
+                match r.intersection(&visivel) {
+                    Some(v) if v == r => f.draw_image(local, cv::Image::new(h.clone())),
+                    // Girada e cortada: não dá para recortar os pixels; não
+                    // desenha (antes cobria os cabeçalhos).
+                    Some(v) if giro == 0.0 && r.width > 0.0 && r.height > 0.0 && !it.espelhar.0 && !it.espelhar.1 => {
+                        let frac = [(v.x - r.x) / r.width, (v.y - r.y) / r.height,
+                            (v.x + v.width - r.x) / r.width, (v.y + v.height - r.y) / r.height];
+                        if let Some(pedaco) = super::figura::recortada(*k, h, frac) {
+                            let destino = Rectangle { x: v.x - c.x, y: v.y - c.y, width: v.width, height: v.height };
+                            f.draw_image(destino, cv::Image::new(pedaco));
+                        }
+                    }
+                    _ => {}
+                }
             } else if let Some(g) = &it.gradiente {
                 f.fill(&cheia, gradiente_canvas(g, r.width, r.height));
             } else if let Some(cor) = it.preenchimento {
@@ -798,7 +813,7 @@ impl Camada {
         let com_texto = self.editando != Some(it.id);
         frame.with_clip(recorte, |f| {
             f.translate(Vector::new(-recorte.x, -recorte.y));
-            Self::desenhar_forma(f, it, ajustes, forma, r, giro, self.z(), com_texto);
+            Self::desenhar_forma(f, it, ajustes, forma, r, giro, self.z(), com_texto, recorte);
         });
     }
 }
@@ -956,7 +971,7 @@ impl Program<Msg> for Camada {
                 previa.espelhar = (espelhar, false);
                 frame.with_clip(corpo, |f| {
                     f.translate(Vector::new(-corpo.x, -corpo.y));
-                    Self::desenhar_forma(f, &previa, &[], forma, self.ret_tela(ret), 0.0, self.z(), false);
+                    Self::desenhar_forma(f, &previa, &[], forma, self.ret_tela(ret), 0.0, self.z(), false, corpo);
                 });
             }
         }

@@ -43,6 +43,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::planilha::column_store::{ChunkedFloatColumn, ChunkedInt32Column};
 use crate::formula::formula_pattern::{expand_pattern, pattern_for, refs_of_pattern, PatternRef};
+use crate::formula::modelo_padrao::{faixas_do_padrao, FaixaPadrao};
 use crate::celulas::pool::StringPool;
 use crate::celulas::values::{CellError, ErrorCode, Value};
 
@@ -103,6 +104,8 @@ pub struct PatternUse {
     /// Referências de célula e pontas de faixas qualificadas, como
     /// deslocamento. Padrões constantes podem ter a lista vazia.
     pub refs: Vec<PatternRef>,
+    /// Intervalos locais que o padrão lê (`AO:AO`, `A2:A10`).
+    pub faixas: Vec<FaixaPadrao>,
 }
 
 /// As colunas que têm fórmula, com os padrões que cada uma usa.
@@ -147,6 +150,8 @@ pub struct FormulaTable {
     pattern_ids: HashMap<String, i32>,
     /// As referências de cada padrão, calculadas uma vez.
     pattern_refs: Vec<Vec<PatternRef>>,
+    /// Paralelo a `pattern_refs`: os intervalos locais de cada padrão.
+    pattern_faixas: Vec<Vec<FaixaPadrao>>,
     /// Padrões já reprovados: recusa na hora, sem compilar de novo.
     rejeitados: HashSet<String>,
     columns: HashMap<u32, Column>,
@@ -244,7 +249,15 @@ impl FormulaTable {
     /// padrões). Sem estado: a abertura de arquivo pergunta em várias
     /// threads, uma vez por padrão, para nem montar a árvore de quem cabe.
     pub fn aceitaria(pattern: &str, raw: &str, mut check: impl PatternCheck) -> bool {
-        Self::refs_aceitas(pattern).is_some() && check(raw)
+        Self::refs_aceitas(pattern).is_some() && faixas_do_padrao(pattern).is_some() && check(raw)
+    }
+
+    /// O intervalo do padrão `id` passa pela própria coluna `col`: a
+    /// fórmula leria a si mesma ou a vizinha de cima/baixo (`=SOMA(A:A)` em
+    /// A). Fica avulsa, onde o cálculo célula a célula acha o circular.
+    fn le_a_propria_coluna(&self, id: i32, col: u32) -> bool {
+        self.pattern_faixas.get(id as usize).is_some_and(|faixas| faixas.iter()
+            .any(|f| f.colunas_em(col).is_none_or(|(c0, c1)| col >= c0 && col <= c1)))
     }
 
     pub fn set_com_padrao(&mut self, row: u32, col: u32, raw: &str, pattern: Option<&str>,
@@ -262,17 +275,23 @@ impl FormulaTable {
                 if self.patterns.len() as i32 >= MAX_PATTERNS {
                     return false;
                 }
-                let Some(refs) = Self::refs_aceitas(pattern).filter(|_| check(raw)) else {
+                let Some((refs, faixas)) = Self::refs_aceitas(pattern)
+                    .zip(faixas_do_padrao(pattern))
+                    .filter(|_| check(raw)) else {
                     self.rejeitados.insert(pattern.to_string());
                     return false;
                 };
                 let id = self.patterns.len() as i32;
                 self.patterns.push(pattern.to_string());
                 self.pattern_refs.push(refs);
+                self.pattern_faixas.push(faixas);
                 self.pattern_ids.insert(pattern.to_string(), id);
                 id
             }
         };
+        if self.le_a_propria_coluna(id, col) {
+            return false;
+        }
         let ja_tinha = self.columns.get(&col).is_some_and(|e| e.slot.has(row));
         if !ja_tinha {
             self.count += 1;
@@ -286,8 +305,56 @@ impl FormulaTable {
         true
     }
 
+    /// Se um padrão (já registrado ou não) poderia morar na coluna `col`:
+    /// os intervalos dele não passam por ela.
+    pub fn caberia_na_coluna(&self, padrao: &str, col: u32) -> bool {
+        match self.pattern_ids.get(padrao) {
+            Some(&id) => !self.le_a_propria_coluna(id, col),
+            None => faixas_do_padrao(padrao).is_some_and(|faixas| faixas.iter()
+                .all(|f| f.colunas_em(col).is_some_and(|(c0, c1)| col < c0 || col > c1))),
+        }
+    }
+
+    /// O padrão que a fórmula `raw` tem na linha `r0` vai para `r0..=r1`
+    /// da coluna `col`, que tem de estar vazia aqui, em blocos: preencher
+    /// 13,7 milhões de linhas com a mesma fórmula relativa é gravar um número
+    /// por linha, sem texto nem árvore (17/10/2026). `false` quando o padrão
+    /// não cabe na coluna empacotada — nada é gravado.
+    pub fn preencher_padrao(&mut self, col: u32, r0: u32, r1: u32, raw: &str, check: impl PatternCheck) -> bool {
+        let Some(padrao) = pattern_for(raw, r0 as i32, col as i32) else { return false };
+        if r0 > r1 || !self.set_com_padrao(r0, col, raw, Some(&padrao), check) {
+            return false;
+        }
+        if r1 > r0 {
+            let id = self.pattern_ids[&padrao];
+            self.column(col).slot.preencher_faixa(r0 + 1, r1, (id << KIND_BITS) | KIND_DIRTY);
+            self.count += r1 - r0;
+        }
+        true
+    }
+
+    /// Esvazia `r0..=r1` da coluna, em blocos (o desfazer do
+    /// [`Self::preencher_padrao`]).
+    pub fn limpar_faixa(&mut self, col: u32, r0: u32, r1: u32) {
+        let Some(entry) = self.columns.get_mut(&col) else { return };
+        let mut tinha = 0u32;
+        if entry.slot.max_row >= r0 as i64 {
+            for r in r0.max(entry.slot.min_row)..=r1.min(entry.slot.max_row as u32) {
+                tinha += u32::from(entry.slot.has(r));
+            }
+        }
+        entry.slot.apagar_faixa(r0, r1);
+        entry.payload.apagar_faixa(r0, r1);
+        self.count = self.count.saturating_sub(tinha);
+    }
+
     pub fn has(&self, row: u32, col: u32) -> bool {
         self.columns.get(&col).is_some_and(|e| e.slot.has(row))
+    }
+
+    /// A máscara de presença das fórmulas do bloco `idx` da coluna.
+    pub fn mascara_do_bloco(&self, col: u32, idx: usize) -> Option<&[u8]> {
+        self.columns.get(&col)?.slot.mascara_do_bloco(idx)
     }
 
     /// O texto da fórmula, reconstruído do padrão.
@@ -461,6 +528,7 @@ impl FormulaTable {
         self.patterns.clear();
         self.pattern_ids.clear();
         self.pattern_refs.clear();
+        self.pattern_faixas.clear();
         self.rejeitados.clear();
         self.columns.clear();
         self.used_by_col.clear();
@@ -478,7 +546,11 @@ impl FormulaTable {
                 col,
                 usos: ids
                     .iter()
-                    .map(|&id| PatternUse { id, refs: self.pattern_refs[id as usize].clone() })
+                    .map(|&id| PatternUse {
+                        id,
+                        refs: self.pattern_refs[id as usize].clone(),
+                        faixas: self.pattern_faixas.get(id as usize).cloned().unwrap_or_default(),
+                    })
                     .collect(),
             })
             .collect()
@@ -631,10 +703,14 @@ impl FormulaTable {
             let id = slot >> KIND_BITS;
             let (menor, maior, _) = *limites.entry(id).or_insert_with(|| {
                 let refs = self.pattern_refs.get(id as usize).map(Vec::as_slice).unwrap_or(&[]);
-                let relativas = refs.iter().filter(|r| !r.row_lock);
-                let menor = relativas.clone().map(|r| r.row as i64).min().unwrap_or(0);
-                let maior = relativas.map(|r| r.row as i64).max().unwrap_or(0);
-                let anda = refs.iter().all(|r| {
+                let faixas = self.pattern_faixas.get(id as usize).map(Vec::as_slice).unwrap_or(&[]);
+                let desloc: Vec<i64> = refs.iter().filter(|r| !r.row_lock).map(|r| r.row as i64)
+                    .chain(faixas.iter().flat_map(FaixaPadrao::deslocamentos_de_linha)).collect();
+                let menor = desloc.iter().copied().min().unwrap_or(0);
+                let maior = desloc.iter().copied().max().unwrap_or(0);
+                // Quem lê intervalo não leva o valor junto: o intervalo pode
+                // ter mudado de ordem.
+                let anda = faixas.is_empty() && refs.iter().all(|r| {
                     let alvo = if r.col_lock { r.col as i64 } else { col as i64 + r.col as i64 };
                     r.sheet.is_none() && !r.row_lock && r.row == 0 && alvo >= c0 as i64 && alvo <= c1 as i64
                 });
@@ -834,6 +910,7 @@ impl FormulaTable {
             // suja — melhor um vetor vazio do que faltar a entrada e
             // desalinhar os ids.
             self.pattern_refs.push(refs.unwrap_or_default());
+            self.pattern_faixas.push(faixas_do_padrao(pattern).unwrap_or_default());
         }
     }
 

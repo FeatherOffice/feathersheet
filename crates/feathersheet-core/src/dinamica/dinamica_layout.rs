@@ -25,12 +25,12 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 
 use crate::dinamica::pivot::{chave_de, montar_dinamica_com_chaves, montar_dinamica_filtrada, parse_date_key, DinamicaConfig};
-use crate::dinamica::acumulador::Acumulador;
+use crate::dinamica::acumulador::{Acumulador, Medida};
 use crate::dinamica::exibicao::{
     chave_agrupada, comparar_natural, mostrar_como, CampoExtra, Eixo, Extras, Grade, MostrarComo, Ordenacao,
 };
 use crate::dinamica::pivot::AgruparData;
-use crate::celulas::values::{to_number, to_text, Matrix, Value};
+use crate::celulas::values::{to_text, Matrix, Value};
 
 /// Separa os níveis de um caminho de grupo (`a` → `b`): um caractere que
 /// ninguém digita numa célula.
@@ -436,9 +436,9 @@ fn montar_estruturado(
     let mut por_caminho_total: HashMap<String, Numeros> = HashMap::new();
     let mut por_coluna: HashMap<String, Numeros> = HashMap::new();
     let mut tudo: Numeros = acumuladores(config);
-    let mut medidas: Vec<f64> = Vec::with_capacity(n_medidas);
-    let empurrar = |alvo: &mut Numeros, medidas: &[f64]| {
-        for (acc, &m) in alvo.iter_mut().zip(medidas) { acc.receber(m); }
+    let mut medidas: Vec<Medida> = Vec::with_capacity(n_medidas);
+    let empurrar = |alvo: &mut Numeros, medidas: &[Medida]| {
+        for (acc, &m) in alvo.iter_mut().zip(medidas) { acc.receber_medida(m); }
     };
     let sep = SEPARADOR.to_string();
 
@@ -450,11 +450,7 @@ fn montar_estruturado(
         }
         medidas.clear();
         for v in &config.valores {
-            let val = valor(r, rel(v.coluna));
-            medidas.push(match &val {
-                Value::Number(x) => *x,
-                _ => to_number(&val).unwrap_or(0.0),
-            });
+            medidas.push(Medida::de(&valor(r, rel(v.coluna))));
         }
         // As colunas: cada prefixo da chave também acumula (para ordenar por
         // valor e para os irmãos do "mostrar valores como").
@@ -929,7 +925,7 @@ mod testes {
                     };
                     let achadas = linhas_do_caminho(d.len(), valor, &config, &Opcoes::antigas(),
                         &Extras::default(), caminho, ck);
-                    let soma: f64 = achadas.iter().map(|&r| to_number(&d[r][2]).unwrap()).sum();
+                    let soma: f64 = achadas.iter().map(|&r| crate::celulas::values::to_number(&d[r][2]).unwrap()).sum();
                     assert_eq!(Value::Number(soma), *celula, "({i}, {j}) com {:?}", config.colunas);
                 }
             }

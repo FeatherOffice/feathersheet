@@ -765,11 +765,18 @@ impl Workbook {
             for uso_col in s.formulas.columns_in_use() {
                 let col = uso_col.col;
                 for uso in &uso_col.usos {
+                    // Intervalo local entra pelas pontas, e só na própria
+                    // aba: em outra, `A2:A10` não é desta.
+                    let refs: std::borrow::Cow<[crate::formula::formula_pattern::PatternRef]> = if mesma && !uso.faixas.is_empty() {
+                        uso.refs.iter().cloned().chain(uso.faixas.iter().flat_map(|f| f.pontas_como_refs())).collect::<Vec<_>>().into()
+                    } else {
+                        uso.refs.as_slice().into()
+                    };
                     // A pergunta é por padrão. Sem saber a linha (o padrão
                     // vale para a coluna toda), a linha entra no teste
                     // célula a célula só quando o eixo é de linha.
                     if coluna {
-                        if !precisa_conserto(mesma, col, &uso.refs, coluna, &destino) {
+                        if !precisa_conserto(mesma, col, &refs, coluna, &destino) {
                             continue;
                         }
                         s.formulas.for_each_with_pattern(col, uso.id, |row| {
@@ -779,7 +786,7 @@ impl Workbook {
                         });
                     } else {
                         s.formulas.for_each_with_pattern(col, uso.id, |row| {
-                            if precisa_conserto(mesma, row, &uso.refs, coluna, &destino) {
+                            if precisa_conserto(mesma, row, &refs, coluna, &destino) {
                                 if let Some(raw) = s.formulas.raw_at(row, col) {
                                     lista.push((row, col, raw));
                                 }
@@ -803,6 +810,7 @@ impl Workbook {
             let alvo = &mut self.abas[j];
             let proprio = alvo.sheet.name.clone();
             alvo.sheet.abrir_transacao();
+            alvo.sheet.adiar_cascata();
             for (row, col, raw) in lista {
                 let (novo_r, novo_c) = if !mesma {
                     (Some(row), Some(col))
@@ -829,6 +837,7 @@ impl Workbook {
                     alvo.sheet.set_cell(nr, nc, &proximo);
                 }
             }
+            alvo.sheet.soltar_cascata();
             alvo.sheet.fechar_transacao();
             if !mesma {
                 alvo.versao = proxima_versao(alvo.versao);
@@ -941,10 +950,13 @@ impl Workbook {
                     let coluna_alvo = |r: &crate::formula::formula_pattern::PatternRef| {
                         if r.col_lock { r.col } else { col as i32 + r.col }
                     };
+                    // Intervalo local: só na aba do bloco movido.
+                    let faixas_daqui = mov.aba.eq_ignore_ascii_case(&s.name);
                     let pode = uso.refs.iter().any(|r| {
                         let c = coluna_alvo(r);
                         da_aba(r) && c >= col0 as i32 && c <= col1 as i32
-                    });
+                    }) || (faixas_daqui && uso.faixas.iter().any(|f| f.colunas_em(col)
+                        .is_some_and(|(c0, c1)| c0 <= col1 && col0 <= c1)));
                     if !pode {
                         continue;
                     }
@@ -953,7 +965,8 @@ impl Workbook {
                             let l = if r.row_lock { r.row } else { row as i32 + r.row };
                             let c = coluna_alvo(r);
                             da_aba(r) && l >= lin0 as i32 && l <= lin1 as i32 && c >= col0 as i32 && c <= col1 as i32
-                        });
+                        }) || (faixas_daqui && uso.faixas.iter().any(|f| f.rect_em(row, col)
+                            .is_some_and(|(r0, c0, r1, c1)| r0 <= lin1 && lin0 <= r1 && c0 <= col1 && col0 <= c1)));
                         if cai && fora(row, col) {
                             if let Some(raw) = s.formulas.raw_at(row, col) {
                                 anotar(row, col, &raw);

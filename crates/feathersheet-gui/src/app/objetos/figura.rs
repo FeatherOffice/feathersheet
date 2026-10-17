@@ -13,6 +13,8 @@ const MAX_CACHE: usize = 128;
 
 thread_local! {
     static CACHE: RefCell<HashMap<u64, Option<Handle>>> = RefCell::new(HashMap::new());
+    /// Pedaços visíveis já recortados (chave da figura + pedaço em pixels).
+    static RECORTES: RefCell<HashMap<(u64, [u32; 4]), Option<Handle>>> = RefCell::new(HashMap::new());
 }
 
 fn chave(im: &ImagemObjeto) -> u64 {
@@ -43,6 +45,32 @@ pub(super) fn handle(im: &ImagemObjeto) -> Option<(u64, Handle)> {
 fn rgb(hex: &str) -> [f32; 3] {
     let [r, g, b, _] = feather_ui::seletor_cor::rgba_de(hex);
     [f32::from(r), f32::from(g), f32::from(b)]
+}
+
+/// Só o pedaço `[x0, y0, x1, y1]` (frações 0..1) da figura `k`. O
+/// `draw_image` do Canvas não respeita o recorte da camada: sem isto, a
+/// figura que rolou para cima aparecia por cima dos cabeçalhos (17/10/2026).
+pub(super) fn recortada(k: u64, h: &Handle, [x0, y0, x1, y1]: [f32; 4]) -> Option<Handle> {
+    let Handle::Rgba { width, height, pixels, .. } = h else { return None };
+    let (w, h) = (*width as f32, *height as f32);
+    let px = [(x0 * w) as u32, (y0 * h) as u32, ((x1 * w).ceil() as u32).min(*width), ((y1 * h).ceil() as u32).min(*height)];
+    if px[2] <= px[0] || px[3] <= px[1] {
+        return None;
+    }
+    RECORTES.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some(r) = c.get(&(k, px)) {
+            return r.clone();
+        }
+        if c.len() >= MAX_CACHE {
+            c.clear();
+        }
+        let img = image::RgbaImage::from_raw(*width, *height, pixels.to_vec())?;
+        let pedaco = image::imageops::crop_imm(&img, px[0], px[1], px[2] - px[0], px[3] - px[1]).to_image();
+        let r = Some(Handle::from_rgba(pedaco.width(), pedaco.height(), pedaco.into_raw()));
+        c.insert((k, px), r.clone());
+        r
+    })
 }
 
 /// Pixels RGBA da figura com recorte e duotom aplicados.

@@ -15,7 +15,7 @@ mod estatistica;
 mod faixas_ocultas;
 mod limpeza;
 mod ordenacao;
-mod regiao;
+pub(crate) mod regiao;
 mod repetidas;
 
 pub use autosoma::*;

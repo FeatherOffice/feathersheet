@@ -57,6 +57,14 @@ pub fn chamar(h: &mut dyn Hospede, nome: &str, args: &Json) -> Saida {
         "sheet_substituir" => crate::edicao::substituir(h, args),
         "sheet_mover" => crate::edicao::mover(h, args),
         "sheet_copiar" => crate::edicao::copiar(h, args),
+        "sheet_condicional" => crate::condicional::condicional(h, args),
+        "sheet_dinamica" => {
+            let texto = h.dinamica(args)?;
+            if !crate::permissoes::so_le("sheet_dinamica", args) {
+                h.marcar_alterado();
+            }
+            Ok(conteudo(texto))
+        }
         outro => Err(format!("Ferramenta desconhecida: {outro}")),
     }
 }
@@ -166,11 +174,34 @@ fn escrever(h: &mut dyn Hospede, args: &Json) -> Saida {
 /// `formula` na primeira célula de `intervalo` e a alça de preenchimento no
 /// resto: as referências relativas andam, como arrastar no aplicativo.
 fn preencher_formula(h: &mut dyn Hospede, args: &Json, formula: &Json) -> Saida {
+    use feathersheet_core::operacoes::fill::shift_formula;
     let (aba, area) = intervalo(h, args, "intervalo")?;
-    if area.area() > MAX_ESCREVER {
-        return Err(format!("{} células; o teto é {MAX_ESCREVER}.", area.area()));
-    }
     let texto = conteudo_da_ia(formula);
+    // Coluna vazia abaixo: em bloco pela coluna empacotada, sem teto — a
+    // fórmula em 13,7 milhões de linhas leva milissegundos (17/10/2026).
+    let em_bloco = area.r1 > area.r0 && texto.starts_with('=') && h.pasta().aba(aba).is_some_and(|a| {
+        (area.c0..=area.c1).all(|c| {
+            let segunda = shift_formula(&texto, 1, (c - area.c0) as i32);
+            a.sheet.faixa_vazia(c, area.r0, area.r1) && a.sheet.formula_cabe_em_bloco(c, area.r0 + 1, &segunda)
+        })
+    });
+    if em_bloco {
+        h.pasta_mut().editar(aba, |sheet| {
+            sheet.abrir_transacao();
+            for c in area.c0..=area.c1 {
+                let dc = (c - area.c0) as i32;
+                sheet.set_cell(area.r0, c, &shift_formula(&texto, 0, dc));
+                sheet.preencher_formula_faixa_vazia(c, area.r0 + 1, area.r1, &shift_formula(&texto, 1, dc));
+            }
+            sheet.fechar_transacao();
+        });
+        h.marcar_alterado();
+        return Ok(conteudo(format!("Fórmula preenchida em {}!{} ({} célula(s), em bloco).",
+            h.pasta().nomes()[aba], nome_area(&area), area.area())));
+    }
+    if area.area() > MAX_ESCREVER {
+        return Err(format!("{} células; o teto é {MAX_ESCREVER} (sem teto quando o intervalo está vazio e a fórmula não é volátil nem lê a própria coluna).", area.area()));
+    }
     let origem = Rect::new(area.r0, area.c0, area.r0, area.c0);
     let mut quantas = 1;
     h.pasta_mut().editar(aba, |sheet| {
@@ -357,6 +388,18 @@ mod testes {
 
     fn texto(r: Saida) -> String {
         r.unwrap()[0]["text"].as_str().unwrap().to_string()
+    }
+
+    #[test]
+    fn preencher_formula_em_milhoes_de_linhas_vai_em_bloco() {
+        let mut h = Avulso::default();
+        h.pasta.escrever_celula(0, 0, 0, "4".into());
+        let r = texto(preencher_formula(&mut h, &json!({ "intervalo": "B1:C2000000" }), &json!("=A1*2")));
+        assert!(r.contains("em bloco"), "{r}");
+        let s = &h.pasta.aba(0).unwrap().sheet;
+        assert_eq!(s.get_raw(1_999_999, 1), "=A2000000*2");
+        assert_eq!(s.get_raw(1_999_999, 2), "=B2000000*2");
+        assert_eq!(h.pasta.valor(0, 0, 2), feathersheet_core::Value::Number(16.));
     }
 
     #[test]

@@ -8,6 +8,7 @@
 // Primeiro: as macros tr!/trf! valem para todos os módulos abaixo.
 #[macro_use]
 mod idioma;
+mod vigia;
 mod app;
 mod configuracao;
 mod grade;

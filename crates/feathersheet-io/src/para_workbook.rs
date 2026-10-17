@@ -28,7 +28,7 @@
 use feathersheet_core::celulas::style::{Align, NumberFormat, Style, VAlign};
 use feathersheet_core::planilha::workbook::Workbook;
 
-use crate::fshz_read::{AbaLida, PastaLida};
+use crate::fshz_read::{AbaLida, ColunaFormulaLida, ColunaNumLida, ColunaTxtLida, PastaLida};
 
 /// Monta a pasta viva a partir do que foi lido do arquivo.
 ///
@@ -38,18 +38,41 @@ use crate::fshz_read::{AbaLida, PastaLida};
 /// jogando fora o valor que acabou de vir do arquivo. O teste "abrir um FSH2
 /// não recalcula fórmula nenhuma" do lado TypeScript existe por causa disso.
 pub fn para_workbook(lida: &PastaLida) -> Workbook {
+    montar(lida, None)
+}
+
+/// [`para_workbook`] soltando cada coluna lida assim que ela entra na aba:
+/// sem isto, a pasta lida (4,4 GB no `2026_03.fshz`) e a montada conviviam
+/// inteiras até o fim. É o caminho do abrir do aplicativo (17/10/2026).
+pub fn para_workbook_soltando(mut lida: PastaLida) -> Workbook {
+    let colunas = lida.sheets.iter_mut().map(|a| (
+        std::mem::take(&mut a.colunas_num), std::mem::take(&mut a.colunas_txt), std::mem::take(&mut a.colunas_formula),
+    )).collect();
+    montar(&lida, Some(colunas))
+}
+
+type ColunasDaAba = (Vec<ColunaNumLida>, Vec<ColunaTxtLida>, Vec<ColunaFormulaLida>);
+
+fn montar(lida: &PastaLida, colunas: Option<Vec<ColunasDaAba>>) -> Workbook {
     // A barra da montagem anda por célula carregada.
-    crate::progresso::etapa_total(lida.sheets.iter().map(|a| {
-        a.avulsas.len() as u64
-            + a.colunas_num.iter().map(|c| c.values.len() as u64).sum::<u64>()
-            + a.colunas_txt.iter().map(|c| c.indices.len() as u64).sum::<u64>()
-            + a.colunas_formula.iter().map(|c| c.slots.len() as u64).sum::<u64>()
+    let tamanho = |num: &[ColunaNumLida], txt: &[ColunaTxtLida], fx: &[ColunaFormulaLida]| {
+        num.iter().map(|c| c.values.len() as u64).sum::<u64>()
+            + txt.iter().map(|c| c.indices.len() as u64).sum::<u64>()
+            + fx.iter().map(|c| c.slots.len() as u64).sum::<u64>()
+    };
+    crate::progresso::etapa_total(lida.sheets.iter().enumerate().map(|(i, a)| {
+        a.avulsas.len() as u64 + match colunas.as_ref().and_then(|c| c.get(i)) {
+            Some((n, t, f)) => tamanho(n, t, f),
+            None => tamanho(&a.colunas_num, &a.colunas_txt, &a.colunas_formula),
+        }
     }).sum());
     let mut pasta = Workbook::vazia();
+    let mut proprias = colunas.map(|c| c.into_iter());
     for aba in &lida.sheets {
         let indice = pasta.criar_aba(aba.n.clone());
+        let desta = proprias.as_mut().and_then(Iterator::next);
         if let Some(viva) = pasta.aba_mut(indice) {
-            carregar_aba(&mut viva.sheet, aba);
+            carregar_aba(&mut viva.sheet, aba, desta);
         }
     }
     // Um arquivo sem aba nenhuma não existe na prática, mas um `.fshz`
@@ -202,7 +225,7 @@ pub fn comentarios_de_json(v: &serde_json::Value) -> feathersheet_core::planilha
     }).collect()
 }
 
-fn carregar_aba(sheet: &mut feathersheet_core::planilha::sheet::Sheet, aba: &AbaLida) {
+fn carregar_aba(sheet: &mut feathersheet_core::planilha::sheet::Sheet, aba: &AbaLida, proprias: Option<ColunasDaAba>) {
     sheet.tab_color = aba.tc.clone();
     sheet.oculta = aba.oc;
     sheet.largura_padrao = aba.wp;
@@ -262,33 +285,11 @@ fn carregar_aba(sheet: &mut feathersheet_core::planilha::sheet::Sheet, aba: &Aba
     }
     sheet.terminar_carga();
 
-    // 2) as colunas de número, inteiras de uma vez (eram 6 milhões de
-    //    `set_cell_valor` na Planilha Pesada).
-    for coluna in &aba.colunas_num {
-        sheet.carregar_coluna_numeros(coluna.col, &coluna.values, &coluna.bitmap);
-        crate::progresso::etapa_somar(coluna.values.len() as u64);
-    }
-
-    // 3) as colunas de texto, que vêm por dicionário: o dicionário entra no
-    //    pool uma vez por texto distinto, os ids vão em bloco.
-    for coluna in &aba.colunas_txt {
-        sheet.carregar_coluna_textos(coluna.col, &coluna.indices, &coluna.bitmap, &coluna.dict);
-        crate::progresso::etapa_somar(coluna.indices.len() as u64);
-    }
-
-    // 4) as fórmulas empacotadas: padrão e valor direto na tabela colunar,
-    //    emprestando os vetores lidos (sem cópia de 1 milhão de linhas).
-    if !aba.padroes_formula.is_empty() {
-        sheet.formulas.load_patterns(&aba.padroes_formula);
-    }
-    let mut vazia = sheet.is_empty();
-    for coluna in &aba.colunas_formula {
-        let erros: Vec<(&str, Option<&str>)> = coluna.erros.iter().map(|e| (e.code.as_str(), e.detail.as_deref())).collect();
-        let linhas = coluna.slots.len() as u32;
-        sheet.formulas.load_column_partes(coluna.col, &coluna.slots, &coluna.payload, &coluna.bitmap,
-            &coluna.dict, &erros, linhas, &mut sheet.pool);
-        estender_limites(sheet, coluna.col, &coluna.bitmap, linhas, &mut vazia);
-        crate::progresso::etapa_somar(linhas as u64);
+    // Com as colunas próprias, cada uma é solta logo depois de carregada
+    // (fim da volta do `for`); emprestadas, ficam com quem chamou.
+    match proprias {
+        Some((num, txt, fx)) => carregar_colunas(sheet, aba, num, txt, fx),
+        None => carregar_colunas(sheet, aba, &aba.colunas_num, &aba.colunas_txt, &aba.colunas_formula),
     }
 
     // 5) o estilo direto: por faixa (arquivos de 16/10/2026 em diante) e por
@@ -310,6 +311,43 @@ fn carregar_aba(sheet: &mut feathersheet_core::planilha::sheet::Sheet, aba: &Aba
     }
     for (row, altura) in &aba.h {
         sheet.row_heights.insert(*row, *altura as u32);
+    }
+}
+
+/// Passos 2 a 4 do [`carregar_aba`]: números, textos e fórmulas empacotadas.
+fn carregar_colunas<N, T, F>(sheet: &mut feathersheet_core::planilha::sheet::Sheet, aba: &AbaLida,
+    num: impl IntoIterator<Item = N>, txt: impl IntoIterator<Item = T>, fx: impl IntoIterator<Item = F>)
+where N: std::borrow::Borrow<ColunaNumLida>, T: std::borrow::Borrow<ColunaTxtLida>, F: std::borrow::Borrow<ColunaFormulaLida> {
+    // 2) as colunas de número, inteiras de uma vez (eram 6 milhões de
+    //    `set_cell_valor` na Planilha Pesada).
+    for coluna in num {
+        let coluna = coluna.borrow();
+        sheet.carregar_coluna_numeros(coluna.col, &coluna.values, &coluna.bitmap);
+        crate::progresso::etapa_somar(coluna.values.len() as u64);
+    }
+
+    // 3) as colunas de texto, que vêm por dicionário: o dicionário entra no
+    //    pool uma vez por texto distinto, os ids vão em bloco.
+    for coluna in txt {
+        let coluna = coluna.borrow();
+        sheet.carregar_coluna_textos(coluna.col, &coluna.indices, &coluna.bitmap, &coluna.dict);
+        crate::progresso::etapa_somar(coluna.indices.len() as u64);
+    }
+
+    // 4) as fórmulas empacotadas: padrão e valor direto na tabela colunar,
+    //    emprestando os vetores lidos (sem cópia de 1 milhão de linhas).
+    if !aba.padroes_formula.is_empty() {
+        sheet.formulas.load_patterns(&aba.padroes_formula);
+    }
+    let mut vazia = sheet.is_empty();
+    for coluna in fx {
+        let coluna = coluna.borrow();
+        let erros: Vec<(&str, Option<&str>)> = coluna.erros.iter().map(|e| (e.code.as_str(), e.detail.as_deref())).collect();
+        let linhas = coluna.slots.len() as u32;
+        sheet.formulas.load_column_partes(coluna.col, &coluna.slots, &coluna.payload, &coluna.bitmap,
+            &coluna.dict, &erros, linhas, &mut sheet.pool);
+        estender_limites(sheet, coluna.col, &coluna.bitmap, linhas, &mut vazia);
+        crate::progresso::etapa_somar(linhas as u64);
     }
 }
 

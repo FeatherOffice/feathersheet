@@ -333,7 +333,7 @@ pub fn adjust_for_structure(raw: &str, options: StructureAdjustOptions) -> Strin
         }
     }
     let mut indice = 0;
-    map_references(raw, |ref_cell| {
+    let celulas = map_references(raw, |ref_cell| {
         let i = indice;
         indice += 1;
         let aba = abas.get(i).and_then(|s| s.as_deref());
@@ -348,7 +348,99 @@ pub fn adjust_for_structure(raw: &str, options: StructureAdjustOptions) -> Strin
         } else {
             format_ref(&ParsedRef { col: next, ..ref_cell })
         }
-    })
+    });
+    ajustar_inteiras(&celulas, &options, &same)
+}
+
+/// Colunas e linhas inteiras (`B:B`, `Dados!$C:$I`, `5:7`) depois de
+/// inserir ou remover: o `map_references` só vê referência de célula, e até
+/// 17/10/2026 inserir a coluna B deixava `=SOMA(B:B)` lendo a coluna errada.
+/// Mesma regra do intervalo de células: anda junto, encolhe quando parte
+/// some, `#REF!` quando some inteiro.
+fn ajustar_inteiras(raw: &str, options: &StructureAdjustOptions, same: &dyn Fn(Option<&str>) -> bool) -> String {
+    let chars: Vec<char> = raw.chars().collect();
+    let letras = |at: usize| -> Option<(bool, u32, usize)> {
+        let lock = chars.get(at) == Some(&'$');
+        let ini = at + lock as usize;
+        let mut fim = ini;
+        while fim < chars.len() && chars[fim].is_ascii_alphabetic() && fim - ini < 3 { fim += 1; }
+        let nome: String = chars[ini..fim].iter().collect();
+        Some((lock, col_index(&nome.to_ascii_uppercase())?, fim))
+    };
+    let digitos = |at: usize| -> Option<(bool, u32, usize)> {
+        let lock = chars.get(at) == Some(&'$');
+        let ini = at + lock as usize;
+        let mut fim = ini;
+        while fim < chars.len() && chars[fim].is_ascii_digit() { fim += 1; }
+        let n: u32 = chars[ini..fim].iter().collect::<String>().parse().ok().filter(|n| *n >= 1)?;
+        Some((lock, n - 1, fim))
+    };
+    let fim_do_corte = options.at + options.count;
+    // As duas pontas novas, ou `None` (#REF!) se o intervalo some inteiro.
+    let ajustar = |a: u32, b: u32| -> Option<(i32, i32)> {
+        let (a, b) = (a.min(b) as i32, a.max(b) as i32);
+        if !options.removing {
+            let mover = |x: i32| if x >= options.at { x + options.count } else { x };
+            return Some((mover(a), mover(b)));
+        }
+        if a >= options.at && b < fim_do_corte {
+            return None;
+        }
+        let na = if a >= fim_do_corte { a - options.count } else if a >= options.at { options.at } else { a };
+        let nb = if b >= fim_do_corte { b - options.count } else if b >= options.at { options.at - 1 } else { b };
+        Some((na, nb))
+    };
+    // A coluna/linha inteira que começa em `i`: o texto reescrito e onde
+    // ela termina.
+    let inteira_em = |i: usize| -> Option<(String, usize)> {
+        let prefixo = match_sheet_prefix(&chars, i);
+        let ini = i + prefixo.as_ref().map_or(0, |p| p.len);
+        let aba = prefixo.as_ref().map(|p| p.name.as_str());
+        for eixo in [Axis::Col, Axis::Row] {
+            let ler = |at: usize| if eixo == Axis::Col { letras(at) } else { digitos(at) };
+            let Some((lock_a, a, fim_a)) = ler(ini) else { continue };
+            if chars.get(fim_a) != Some(&':') { continue; }
+            let Some((lock_b, b, fim_b)) = ler(fim_a + 1) else { continue };
+            let depois = chars.get(fim_b).copied().unwrap_or('\0');
+            if is_glued_char(depois) || depois == '(' || depois == '!' { continue; }
+            if eixo != options.axis || !same(aba) {
+                return Some((chars[i..fim_b].iter().collect(), fim_b));
+            }
+            let prefixo_txt: String = chars[i..ini].iter().collect();
+            let escrever = |lock: bool, n: i32| {
+                let n = if eixo == Axis::Col { col_name(n as u32) } else { (n + 1).to_string() };
+                format!("{}{n}", if lock { "$" } else { "" })
+            };
+            return Some((match ajustar(a, b) {
+                None => "#REF!".to_string(),
+                Some((na, nb)) => format!("{prefixo_txt}{}:{}", escrever(lock_a, na), escrever(lock_b, nb)),
+            }, fim_b));
+        }
+        None
+    };
+    let mut out = String::with_capacity(raw.len());
+    let mut i = 0;
+    let mut in_string = false;
+    while i < chars.len() {
+        let c = chars[i];
+        if in_string || c == '"' {
+            if c == '"' { in_string = !in_string; }
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        let colada = i > 0 && (is_glued_char(chars[i - 1]) || chars[i - 1] == ':');
+        if !colada {
+            if let Some((texto, fim)) = inteira_em(i) {
+                out.push_str(&texto);
+                i = fim;
+                continue;
+            }
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
 }
 
 #[cfg(test)]
@@ -392,6 +484,20 @@ mod tests {
             format_ref(&r)
         });
         assert_eq!(abas, vec![Some("[Vendas.fshz]Dados".to_string()), Some("Dados".to_string())]);
+    }
+
+    #[test]
+    fn colunas_e_linhas_inteiras_andam_com_a_estrutura() {
+        let ajustar = |raw: &str, axis, at, count, removing| adjust_for_structure(raw, StructureAdjustOptions {
+            axis, at, count, removing, sheet: "Dados", own_sheet: "Dados",
+        });
+        assert_eq!(ajustar("=SOMA(B:B)+B1", Axis::Col, 1, 1, false), "=SOMA(C:C)+C1");
+        assert_eq!(ajustar("=MÍNIMOSES(AO:AO;A:A;A2)", Axis::Col, 1, 2, false), "=MÍNIMOSES(AQ:AQ;A:A;A2)");
+        assert_eq!(ajustar("=PROCV(X;Dados!$C:$I;2;0)", Axis::Col, 3, 1, true), "=PROCV(X;Dados!$C:$H;2;0)");
+        assert_eq!(ajustar("=SOMA(C:C)", Axis::Col, 2, 1, true), "=SOMA(#REF!)");
+        assert_eq!(ajustar("=SOMA(Outra!B:B)", Axis::Col, 0, 1, false), "=SOMA(Outra!B:B)");
+        assert_eq!(ajustar("=SOMA(5:7)+SOMA(B:B)", Axis::Row, 0, 1, false), "=SOMA(6:8)+SOMA(B:B)");
+        assert_eq!(ajustar("=\"B:B\"&LOG10(2)", Axis::Col, 0, 1, false), "=\"B:B\"&LOG10(2)");
     }
 
     #[test]

@@ -16,6 +16,7 @@ impl App {
                     }
                 }
                 self.imagens_importadas.shift.set(mods.shift());
+                self.imagens_importadas.alt.set(mods.alt());
                 if self.pendente.is_some() && self.janelas.principal == Some(id) {
                     return if key == keyboard::Key::Named(keyboard::key::Named::Escape) {
                         self.update(Msg::Cancelar)

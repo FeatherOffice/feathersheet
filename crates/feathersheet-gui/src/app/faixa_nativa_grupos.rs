@@ -209,7 +209,20 @@ impl App {
                     em_breve(self.faixa_grande_seta(tr!("Modelos 3D"), "cube", None, false), tr!("Em breve: modelos 3D")),
                     em_breve(self.faixa_grande("SmartArt", "sitemap", None, false), tr!("Em breve: diagramas SmartArt")),
                     em_breve(self.faixa_grande(tr!("Instantâneo"), "screenshot", None, false), tr!("Em breve: captura de outra janela")),
-                    self.faixa_pequeno(tr!("Efeitos da imagem"), "photo", self.workbook.aba(self.folha).and_then(|aba| aba.sheet.im.as_ref()).map(|_| Msg::ImagemEfeitosAbrir), self.efeitos_imagem.aberto),
+                    self.faixa_pilha(vec![
+                        self.faixa_pequeno(tr!("Efeitos da imagem"), "photo", self.workbook.aba(self.folha).and_then(|aba| aba.sheet.im.as_ref()).map(|_| Msg::ImagemEfeitosAbrir), self.efeitos_imagem.aberto),
+                        self.faixa_pequeno(tr!("Imagem na célula…"), "layout-grid",
+                            Some(Msg::ImagemCelula(super::imagem_na_celula::Evento::Inserir)), false),
+                        // Troca de lugar: a da célula sai; a solta selecionada entra.
+                        if self.celula_tem_imagem() {
+                            self.faixa_pequeno(tr!("Colocar sobre as células"), "arrow-up-right",
+                                Some(Msg::ImagemCelula(super::imagem_na_celula::Evento::ColocarSobre)), false)
+                        } else {
+                            self.faixa_pequeno(tr!("Colocar na célula"), "arrow-down-right",
+                                self.imagem_selecionada.is_some().then_some(
+                                    Msg::ImagemCelula(super::imagem_na_celula::Evento::ColocarNaCelula)), false)
+                        },
+                    ]),
                 ])));
                 grupos.push(self.faixa_grupo(tr!("Controles"), self.faixa_linha(vec![
                     // Caixas de seleção: insere na seleção; aceso = a seleção tem caixa

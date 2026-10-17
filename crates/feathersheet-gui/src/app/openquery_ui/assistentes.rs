@@ -192,7 +192,7 @@ impl App {
         };
         let mut corpo = iced::widget::column![
             titulo_oq(titulo),
-            legenda_oq(tr!("As escolhas viram uma etapa editável no motor Rust.")),
+            legenda_oq(tr!("As escolhas viram uma etapa editável da consulta.")),
         ].spacing(ESPACO_MEDIO);
         if w.tipo != Tipo::Pivotar {
             let mut fontes = iced::widget::row![].spacing(ESPACO_PEQUENO);

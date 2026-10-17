@@ -8,6 +8,7 @@
 //! e consulta são calculados pelo motor, e a IA recebe só o resultado.
 pub mod ao_vivo;
 pub mod arquivo;
+pub mod condicional;
 pub mod dados;
 pub mod edicao;
 pub mod esquemas;

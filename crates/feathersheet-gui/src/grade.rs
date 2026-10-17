@@ -113,6 +113,7 @@ impl canvas::Program<Msg> for Grade<'_> {
         &self, state: &Self::State, renderer: &Renderer, _theme: &Theme,
         bounds: Rectangle, _cursor: mouse::Cursor,
     ) -> Vec<Geometry> {
+        let inicio_vigia = std::time::Instant::now();
         let tela = bounds;
         // Guarda o tamanho real do Canvas: manter a célula à vista e o Page
         // Down contam com ele (zoom e alturas reais), não com 28 × 12 fixos.
@@ -927,7 +928,9 @@ impl canvas::Program<Msg> for Grade<'_> {
         self.desenhar_copiada(&mut f, &colunas_visiveis, &linhas_visiveis, ativo);
         if let Some(a) = state.dimensao { desenhar_guia_dimensao(&mut f, bounds, a, ativo, self.zoom); }
         });
-        vec![celulas, self.desenhar_barras(renderer, tela, state.barra)]
+        let barras = self.desenhar_barras(renderer, tela, state.barra);
+        crate::vigia::conferir(|| "desenhar a grade (calcula as células visíveis)".into(), inicio_vigia.elapsed());
+        vec![celulas, barras]
     }
 
     fn update(

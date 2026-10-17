@@ -14,6 +14,21 @@ use feathersheet_core::planilha::sheet::ContagemSelecao;
 /// custavam 10× mais que a conta inteira (34 s contra 4,3 s na tabela).
 const CELULAS_DIRETAS: u64 = 2_000_000;
 const CELULAS_POR_LOTE: u64 = 500_000;
+/// Com fórmula nas colunas da seleção, cada célula pode custar microssegundos
+/// (um `MÍNIMOSES` em 13,7 milhões de linhas): lotes pequenos, para o
+/// orçamento por quadro valer, e nada de contar tudo de uma vez. Eram 500
+/// mil fórmulas por lote, ~1 s cada, e a janela "não está respondendo"
+/// (17/10/2026).
+const CELULAS_POR_LOTE_COM_FORMULA: u64 = 16_384;
+const CELULAS_DIRETAS_COM_FORMULA: u64 = 16_384;
+
+/// Alguma coluna de `c0..=c1` tem fórmula empacotada ou avulsa.
+fn tem_formula(sheet: &feathersheet_core::planilha::sheet::Sheet, c0: u32, c1: u32) -> bool {
+    sheet.formulas.colunas().iter().any(|&c| c >= c0 && c <= c1)
+        // Muitas avulsas: não vale varrê-las a cada quadro, trata como fórmula.
+        || sheet.cells.len() > 100_000
+        || sheet.cells.keys().any(|&k| { let c = feathersheet_core::celulas::refs::key_col(k); c >= c0 && c <= c1 })
+}
 const ORCAMENTO_MS: u128 = 12;
 const COR_ERRO: iced::Color = iced::Color::from_rgb(220.0 / 255.0, 75.0 / 255.0, 77.0 / 255.0);
 
@@ -101,7 +116,8 @@ impl App {
         let recortada = Rect::new(r0, c0, r1, c1);
         // A chave corresponde à seleção original; o processo usa o recorte.
         let celulas = (r1 as u64 - r0 as u64 + 1) * (c1 as u64 - c0 as u64 + 1);
-        if celulas <= CELULAS_DIRETAS {
+        let diretas = if tem_formula(&aba.sheet, c0, c1) { CELULAS_DIRETAS_COM_FORMULA } else { CELULAS_DIRETAS };
+        if celulas <= diretas {
             estado.conta = aba.sheet.contar_selecao(&recortada, Some(&self.workbook));
         } else {
             // Redefine a área processada, mantendo a chave da seleção original.
@@ -147,7 +163,8 @@ impl App {
             return;
         }
         let colunas = c1 as u64 - c0 as u64 + 1;
-        let linhas = (CELULAS_POR_LOTE / colunas).clamp(1, 500_000) as u32;
+        let por_lote = if tem_formula(&aba.sheet, c0, c1) { CELULAS_POR_LOTE_COM_FORMULA } else { CELULAS_POR_LOTE };
+        let linhas = (por_lote / colunas).clamp(1, 500_000) as u32;
         let inicio = Instant::now();
         while estado.pendente {
             let r0 = estado.proxima;
@@ -221,6 +238,32 @@ impl App {
 #[cfg(test)]
 mod testes {
     use super::*;
+    #[test]
+    fn coluna_de_formulas_pesadas_soma_em_fatias_curtas() {
+        let mut app = App::default();
+        let n = 300_000u32;
+        app.workbook.editar(0, |s| {
+            for r in 0..n {
+                s.set_cell(r, 0, if r % 3 == 0 { "a" } else { "b" });
+                s.set_cell(r, 1, &r.to_string());
+            }
+            s.set_cell(0, 2, "=MÍNIMOSES(B:B;A:A;A1)");
+            assert!(s.preencher_formula_faixa_vazia(2, 1, n - 1, "=MÍNIMOSES(B:B;A:A;A2)"));
+        });
+        app.linha = 0; app.coluna = 2; app.fim_selecao = (n - 1, 2);
+        // O primeiro quadro monta o índice do MÍNIMOSES; os outros só leem.
+        app.avancar_resumo();
+        let mut pior = std::time::Duration::ZERO;
+        for _ in 0..20 {
+            let t = std::time::Instant::now();
+            app.avancar_resumo();
+            pior = pior.max(t.elapsed());
+        }
+        assert!(pior < std::time::Duration::from_millis(150), "quadro de {pior:?}");
+        while app.resumo_selecao.borrow().pendente { app.avancar_resumo(); }
+        assert_eq!(app.resumo_selecao.borrow().conta.numbers, n as u64);
+    }
+
     #[test]
     fn status_altera_com_selecao_e_edicao_mas_nao_com_redesenho() {
         let mut app = App::default();

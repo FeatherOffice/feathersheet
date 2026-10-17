@@ -283,7 +283,7 @@ impl App {
                         c.macros.push(novo);
                     }
                 }
-                self.persistir_modulos(c, tr!("Catálogo TypeScript importado"));
+                self.persistir_modulos(c, tr!("Catálogo de macros importado"));
             }
             Err(e) => self.macro_saida = trf!("Catálogo inválido: {e}"),
         }

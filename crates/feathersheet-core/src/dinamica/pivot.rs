@@ -5,7 +5,8 @@
 use std::collections::HashMap;
 
 use crate::celulas::refs::Rect;
-use crate::celulas::values::{to_number, to_text, Matrix, Value};
+use super::acumulador::Medida;
+use crate::celulas::values::{to_text, Matrix, Value};
 
 /// Operação de agregação para medidas na Tabela Dinâmica.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -204,8 +205,8 @@ fn acumuladores(valores: &[MedidaDinamica]) -> Vec<super::acumulador::Acumulador
     valores.iter().map(|v| super::acumulador::Acumulador::novo(v.op)).collect()
 }
 
-fn acumular(totais: &mut [super::acumulador::Acumulador], dados: &[f64]) {
-    for (acc, &n) in totais.iter_mut().zip(dados) { acc.receber(n); }
+fn acumular(totais: &mut [super::acumulador::Acumulador], dados: &[Medida]) {
+    for (acc, &m) in totais.iter_mut().zip(dados) { acc.receber_medida(m); }
 }
 
 pub fn montar_dinamica_com(
@@ -293,11 +294,7 @@ pub(crate) fn montar_dinamica_com_chaves(
         let ci = combo(&mut combos_c, &ids, &mut por_coluna);
         medidas.clear();
         for medida in valores {
-            let atual = valor(r, medida.coluna.saturating_sub(c0));
-            medidas.push(match &atual {
-                Value::Number(n) => *n,
-                _ => to_number(&atual).unwrap_or(0.),
-            });
+            medidas.push(Medida::de(&valor(r, medida.coluna.saturating_sub(c0))));
         }
         acumular(grupos.entry((li, ci)).or_insert_with(|| acumuladores(valores)), &medidas);
         acumular(&mut por_linha[li], &medidas);
@@ -389,6 +386,7 @@ pub(crate) fn montar_dinamica_com_chaves(
 #[cfg(test)]
 mod testes {
     use super::*;
+    use crate::celulas::values::to_number;
 
     fn criar_dados_exemplo() -> (Rect, Vec<Vec<Value>>) {
         let origem = Rect::new(0, 0, 5, 3);

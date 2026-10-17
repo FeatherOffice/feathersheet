@@ -29,7 +29,7 @@ impl App {
                         0, 0, fonte.linhas.len() as u32,
                         fonte.cabecalho.len().saturating_sub(1) as u32,
                     );
-                    (tr!("Snapshot TypeScript").into(), area, fonte)
+                    (tr!("Consulta salva").into(), area, fonte)
                 };
             let mut estado = Estado::novo(fonte, origem_aba, origem);
             estado.nome = salva.dados["nome"].as_str().unwrap_or(tr!("Consulta")).into();
@@ -182,8 +182,8 @@ impl App {
                 // Legacy TS não registra a área de saída. É inseguro
                 // sobrescrevê-la, sobretudo com outras tabelas na aba.
                 let antigo = registro::area_saida(&salva.dados).ok_or(
-                    tr!("Esta consulta TypeScript ainda não tem área de saída vinculada. \
-                     Não sobrescrevi a aba; crie uma consulta nativa.")
+                    tr!("Esta consulta antiga não tem área de saída vinculada. \
+                     Não sobrescrevi a aba; crie a consulta de novo.")
                 )?;
                 let nome = registro::destino(&salva.dados).ok_or(tr!("Destino salvo inválido"))?;
                 let indice = self.workbook.indice_por_nome(nome)

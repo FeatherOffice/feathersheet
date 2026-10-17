@@ -1,5 +1,8 @@
 # MCP do FeatherSheet — o que falta
 
+> **Meta do usuário (17/10/2026): "o MCP tem que editar tudo, tudo mesmo".** Cada janela e cada
+> comando do app precisa de ferramenta direta, com parâmetros. Esta lista é o caminho.
+
 > Levantamento de 14/10/2026, logo depois da primeira versão (`d177e8f5`, `a4a15506`).
 > Crate: `crates/feathersheet-mcp`; ponte ao vivo: `crates/feathersheet-gui/src/app/mcp_vivo.rs`.
 > Regra que vale para tudo abaixo: **nunca despejar a planilha** — o motor calcula, a IA recebe
@@ -56,8 +59,11 @@ O que mais se pede depois de dados e fórmulas.
 
 - [ ] **Tabelas** (Ctrl+T): criar, renomear, estilo, faixas, linha de totais, redimensionar.
       Conferir as ações de `app/tabelas.rs` e mover a regra para o motor onde ainda estiver na interface.
-- [ ] **Tabela dinâmica**: criar a partir de um intervalo com campos de linhas, colunas e valores
-      (agregação), atualizar e editar. O motor já tem `dinamica`.
+- [x] **`sheet_dinamica`** (17/10, ao vivo): listar, criar (origem + linhas/colunas/valores pelo
+      título ou letra, nova aba por padrão), editar, atualizar (uma ou todas) e excluir, pelo mesmo
+      caminho do painel (`app/dinamica_ui/mcp.rs`). Sem o app explica e indica `sheet_consulta`.
+      **Falta:** filtros, campos calculados, agrupar datas e "mostrar valores como" pelo MCP; modo
+      arquivo (a regra mora na interface).
 - [ ] **Gráficos**: criar (tipo, séries, intervalo), mudar o tipo, título e eixos, apagar; listar os
       gráficos da aba. O motor já tem `grafico`. Ao vivo, o `sheet_ver` confere o desenho.
 - [ ] **Formatação condicional**: listar regras, criar (operador e valor, fórmula, escala de cor,

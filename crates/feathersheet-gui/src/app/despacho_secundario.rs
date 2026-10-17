@@ -495,8 +495,9 @@ impl App {
                 if !mantendo_formula {self.confirmar();}
                 let nomes = self.workbook.nomes();
                 let mut n = 1;
-                while nomes.iter().any(|nome| nome.eq_ignore_ascii_case(&format!("Planilha{n}"))) { n += 1; }
-                let nome = format!("Planilha{n}");
+                let prefixo = tr!("Planilha");
+                while nomes.iter().any(|nome| nome.eq_ignore_ascii_case(&format!("{prefixo}{n}"))) { n += 1; }
+                let nome = format!("{prefixo}{n}");
                 self.folha = self.workbook.criar_aba(nome.clone());
                 self.nome_aba = nome;
                 self.editando_nome_aba = false;
@@ -756,7 +757,10 @@ impl App {
                 tarefa
             }
             Msg::AbrirContexto(tipo, x, y) => {
-                if self.editor_formula.ativo { return Task::none(); }
+                // Editando a célula: grava a edição e abre o menu (antes o
+                // botão direito não fazia nada). Fica só se a validação recusar.
+                if self.editor_formula.ativo && !self.confirmar() { return Task::none(); }
+                self.imagem_contexto = None;
                 self.paleta_aba_aberta = false;
                 self.contexto_tamanho = if matches!(tipo, Contexto::Aba(_)) {
                     (248.0, cores_aba::altura_menu(
@@ -1032,6 +1036,11 @@ impl App {
                         if let Ok(modo) = std::env::var("FEATHERSHEET_CAPTURAR_OBJETOS") {
                             self.preparar_captura_objetos(&modo);
                         }
+                        // FEATHERSHEET_CAPTURAR_IMAGEM=painel|menu: imagem de exemplo selecionada,
+                        // com o painel Formatar imagem ou o menu do botão direito aberto.
+                        if let Ok(modo) = std::env::var("FEATHERSHEET_CAPTURAR_IMAGEM") {
+                            self.preparar_captura_imagem(&modo);
+                        }
                         // FEATHERSHEET_CAPTURAR_MENU_ABA=1: botão direito na primeira aba.
                         if std::env::var_os("FEATHERSHEET_CAPTURAR_MENU_ABA").is_some() {
                             let _ = self.update(Msg::AbrirContexto(Contexto::Aba(0), 0.0, 0.0));
@@ -1268,10 +1277,18 @@ impl App {
             Msg::MonitorPulso => {
                 self.recolher_diario_motor();
                 // Parado e com o visível calculado: arruma a memória do motor
-                // aos poucos (500 mil resultados levam ~0,12 s).
+                // aos poucos, em lotes, até ~30 ms por pulso (500 mil de uma
+                // vez davam um tranco por segundo depois de colar 13 milhões
+                // de fórmulas).
                 if !self.carregando && !self.calculo_pendente {
                     self.workbook.soltar_faixas();
-                    let movidos = self.workbook.consolidar_calculos(500_000);
+                    let inicio = std::time::Instant::now();
+                    let mut movidos = 0;
+                    while inicio.elapsed() < Duration::from_millis(30) {
+                        let lote = self.workbook.consolidar_calculos(50_000);
+                        movidos += lote;
+                        if lote < 50_000 { break; }
+                    }
                     if movidos > 0 {
                         self.monitor.registrar(feather_ui::monitor::Nivel::Info, tr!("Motor"),
                             &trf!("[motor] {movidos} resultados de fórmula guardados nas colunas"));

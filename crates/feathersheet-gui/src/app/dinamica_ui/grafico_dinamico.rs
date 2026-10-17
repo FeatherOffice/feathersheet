@@ -108,4 +108,39 @@ mod testes {
         let _ = app.inserir_grafico_dinamico();
         assert_eq!(app.graficos.dinamica.as_deref(), meta["id"].as_str());
     }
+
+    /// O caso do usuário (18/10): painel de campos aberto, quatro campos em
+    /// Linhas e Desvio padrão; Gráfico dinâmico e escolher o tipo tem que
+    /// pôr o gráfico na planilha.
+    #[test]
+    fn grafico_dinamico_com_painel_aberto_e_varios_campos_entra_na_planilha() {
+        use feathersheet_core::dinamica::pivot::AgregacaoOp;
+        let mut app = App::default();
+        app.workbook.editar(0, |s| {
+            for (c, t) in ["Ramal", "Nome", "Ini", "Fim", "Nivel"].iter().enumerate() { s.set_cell(0, c as u32, t); }
+            for r in 1..=60u32 {
+                s.set_cell(r, 0, &format!("R{}", r % 2));
+                s.set_cell(r, 1, &format!("N{}", r % 5));
+                s.set_cell(r, 2, &(r % 3).to_string());
+                s.set_cell(r, 3, &(r % 3 + 10).to_string());
+                s.set_cell(r, 4, &format!("{}", r % 7));
+            }
+        });
+        app.fim_selecao = (60, 4);
+        app.evento_dinamica(Evento::Abrir);
+        app.evento_dinamica(Evento::Criar);
+        let e = app.dinamica.as_mut().expect("painel aberto");
+        e.linhas = vec![0, 1, 2, 3];
+        e.valores = vec![MedidaDinamica { coluna: 4, op: AgregacaoOp::DesvioPadrao }];
+        let estado = app.dinamica.clone().unwrap();
+        let destino = app.folha;
+        app.aplicar_estado_na_dinamica(destino, &estado).expect("aplica");
+        assert!(app.dinamica.is_some(), "painel continua aberto");
+        let _ = app.inserir_grafico_dinamico();
+        assert!(app.graficos.seletor_aberto, "a galeria de tipos abre");
+        let _ = app.update(Msg::Grafico(crate::app::graficos::Evento::Tipo(crate::app::graficos::TipoUi::Colunas)));
+        let aba = app.workbook.aba(app.folha).unwrap();
+        let lista = feathersheet_io::graficos_salvos::listar(&aba.sheet).unwrap();
+        assert_eq!(lista.len(), 1, "gráfico na planilha; status: {}", app.status);
+    }
 }

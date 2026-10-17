@@ -37,7 +37,7 @@ use crate::formula::formula_table::FormulaTable;
 use crate::formula::modelo_padrao::ModeloPadrao;
 use crate::formula::parser::parse_formula;
 use crate::planilha::data_table::DataTable;
-use crate::planilha::agregado::{Agregado, ChaveCriterio};
+use crate::planilha::agregado::Agregado;
 use crate::planilha::faixa_lida::{FaixaLida, MAXIMO, MINIMO, TOTAL};
 use crate::planilha::sheet::{mesmo_nome, CellData, Sheet};
 use crate::planilha::workbook::AbaViva;
@@ -291,12 +291,15 @@ impl EvalContext for Contexto<'_, '_> {
                 Some(r) => Some((r, self.faixa_lida(r)?)),
                 None => None,
             };
+            let sem_pool = |_: i32| "";
+            let leitor = std::cell::RefCell::new(crate::planilha::agregado::LeitorChaves::novo(&sem_pool));
             Agregado::montar(criterios.len(), soma.is_some(), linhas, colunas,
-                |i, r, c| ChaveCriterio::da_celula(lidas[i].valor(criterios[i].r0 + r, criterios[i].c0 + c)),
+                |i, r, c| leitor.borrow_mut().da_celula(lidas[i].valor(criterios[i].r0 + r, criterios[i].c0 + c)),
                 |r, c| match somada.as_ref().map(|(rect, f)| f.valor(rect.r0 + r, rect.c0 + c)) {
                     Some(Value::Number(n)) => Some(*n),
                     _ => None,
                 },
+                || std::mem::take(&mut leitor.borrow_mut().chaves),
             ).map(Arc::new)
         }).clone()
     }
@@ -402,6 +405,18 @@ fn planejar(abas: &[AbaViva]) -> (Vec<No>, Vec<Vec<usize>>) {
         // Pontas de faixa qualificada: a coluna depende de tudo entre elas.
         let mut faixas: HashMap<usize, (u32, u32)> = HashMap::new();
         for padrao in &uso.usos {
+            // Intervalo local: a coluna depende de todas as colunas dele.
+            // Passar pela própria coluna nem vira empacotada (`FormulaTable`).
+            for f in &padrao.faixas {
+                let Some((c0, c1)) = f.colunas_em(no.col) else { fora[i] = true; continue };
+                if c0 <= no.col && no.col <= c1 {
+                    fora[i] = true;
+                    continue;
+                }
+                let e = faixas.entry(no.aba).or_insert((c0, c1));
+                e.0 = e.0.min(c0);
+                e.1 = e.1.max(c1);
+            }
             for r in &padrao.refs {
                 let alvo = match &r.sheet {
                     None => Some(no.aba),

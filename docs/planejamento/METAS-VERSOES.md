@@ -118,6 +118,163 @@
 
 ---
 
+## v0.1.1 a v0.1.8 — o caminho até a v0.2 (combinado em 17/10/2026)
+
+> Uma versão por tema, cada uma lançada quando a lista dela fecha. Itens
+> marcados *(conferir)* podem já estar resolvidos: confirmar antes de mexer.
+
+### v0.1.1 — correções
+- [x] **CRÍTICO: salvar `.fshz` de 13 milhões de linhas (vindo de `.parquet`)
+      bateu 20 GB de RAM** (17/10, usuário). Feito: o gravador
+      (`fshz_write.rs`) não monta mais vetores Arrow nem bytes IPC da aba
+      inteira; conta o tamanho numa passada e grava fatias de ~64 MB direto
+      no gzip (o leitor, inclusive o da v0.1.0, já juntava vários blocos).
+      Medido com `examples/medir_salvar_grande.rs` no `2026_03.fshz`: pico
+      9,0 GB (pasta aberta 4,4 + cópia para gravar 4,4 + gravador ~0,1),
+      arquivo idêntico (`examples/conferir_fshz_iguais.rs`).
+- [ ] **A cópia para gravar** (`da_workbook`, 4,4 GB e 3,4 s **na thread da
+      tela** a cada Ctrl+S no mesmo arquivo): blocos da coluna em `Arc` com
+      cópia só ao editar, e o gravador lendo os blocos direto.
+- [x] **Abrir esse arquivo tinha pico de 13,3 GB** para 4,4 GB residentes:
+      bloco Arrow inteiro + `RecordBatch` + vetores. Agora `arrow_fluxo.rs`
+      lê buffer a buffer do gzip direto para as colunas (também os arquivos
+      da v0.1.0, de lote único) e `para_workbook_soltando` solta cada coluna
+      ao carregar: pico 4,5 GB, 8,6 s (era 13 s). Abrir + `MÍNIMOSES` em AU +
+      calcular tudo: pico 5,5 GB.
+- [ ] Gravar leva 43 s (gzip nível 6, 359 MB). Nível 3: 20 s e 458 MB;
+      nível 1: 13 s e 702 MB. Decidir com o usuário.
+- [x] **Dinâmica: vazio e texto entravam como 0** em Média, DesvPad, Mín e
+      Moda (`pivot.rs`/`dinamica_layout.rs`, `to_number(..).unwrap_or(0.)`).
+      Agora como no Excel: vazio fica de fora; texto só conta na Contagem.
+- [x] **Fórmula na coluna inteira** (análise de 13,7 milhões de linhas):
+      a coluna empacotada aceita intervalo local (`FaixaPadrao` em
+      `modelo_padrao.rs`; invalida por coluna quando o intervalo tem linhas
+      fixas). `Sheet::preencher_formula_faixa_vazia` grava o padrão em bloco,
+      um Ctrl+Z. Ctrl+D/alça/até o fim e colar usam o bloco quando a coluna
+      abaixo está vazia. No `2026_03.fshz`: preencher AU2:AU13770159 com o
+      `MÍNIMOSES` = 11 ms; calcular as 13,7 milhões = 26 s, +690 MB
+      (`examples/medir_formula_coluna_inteira.rs`). Falta: `sheet_escrever`
+      do MCP usar o mesmo caminho.
+- [x] Colar não deslocava referência relativa (`=A1` de B1 em B5 ficava
+      `=A1`): agora como no Excel; recortar mantém.
+- [x] Inserir/excluir coluna não mexia em `B:B`/`5:7` (`ajustar_inteiras`
+      em `formula_text.rs`).
+- [ ] **Recálculo fora da thread da tela**, com progresso e Esc: `MÍNIMOSES`
+      em 13,7 milhões de linhas travou o app inteiro (17/10).
+- [x] **`*SES` em coluna inteira travando** (`MÍNIMOSES(AO:AO;A:A;A2;…)`):
+      o `*SES` já usava o índice por grupo (`planilha/agregado.rs`); o que
+      travava era o grafo de dependências, que indexava `A:A` em ~98 mil
+      blocos de 1.024 linhas (até a linha 100 milhões): 70 ms **por fórmula
+      escrita**. Faixa alta agora vai para um índice por coluna
+      (`sheet_deps.rs`). Preencher 1.000 linhas: 76 s → 12,5 ms; 100 mil:
+      1,3 s (`examples/medir_minimoses.rs`).
+- [x] `PARÂMETRO`/`SWITCH` comparava o texto dos dois lados: agora como no
+      Excel (texto sem ligar para maiúscula; número não casa com texto).
+- [ ] **MCP edita tudo** (17/10, usuário: "tem que editar tudo tudo mesmo"):
+      `sheet_dinamica` feito (listar/criar/editar/atualizar/excluir, ao vivo);
+      `sheet_escrever` com fórmula vai em bloco sem teto. Seguir a lista de
+      `MCP-PENDENTE.md` até cobrir cada janela do app.
+- [x] Índice dos `*SES` por códigos (`agregado.rs`): 13,7 milhões de linhas
+      3,3 s → 1,9 s na primeira célula.
+- [ ] Teste de referência da v0.1.1: a análise do desvio padrão por bloco de
+      200 m no `2026_03.fshz` (13,7 milhões de linhas) feita inteira no app.
+- [x] Inserir/excluir coluna com muitas fórmulas trava (2 mil linhas = 3,3 s;
+      1 milhão > 13 min). Causa: cada fórmula regravada disparava a cascata
+      de "sujo" pela cadeia inteira (coluna acumulada `=K1+I2`): quadrático.
+      Agora `Sheet::adiar_cascata`/`soltar_cascata` no `mover_estrutura`:
+      2 mil linhas em 20–48 ms (`examples/conferir_estrutura_pequena.rs`).
+      O Ctrl+Z dessas operações ainda regrava célula a célula.
+- [ ] Fórmulas de G–M trocadas de coluna na "Planilha Pesada" (#REF! e Resumo
+      zerado): reproduzir com `examples/conferir_estrutura_pequena.rs`.
+- [ ] Botão direito na guia da aba não mostra nada.
+- [ ] Menu Orientação do texto: ícones como quadradinhos e menu longe do botão.
+- [x] Exportar sugere o nome do arquivo: o `.xlsx` já sugeria; o CSV/TSV
+      sugeria o nome da aba ("Planilha1") e agora sugere o do documento.
+- [ ] Barra de progresso ao abrir fica em 100% durante "Montando… na memória".
+- [ ] Inglês sem sobras: status "salvo", Colar, grupos da Página Inicial,
+      abas Exibir/Macros/Ferramentas *(conferir)*.
+- [ ] `.dmg` para Mac Intel (o job `macos-13` ficou parado na fila).
+- [x] Ctrl+T e Região atual em 13 milhões de linhas travavam: `regiao_atual`
+      e `regiao_da_tabela` leem as máscaras de presença por bloco
+      (`Sheet::sequencias_com_conteudo`). F12 mostra o tempo do Ctrl+T.
+- [x] Colar 13 milhões de fórmulas: o pulso que guarda os resultados nas
+      colunas percorria o cache inteiro a cada segundo (`retain`); agora
+      `extract_if` com cota e orçamento de 30 ms por pulso.
+- [x] Imagem na célula (17/10 noite): GIF/BMP/WebP na grade, barra de
+      fórmulas vazia, Inserir imagem na célula, Colocar na célula / sobre as
+      células, Alt+arrastar, painel Formatar imagem, menu do botão direito na
+      imagem; figura do `.xlsx` recortada sob os cabeçalhos.
+- [x] Só um painel lateral aberto por vez (gráfico, dinâmica, imagem).
+
+### v0.1.2 — sem travadas
+- [ ] Selecionar 87 milhões de células trava ~5 s (rodapé, realce e alças fora
+      da thread da tela).
+- [ ] Rolar a grade com `.parquet` aberto trava.
+- [ ] Lag ao rolar com gráficos na tela.
+- [ ] Recuperação automática prepara a cópia na thread da tela (~1 s em 70
+      milhões de células): mover para fora.
+- [ ] Lentidão com outra janela aberta (Configurações) *(conferir)*.
+- [ ] Apagar uma fórmula na Planilha Pesada e dar Ctrl+Z trava um pouco
+      (17/10, usuário): medir no F12 o desfazer e o recálculo que ele dispara.
+
+### v0.1.3 — Excel e acabamento
+- [ ] Referência entre arquivos gravada como vínculo externo do `.xlsx`
+      (`externalLink`); hoje o Excel pode pedir reparo.
+- [ ] Dinâmica gravada no `.xlsx` reconhecida pelo Excel como dinâmica (conferir
+      no Excel de verdade).
+- [ ] Colar até o fim também para fórmula e data formatada.
+- [ ] Alças do gráfico: barra mais grossa no lugar dos quadradinhos.
+- [ ] Barrinha flutuante da forma encostada na forma.
+- [ ] Barra de status: contas coladas no "−" do zoom, alinhadas na vertical.
+- [ ] Formatar células: códigos de número sem rolagem horizontal; abas Fonte,
+      Borda e Preenchimento compactas *(conferir)*.
+- [ ] Borda do Ctrl+C animada, como a do Excel.
+
+### v0.1.4 — motor novo da dinâmica
+- [ ] Ler as colunas inteiras de uma vez (dicionário de textos do motor, sem
+      `Value` por célula) e agrupar por códigos em paralelo por bloco.
+- [ ] Somas guardadas por grupo: mudar uma célula da origem refaz só o grupo.
+- [ ] "Adiar atualização" no painel (arrumar campos e calcular no fim).
+- [ ] Medir o caso do LinkedIn (20 arquivos × 850 mil linhas × 22 colunas =
+      17 milhões de linhas): tempo, RAM e tamanho do `.fshz`, com script.
+
+### v0.1.5 — memória
+- [ ] A parte do plano dos 400 MB (`PLANO-MEMORIA-400MB.md`) que o caso de 17
+      milhões de linhas exigir: RAM de abrir e da dinâmica medidas no F12.
+- [ ] F12 × Monitor do GNOME (~300 MB de diferença): mesmo critério de memória.
+
+### v0.1.6 — dinâmica igual à do Excel (parte 1)
+- [ ] Painel e faixa no padrão do `GUIA-JANELAS.md` ("feia e não usual", 16/10).
+- [ ] Campos calculados com editor de fórmula e autocompletar dos campos.
+- [ ] Itens agrupados à mão (selecionar itens → Agrupar).
+- [ ] Linha do tempo para campos de data.
+- [ ] Layouts completos: estrutura de tópicos, subtotais em cima/embaixo,
+      recolher e expandir por nível.
+- [ ] Mostrar páginas de filtro (uma aba por item).
+
+### v0.1.7 — dinâmica igual à do Excel (parte 2)
+- [ ] Estilos de dinâmica e formatação que sobrevive ao Atualizar.
+- [ ] Segmentação completa (várias dinâmicas, várias seleções, estilos, `.xlsx`).
+- [ ] Gráfico dinâmico completo (botões de campo, todos os tipos, `.xlsx`).
+- [ ] Dinâmicas recomendadas (3 a 5 a partir dos dados).
+- [ ] Origem: outra aba, outro arquivo aberto e tabela.
+
+### v0.1.8 — além do Excel
+- [ ] Contagem de distintos sem "modelo de dados".
+- [ ] Mediana e percentis como agregação.
+- [ ] Ctrl+Z em cada mudança do painel.
+- [ ] Dinâmica de dinâmica (a saída vira origem sem copiar valores).
+- [ ] Medidas simples entre campos (o "DAX" sem DAX) e tabelas relacionadas
+      por uma coluna em comum.
+
+### v0.2.0 — fechamento
+- [ ] As metas de número abaixo batidas e medidas no F12.
+- [ ] Ajuda F1 com tudo o que o app faz, nos três idiomas.
+- [ ] Comparação com o Excel publicada no README (mesmo arquivo, script para
+      repetir).
+
+---
+
 ## v0.2 — a melhor tabela dinâmica (melhor que a do Excel)
 
 ### Recursos

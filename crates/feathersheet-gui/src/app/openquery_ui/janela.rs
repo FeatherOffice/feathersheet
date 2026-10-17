@@ -130,7 +130,7 @@ impl App {
         let titulo = if script { tr!("Script completo · visualização") }
             else { tr!("Editor avançado · etapas JavaScript") };
         let nota = if script {
-            tr!("Código ilustrativo do fluxo completo. Não é executado como JavaScript: as etapas são processadas pelo motor Rust.")
+            tr!("Código ilustrativo do fluxo completo. Não é executado como JavaScript: as etapas são processadas pelo FeatherSheet.")
         } else {
             tr!("Edite const etapas = [ ... ]; para transformar os dados. Aplicar valida todas as etapas antes de modificar a consulta.")
         };

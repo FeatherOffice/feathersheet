@@ -300,12 +300,12 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
                 tr!("Encostar a ponta na planilha já risca (a borracha da caneta apaga); o mouse ou Esc voltam à seleção. Faixa, menus e janelas continuam recebendo clique."),
                 toggler(app.config.caneta_auto_desenhar)
                     .on_toggle(|v| Msg::Caneta(super::desenhar::AjusteCaneta::AutoDesenhar(v))).style(estilo_toggle)),
-            text(tr!("Largura/altura padrão e estilo inicial de tabelas ainda dependem de integração adicional ao motor Rust."))
+            text(tr!("Largura e altura padrão e estilo inicial de tabelas: em breve."))
                 .size(11).color(COR_TEXTO_MUTED()),
         ].spacing(0).into(),
         3 => iced::widget::column![
             text("OpenQuery").size(16).color(COR_TEXTO()),
-            text(tr!("O editor de consultas do TypeScript ainda não foi integrado ao FeatherSheet nativo."))
+            text(tr!("O editor de consultas ainda não foi integrado às Configurações."))
                 .size(12).color(COR_TEXTO_MUTED()),
             text(tr!("O limite padrão de pré-visualização será configurável quando o executor de consultas estiver disponível. Nenhuma consulta será modificada por esta tela."))
                 .size(12).color(COR_TEXTO_MUTED()),
@@ -336,8 +336,6 @@ pub(super) fn visualizar(app: &App) -> Element<'_, Msg> {
                 .size(12),
             text(tr!("As preferências são guardadas no diretório de configuração do usuário, fora do arquivo da planilha."))
                 .size(12),
-            text(tr!("Recursos exclusivos do TypeScript permanecem identificados como pendentes, sem controles fictícios."))
-                .size(12).color(COR_TEXTO_MUTED()),
             Space::with_height(4),
             feather_ui::creditos::colaboradores(),
         ].spacing(12).into()

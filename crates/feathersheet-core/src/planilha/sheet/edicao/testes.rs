@@ -609,3 +609,32 @@ fn validacoes_json_entram_no_mesmo_undo_e_rollback_das_celulas() {
     assert!(s.va.as_ref().is_some_and(|v|v.contains("regra")));
 }
 
+
+#[test]
+fn regiao_da_tabela_junta_colunas_que_acabam_em_linhas_diferentes() {
+    let mut s = Sheet::new("Escada");
+    // A: linhas 0–5; B: linhas 3–70.000 (passa da divisa de bloco); C: 60.000–70.010.
+    for r in 0..=5 { s.set_cell(r, 0, "a"); }
+    for r in 3..=70_000 { s.set_cell(r, 1, "1"); }
+    for r in 60_000..=70_010 { s.set_cell(r, 2, "2"); }
+    assert_eq!(s.regiao_da_tabela(0, 0), Rect::new(0, 0, 70_010, 2));
+    assert_eq!(s.regiao_da_tabela(70_010, 2), Rect::new(0, 0, 70_010, 2), "sobe até a linha 0");
+}
+
+#[test]
+fn desfazer_varias_celulas_de_uma_vez_recalcula_quem_depende() {
+    use crate::celulas::values::Value;
+    let mut s = Sheet::new("Lote");
+    for r in 0..3 { s.set_cell(r, 0, "1"); }
+    s.set_cell(0, 1, "=SOMA(A1:A3)");
+    s.set_cell(1, 1, "=B1*2");
+    assert_eq!(s.get_value(1, 1), Value::Number(6.0));
+    s.abrir_transacao();
+    for r in 0..3 { s.set_cell(r, 0, "10"); }
+    s.fechar_transacao();
+    assert_eq!(s.get_value(1, 1), Value::Number(60.0));
+    assert!(s.undo());
+    assert_eq!(s.get_value(1, 1), Value::Number(6.0), "Ctrl+Z em lote suja a cadeia toda");
+    assert!(s.redo());
+    assert_eq!(s.get_value(1, 1), Value::Number(60.0));
+}

@@ -17,6 +17,42 @@ const MAX_LARGURA: f64 = 320.;
 const MAX_ALTURA: f64 = 220.;
 const CABECALHO_X: f64 = 90.;
 const CABECALHO_Y: f64 = 30.;
+/// Quanto a imagem inserida fica para dentro do canto da célula.
+pub(super) const RECUO_X: f64 = 30.;
+pub(super) const RECUO_Y: f64 = 24.;
+/// A régua das imagens começa em `CABECALHO_X/Y`; a da grade, nos
+/// cabeçalhos dela. Somar isto leva um ponto da imagem para a régua da grade.
+pub(super) const DESLOC_X: f64 = CABECALHO_X - crate::grade::CABECALHO_LINHA as f64;
+pub(super) const DESLOC_Y: f64 = CABECALHO_Y - crate::grade::CABECALHO_COLUNA as f64;
+
+/// "Propriedades" do Formatar imagem: como a imagem acompanha as células
+/// (chave `placement` do item; o padrão é o do Excel para imagens).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Posicionamento {
+    /// Mover e dimensionar com células (`twoCell`).
+    MoverEDimensionar,
+    /// Mover mas não dimensionar com células (`oneCell`).
+    #[default]
+    Mover,
+    /// Não mover nem dimensionar com células (`absolute`).
+    Fixa,
+}
+impl Posicionamento {
+    pub(super) fn de(item: &Value) -> Self {
+        match item["placement"].as_str() {
+            Some("twoCell") => Self::MoverEDimensionar,
+            Some("absolute") => Self::Fixa,
+            _ => Self::Mover,
+        }
+    }
+    pub(super) fn chave(self) -> &'static str {
+        match self {
+            Self::MoverEDimensionar => "twoCell",
+            Self::Mover => "oneCell",
+            Self::Fixa => "absolute",
+        }
+    }
+}
 static PROXIMO_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Default)]
@@ -27,6 +63,8 @@ pub(super) struct Cache {
     objetos: std::cell::RefCell<HashMap<u32, (usize, usize, Arc<Vec<Value>>)>>,
     /// Shift segurado: redimensionar pelos cantos mantém a proporção (como no TS).
     pub(super) shift: std::cell::Cell<bool>,
+    /// Alt segurado: soltar a imagem arrastada a põe dentro da célula.
+    pub(super) alt: std::cell::Cell<bool>,
 }
 
 /// Interação da imagem selecionada com o mouse. Sem editor de efeitos.
@@ -81,13 +119,50 @@ const TAM_ALCA: f64 = 10.;
 const LADO_MINIMO: f64 = 20.;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct Posicao {
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
+pub(super) struct Posicao {
+    pub(super) x: f64,
+    pub(super) y: f64,
+    pub(super) width: f64,
+    pub(super) height: f64,
 }
 impl Posicao {
+    /// Onde a imagem está agora: presa às células pela âncora (`de`/`ate`)
+    /// conforme o [`Posicionamento`]; sem âncora, a `position` gravada.
+    pub(super) fn efetiva(item: &Value, sheet: &Sheet) -> Option<Self> {
+        use feathersheet_io::objetos_aba::Ancora;
+        let pos = Self::ler(item)?;
+        let regua = super::objetos::ReguaAba(sheet);
+        let ancora = |k: &str| serde_json::from_value::<Ancora>(item[k].clone()).ok();
+        let ponto = |a: Ancora| {
+            let (x, y) = a.ponto(&regua);
+            (f64::from(x) - DESLOC_X, f64::from(y) - DESLOC_Y)
+        };
+        Some(match (Posicionamento::de(item), ancora("de"), ancora("ate")) {
+            (Posicionamento::Fixa, ..) | (_, None, _) => pos,
+            (Posicionamento::MoverEDimensionar, Some(de), Some(ate)) => {
+                let ((x0, y0), (x1, y1)) = (ponto(de), ponto(ate));
+                Self { x: x0, y: y0, width: (x1 - x0).clamp(1., 4096.), height: (y1 - y0).clamp(1., 4096.) }
+            }
+            (_, Some(de), _) => {
+                let (x, y) = ponto(de);
+                Self { x, y, ..pos }
+            }
+        })
+    }
+
+    /// Grava a posição e a âncora nas células (as duas pontas).
+    pub(super) fn gravar(self, item: &mut Value, sheet: &Sheet) {
+        use feathersheet_io::objetos_aba::Ancora;
+        for (campo, numero) in [("x", self.x), ("y", self.y), ("width", self.width), ("height", self.height)] {
+            item["position"][campo] = json!(numero);
+        }
+        let regua = super::objetos::ReguaAba(sheet);
+        let ancora = |x: f64, y: f64| serde_json::to_value(
+            Ancora::em((x + DESLOC_X) as f32, (y + DESLOC_Y) as f32, &regua)).unwrap_or(Value::Null);
+        item["de"] = ancora(self.x, self.y);
+        item["ate"] = ancora(self.x + self.width, self.y + self.height);
+    }
+
     fn ler(item: &Value) -> Option<Self> {
         let p = &item["position"];
         let pos = Self {
@@ -179,6 +254,8 @@ pub(super) struct Arraste {
     base: Posicao,
     atual: Posicao,
     gesto: Gesto,
+    /// "Fixar taxa de proporção": os cantos mantêm a proporção (Shift também).
+    travar: bool,
 }
 
 /// Atualiza somente a posição do objeto em Sheet.im. Todos os pixels e
@@ -187,16 +264,11 @@ fn salvar_posicao(sheet: &mut Sheet, id: &str, nova: Posicao) -> Result<bool, St
     let mut lista = itens(sheet)?;
     let item = lista.iter_mut().find(|v| v["id"].as_str() == Some(id))
         .ok_or(tr!("A imagem selecionada não existe mais."))?;
-    let antiga = Posicao::ler(item).ok_or(tr!("A posição da imagem é inválida."))?;
+    let antiga = Posicao::efetiva(item, sheet).ok_or(tr!("A posição da imagem é inválida."))?;
     if antiga == nova {
         return Ok(false);
     }
-    for (campo, numero) in [
-        ("x", nova.x), ("y", nova.y),
-        ("width", nova.width), ("height", nova.height),
-    ] {
-        item["position"][campo] = json!(numero);
-    }
+    nova.gravar(item, sheet);
     let gravado = serde_json::to_string(&lista)
         .map_err(|e| trf!("Não consegui atualizar a imagem: {e}"))?;
     // Um único passo de desfazer, junto com o resto do histórico da aba.
@@ -204,8 +276,39 @@ fn salvar_posicao(sheet: &mut Sheet, id: &str, nova: Posicao) -> Result<bool, St
     Ok(true)
 }
 
+/// Muda campos de uma imagem solta (um passo de desfazer). `f` devolve
+/// `false` quando não mudou nada.
+pub(super) fn alterar_item(sheet: &mut Sheet, id: &str, f: impl FnOnce(&mut Value, &Sheet) -> bool) -> Result<bool, String> {
+    let mut lista = itens(sheet)?;
+    let item = lista.iter_mut().find(|v| v["id"].as_str() == Some(id))
+        .ok_or(tr!("A imagem selecionada não existe mais."))?;
+    if !f(item, sheet) {
+        return Ok(false);
+    }
+    let gravado = serde_json::to_string(&lista)
+        .map_err(|e| trf!("Não consegui atualizar a imagem: {e}"))?;
+    sheet.alterar_imagens(Some(gravado));
+    Ok(true)
+}
+
+/// Largura e altura em pixels da figura do item.
+pub(super) fn tamanho_original(item: &Value) -> Option<(u32, u32)> {
+    let bytes = decodificar_src(item["src"].as_str()?)?;
+    image::ImageReader::new(Cursor::new(bytes)).with_guessed_format().ok()?.into_dimensions().ok()
+}
+
+/// O `src` e o canto (x, y) da imagem solta.
+pub(super) fn src_e_posicao(sheet: &Sheet, id: &str) -> Result<(String, f64, f64), String> {
+    let lista = itens(sheet)?;
+    let item = lista.iter().find(|v| v["id"].as_str() == Some(id))
+        .ok_or(tr!("A imagem selecionada não existe mais."))?;
+    let pos = Posicao::efetiva(item, sheet).ok_or(tr!("A posição da imagem é inválida."))?;
+    let src = item["src"].as_str().ok_or(tr!("Não consegui ler a imagem."))?;
+    Ok((src.to_owned(), pos.x, pos.y))
+}
+
 /// Remove a imagem do bloco `im` (um passo de desfazer).
-fn remover_imagem(sheet: &mut Sheet, id: &str) -> Result<bool, String> {
+pub(super) fn remover_imagem(sheet: &mut Sheet, id: &str) -> Result<bool, String> {
     let mut lista = itens(sheet)?;
     let antes = lista.len();
     lista.retain(|v| v["id"].as_str() != Some(id));
@@ -268,19 +371,23 @@ pub(super) fn importar(
     let escala = (MAX_LARGURA / f64::from(w)).min(MAX_ALTURA / f64::from(h)).min(1.);
     let numero = PROXIMO_ID.fetch_add(1, Ordering::Relaxed);
     let id = format!("rust-imagem-{numero}-{}", std::process::id());
-    anteriores.push(json!({
+    let (largura, altura) = ((f64::from(w) * escala).round().max(1.), (f64::from(h) * escala).round().max(1.));
+    let mut novo = json!({
         "id": id,
         "src": format!("data:{mime};base64,{}", STANDARD.encode(bytes)),
         "name": nome,
-        "position": {
-            // Régua real da aba (larguras e alturas próprias), a da grade.
-            "x": f64::from(crate::grade::modelo::inicio_x_da(sheet, coluna)) + 30.,
-            "y": f64::from(crate::grade::modelo::inicio_y_da(sheet, linha)) + 24.,
-            "width": (f64::from(w) * escala).round().max(1.),
-            "height": (f64::from(h) * escala).round().max(1.),
-        },
-        "aspectRatio": f64::from(w) / f64::from(h)
-    }));
+        "aspectRatio": f64::from(w) / f64::from(h),
+        // Tamanho ao inserir: a escala "não relativa ao original" parte dele.
+        "base": {"width": largura, "height": altura}
+    });
+    // Régua real da aba (larguras e alturas próprias), a da grade.
+    Posicao {
+        x: f64::from(crate::grade::modelo::inicio_x_da(sheet, coluna)) + RECUO_X,
+        y: f64::from(crate::grade::modelo::inicio_y_da(sheet, linha)) + RECUO_Y,
+        width: largura,
+        height: altura,
+    }.gravar(&mut novo, sheet);
+    anteriores.push(novo);
     let json = serde_json::to_string(&anteriores)
         .map_err(|e| trf!("Não consegui guardar a imagem: {e}"))?;
     sheet.im = Some(json);
@@ -390,7 +497,7 @@ impl App {
             let (Some(id), Some(src)) = (item["id"].as_str(), item["src"].as_str()) else {
                 continue;
             };
-            let Some(mut pos) = Posicao::ler(&item) else { continue };
+            let Some(mut pos) = Posicao::efetiva(item, &aba.sheet) else { continue };
             let selecionada = self.imagem_selecionada.as_ref()
                 .is_some_and(|(aba_id, escolhido)| *aba_id == aba.id && escolhido == id);
             if let Some(arraste) = &self.arraste_imagem {
@@ -424,11 +531,16 @@ impl App {
             });
             let Some(handle) = handle else { continue };
 
+            let giro = item["rotation"].as_f64().unwrap_or(0.);
             let imagem = mouse_area(
                 iced_image(handle)
                     .width(Length::Fixed(width as f32))
-                    .height(Length::Fixed(height as f32)),
+                    .height(Length::Fixed(height as f32))
+                    // Sem "fixar proporção" a figura estica no tamanho pedido.
+                    .content_fit(iced::ContentFit::Fill)
+                    .rotation(iced::Rotation::Floating(iced::Radians(giro.to_radians() as f32))),
             ).on_press(Msg::ImagemPressionar(id.to_owned(), Gesto::Mover))
+            .on_right_press(Msg::ImagemCelula(super::imagem_na_celula::Evento::Contexto(id.to_owned())))
             .on_scroll(crate::app::botoes_macro::rolar_pela_roda)
             .interaction(mouse::Interaction::Grab);
             let conteudo: Element<'_, Msg> = if selecionada {
@@ -483,8 +595,14 @@ impl App {
         let Some(item) = lista.iter().find(|v| v["id"].as_str() == Some(&id)) else {
             return;
         };
-        let Some(pos) = Posicao::ler(item) else { return };
+        let Some(pos) = Posicao::efetiva(item, &aba.sheet) else { return };
         self.imagem_selecionada = Some((aba.id, id.clone()));
+        // Bloqueada (Formatar imagem › Propriedades) com a aba protegida: só seleciona.
+        if aba.sheet.protegida() && item["locked"].as_bool().unwrap_or(true) {
+            self.status = tr!("A imagem está bloqueada: desproteja a planilha para mover.").into();
+            return;
+        }
+        let travar = item["lockAspect"].as_bool().unwrap_or(true);
         self.arraste_imagem = Some(Arraste {
             id,
             aba_id: aba.id,
@@ -492,6 +610,7 @@ impl App {
             base: pos,
             atual: pos,
             gesto,
+            travar,
         });
     }
 
@@ -500,7 +619,7 @@ impl App {
             let zoom = f64::from(self.config.zoom) / 100.;
             drag.atual = match drag.gesto {
                 Gesto::Alca(alca) => drag.base.redimensionar(
-                    drag.inicio, cursor, zoom, alca, self.imagens_importadas.shift.get()),
+                    drag.inicio, cursor, zoom, alca, drag.travar || self.imagens_importadas.shift.get()),
                 outro => drag.base.transformar(drag.inicio, cursor, zoom, outro),
             };
         }
@@ -508,6 +627,14 @@ impl App {
 
     pub(super) fn soltar_imagem(&mut self) {
         let Some(drag) = self.arraste_imagem.take() else { return };
+        // Alt + arrastar: a imagem vai para dentro da célula onde o canto dela caiu.
+        if self.imagens_importadas.alt.get() && drag.gesto == Gesto::Mover && drag.atual != drag.base {
+            self.imagem_selecionada = Some((drag.aba_id, drag.id));
+            if let Err(e) = self.colocar_na_celula_em(Some((drag.atual.x, drag.atual.y))) {
+                self.status = e;
+            }
+            return;
+        }
         let Some(aba) = self.workbook.aba_mut(self.folha)
             .filter(|a| a.id == drag.aba_id) else { return };
         match salvar_posicao(&mut aba.sheet, &drag.id, drag.atual) {
@@ -543,7 +670,7 @@ impl App {
 
     /// Cache da lista de metadados; invalida quando troca a String de Sheet.im.
     /// Com isso, arrastar a imagem não custa O(tamanho do PNG base64) por frame.
-    fn itens_cached(&self, aba_id: u32, sheet: &Sheet) -> Result<Arc<Vec<Value>>, String> {
+    pub(super) fn itens_cached(&self, aba_id: u32, sheet: &Sheet) -> Result<Arc<Vec<Value>>, String> {
         let Some(json) = &sheet.im else { return Ok(Arc::new(Vec::new())) };
         let chave = (json.as_ptr() as usize, json.len());
         if let Some((ptr, len, lista)) = self.imagens_importadas.objetos.borrow().get(&aba_id) {

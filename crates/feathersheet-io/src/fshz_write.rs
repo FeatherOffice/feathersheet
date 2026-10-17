@@ -397,32 +397,98 @@ fn bit_ligado(bitmap: &[u8], r: u32) -> bool {
     bitmap[(r >> 3) as usize] & (1 << (r & 7)) != 0
 }
 
-fn vetor_float(values: &[f64], bitmap: &[u8], linhas: u32) -> ArrayRef {
-    let it = (0..linhas as usize).map(|r| {
-        if bit_ligado(bitmap, r as u32) {
-            Some(values[r])
-        } else {
-            None
-        }
-    });
-    Arc::new(Float64Array::from_iter(it))
+/// Um campo do bloco Arrow de uma aba, ainda sem vetor: aponta para os dados
+/// crus e só vira vetor Arrow uma fatia de linhas por vez ([`escrever_bloco`]).
+/// Até 17/10/2026 o gravador montava a aba inteira em vetores Arrow e depois
+/// os bytes IPC inteiros na memória — três cópias dos dados além da pasta
+/// crua: salvar 13,7 milhões de linhas × 46 colunas bateu 20 GB de RAM.
+enum Campo<'a> {
+    Float { values: &'a [f64], bitmap: &'a [u8] },
+    /// `remapa`: índice global → índice no dicionário local da coluna.
+    Int { values: &'a [i32], bitmap: &'a [u8], remapa: Option<Vec<i32>> },
 }
 
-fn vetor_int(values: &[i32], bitmap: &[u8], linhas: u32) -> ArrayRef {
-    let it = (0..linhas as usize).map(|r| {
-        if bit_ligado(bitmap, r as u32) {
-            Some(values[r])
-        } else {
-            None
+impl Campo<'_> {
+    fn tipo(&self) -> DataType {
+        match self {
+            Campo::Float { .. } => DataType::Float64,
+            Campo::Int { .. } => DataType::Int32,
         }
-    });
-    Arc::new(Int32Array::from_iter(it))
+    }
+
+    fn fatia(&self, r0: u32, r1: u32) -> ArrayRef {
+        let presente = |bitmap: &[u8], r: u32| bitmap.get((r >> 3) as usize).is_some_and(|b| b & (1 << (r & 7)) != 0);
+        match self {
+            Campo::Float { values, bitmap } => Arc::new(Float64Array::from_iter((r0..r1).map(|r| {
+                if presente(bitmap, r) { values.get(r as usize).copied() } else { None }
+            }))),
+            Campo::Int { values, bitmap, remapa } => Arc::new(Int32Array::from_iter((r0..r1).map(|r| {
+                if !presente(bitmap, r) { return None; }
+                let v = *values.get(r as usize)?;
+                Some(match remapa {
+                    Some(m) => m.get(v as usize).copied().unwrap_or(v),
+                    None => v,
+                })
+            }))),
+        }
+    }
+}
+
+/// Linhas por `RecordBatch`: ~64 MB de vetores por fatia, nunca menos de
+/// 64 mil linhas. Múltiplo de 8 para a máscara não cruzar byte.
+fn linhas_por_fatia(campos: usize) -> u32 {
+    let por_linha = (campos.max(1) * 8) as u64;
+    ((64 << 20) / por_linha).clamp(65_536, 4_194_304) as u32 & !7
+}
+
+/// Grava o bloco Arrow IPC de uma aba em `destino`, uma fatia de linhas por
+/// `RecordBatch` — o leitor junta os blocos (`coluna_float`/`coluna_int`),
+/// inclusive o da v0.1.0. O pico de memória é uma fatia, não a aba.
+fn escrever_bloco<W: Write>(destino: W, nomes: &[String], campos: &[Campo], linhas: u32, aba: &str) -> Result<(), String> {
+    escrever_em_fatias(destino, nomes, campos, linhas, aba, linhas_por_fatia(campos.len()))
+}
+
+fn escrever_em_fatias<W: Write>(destino: W, nomes: &[String], campos: &[Campo], linhas: u32, aba: &str, passo: u32) -> Result<(), String> {
+    let fields: Vec<Field> = nomes.iter().zip(campos).map(|(n, c)| Field::new(n, c.tipo(), true)).collect();
+    let schema = Arc::new(Schema::new(fields));
+    let mut writer = FileWriter::try_new(destino, &schema)
+        .map_err(|e| format!("Não consegui abrir o gravador Arrow de \"{aba}\": {e}"))?;
+    let mut r0 = 0u32;
+    while r0 < linhas {
+        let r1 = linhas.min(r0.saturating_add(passo));
+        let arrays: Vec<ArrayRef> = campos.iter().map(|c| c.fatia(r0, r1)).collect();
+        let batch = RecordBatch::try_new(schema.clone(), arrays)
+            .map_err(|e| format!("Não consegui montar a tabela Arrow de \"{aba}\": {e}"))?;
+        writer.write(&batch).map_err(|e| format!("Não consegui gravar a tabela Arrow de \"{aba}\": {e}"))?;
+        r0 = r1;
+    }
+    writer.finish().map_err(|e| format!("Não consegui fechar a tabela Arrow de \"{aba}\": {e}"))
+}
+
+/// O dicionário local de [`dicionario_local`] sem copiar os índices: devolve
+/// o dicionário e a tabela global → local (`None` se já é a identidade, o
+/// caso comum — `da_workbook` já manda o dicionário local).
+fn remapa_local<'a>(indices: &[i32], bitmap: &[u8], texto: impl Fn(i32) -> &'a str) -> (Vec<&'a str>, Option<Vec<i32>>) {
+    let mut tabela: Vec<i32> = Vec::new();
+    let mut dict = Vec::new();
+    let mut identidade = true;
+    for (linha, &indice) in indices.iter().enumerate() {
+        if bitmap.get(linha >> 3).copied().unwrap_or(0) & (1 << (linha & 7)) == 0 { continue; }
+        let Ok(at) = usize::try_from(indice) else { continue };
+        if at >= tabela.len() { tabela.resize(at + 1, -1); }
+        if tabela[at] < 0 {
+            tabela[at] = dict.len() as i32;
+            identidade &= tabela[at] == indice;
+            dict.push(texto(indice));
+        }
+    }
+    (dict, (!identidade).then_some(tabela))
 }
 
 /// Monta uma aba: decide avulsa-ou-coluna, deduplica estilo, monta os
 /// vetores Arrow. Devolve a meta da aba e os campos (nome -> vetor) para
 /// entrar num `RecordBatch`, na mesma ordem em que `cols` os lista.
-fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<'a>, Vec<(String, ArrayRef)>) {
+fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<'a>, Vec<(String, Campo<'a>)>) {
     let mut avulsas: Vec<CelulaAvulsaMeta> = aba
         .avulsas
         .iter()
@@ -434,7 +500,7 @@ fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<
         .collect();
 
     let mut colunas_meta = Vec::new();
-    let mut campos: Vec<(String, ArrayRef)> = Vec::new();
+    let mut campos: Vec<(String, Campo<'a>)> = Vec::new();
     let linhas = aba.linhas;
 
     if linhas >= LINHAS_MINIMAS {
@@ -444,7 +510,7 @@ fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<
                 continue;
             }
             let f = format!("n{}", col.col);
-            campos.push((f.clone(), vetor_float(&col.values, &col.bitmap, linhas)));
+            campos.push((f.clone(), Campo::Float { values: &col.values, bitmap: &col.bitmap }));
             colunas_meta.push(ColunaMeta { f, c: col.col, k: "num", d: None, e: None, fv: None });
         }
         for col in &aba.colunas_txt {
@@ -453,11 +519,10 @@ fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<
                 continue;
             }
             let f = format!("t{}", col.col);
-            let mut indices = col.indices.clone();
-            let dict = dicionario_local(&mut indices, &col.bitmap, |id| {
+            let (dict, remapa) = remapa_local(&col.indices, &col.bitmap, |id| {
                 col.dict.get(id as usize).map(String::as_str).unwrap_or_default()
             });
-            campos.push((f.clone(), vetor_int(&indices, &col.bitmap, linhas)));
+            campos.push((f.clone(), Campo::Int { values: &col.indices, bitmap: &col.bitmap, remapa }));
             colunas_meta.push(ColunaMeta {
                 f,
                 c: col.col,
@@ -472,8 +537,8 @@ fn montar_aba<'a>(aba: &'a AbaBruta, estilos: &mut TabelaDeEstilos) -> (AbaMeta<
         for col in &aba.colunas_formula {
             let f = format!("f{}", col.col);
             let fv = format!("v{}", col.col);
-            campos.push((f.clone(), vetor_int(&col.slots, &col.bitmap, linhas)));
-            campos.push((fv.clone(), vetor_float(&col.payload, &col.bitmap, linhas)));
+            campos.push((f.clone(), Campo::Int { values: &col.slots, bitmap: &col.bitmap, remapa: None }));
+            campos.push((fv.clone(), Campo::Float { values: &col.payload, bitmap: &col.bitmap }));
             colunas_meta.push(ColunaMeta {
                 f,
                 c: col.col,
@@ -622,48 +687,30 @@ fn derramar_formula(col: &ColunaFormulaBruta, padroes: &[String], linhas: u32, a
     }
 }
 
-/// Monta o corpo do FSH2 (meta JSON + bytes Arrow) e devolve pronto para
-/// comprimir. Equivalente a `montarV2` + a montagem do envelope de
-/// `encodeBookArrow`, sem o `FSH2` + gzip — isso [`gravar`] faz por cima.
-fn montar_partes(pasta: &PastaBruta) -> Result<(LivroMeta<'_>, Vec<Vec<u8>>), String> {
+/// Os blocos Arrow das abas, ainda por gravar: nome da aba, linhas, nomes
+/// dos campos e campos.
+type Blocos<'a> = Vec<(&'a str, u32, Vec<String>, Vec<Campo<'a>>)>;
+
+/// Monta a meta do livro e o plano dos blocos Arrow. O tamanho de cada bloco
+/// (o `ar` da meta, que vai antes dos blocos no arquivo) sai de uma passada
+/// que só conta os bytes ([`Contador`]); os bytes de verdade são gerados de
+/// novo, fatia a fatia, direto no compressor ([`gravar_blocos`]).
+fn montar_partes(pasta: &PastaBruta) -> Result<(LivroMeta<'_>, Blocos<'_>), String> {
     let mut estilos = TabelaDeEstilos::new();
     let mut abas_meta = Vec::with_capacity(pasta.sheets.len());
-    let mut blocos: Vec<Vec<u8>> = Vec::new();
+    let mut blocos: Blocos = Vec::new();
     let mut deslocamento: usize = 0;
 
     for aba in &pasta.sheets {
         let (mut meta, campos) = montar_aba(aba, &mut estilos);
         if !campos.is_empty() {
-            let fields: Vec<Field> = campos
-                .iter()
-                .map(|(nome, arr)| {
-                    let tipo = if matches!(arr.data_type(), DataType::Float64) {
-                        DataType::Float64
-                    } else {
-                        DataType::Int32
-                    };
-                    Field::new(nome, tipo, true)
-                })
-                .collect();
-            let schema = Arc::new(Schema::new(fields));
-            let arrays: Vec<ArrayRef> = campos.into_iter().map(|(_, a)| a).collect();
-            let batch = RecordBatch::try_new(schema.clone(), arrays)
-                .map_err(|e| format!("Não consegui montar a tabela Arrow de \"{}\": {e}", aba.n))?;
-
-            let mut bytes: Vec<u8> = Vec::new();
-            {
-                let mut writer = FileWriter::try_new(&mut bytes, &schema)
-                    .map_err(|e| format!("Não consegui abrir o gravador Arrow de \"{}\": {e}", aba.n))?;
-                writer
-                    .write(&batch)
-                    .map_err(|e| format!("Não consegui gravar a tabela Arrow de \"{}\": {e}", aba.n))?;
-                writer
-                    .finish()
-                    .map_err(|e| format!("Não consegui fechar a tabela Arrow de \"{}\": {e}", aba.n))?;
-            }
-            meta.ar = Some((deslocamento, bytes.len()));
-            deslocamento += bytes.len();
-            blocos.push(bytes);
+            let (nomes, campos): (Vec<String>, Vec<Campo>) = campos.into_iter().unzip();
+            let mut contador = Contador::default();
+            escrever_bloco(&mut contador, &nomes, &campos, aba.linhas, &aba.n)?;
+            let tamanho = usize::try_from(contador.0).map_err(|_| "Bloco Arrow grande demais".to_string())?;
+            meta.ar = Some((deslocamento, tamanho));
+            deslocamento = deslocamento.checked_add(tamanho).ok_or("Região Arrow grande demais")?;
+            blocos.push((&aba.n, aba.linhas, nomes, campos));
         }
         abas_meta.push(meta);
     }
@@ -682,6 +729,13 @@ fn montar_partes(pasta: &PastaBruta) -> Result<(LivroMeta<'_>, Vec<Vec<u8>>), St
     Ok((meta, blocos))
 }
 
+fn gravar_blocos<W: Write>(destino: &mut W, blocos: &Blocos) -> Result<(), String> {
+    for (aba, linhas, nomes, campos) in blocos {
+        escrever_bloco(&mut *destino, nomes, campos, *linhas, aba)?;
+    }
+    Ok(())
+}
+
 /// Conta a serialização sem manter outro buffer de centenas de MB na memória.
 #[derive(Default)]
 pub(crate) struct Contador(pub(crate) u64);
@@ -697,15 +751,27 @@ impl Write for Contador {
 /// Grava metadados binários e Arrow diretamente no compressor, sem corpo
 /// descomprimido contíguo nem cópia intermediária dos blocos Arrow.
 pub(crate) fn gravar_binario<W: Write, T: Serialize>(destino: W, meta: &T, blocos: &[Vec<u8>]) -> Result<(), String> {
+    gravar_binario_com(destino, meta, |enc| {
+        for bloco in blocos {
+            enc.write_all(bloco).map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })
+}
+
+/// [`gravar_binario`] com os blocos gerados direto no compressor.
+fn gravar_binario_com<W: Write, T: Serialize>(
+    destino: W,
+    meta: &T,
+    blocos: impl FnOnce(&mut GzEncoder<W>) -> Result<(), String>,
+) -> Result<(), String> {
     let mut contador = Contador::default();
     rmp_serde::encode::write_named(&mut contador, meta).map_err(|e| e.to_string())?;
     let tamanho = u32::try_from(contador.0).map_err(|_| "Metadados FSH3 excedem 4 GiB".to_string())?;
     let mut enc = GzEncoder::new(destino, Compression::default());
     enc.write_all(&tamanho.to_le_bytes()).map_err(|e| e.to_string())?;
     rmp_serde::encode::write_named(&mut enc, meta).map_err(|e| format!("Não consegui gravar os metadados binários: {e}"))?;
-    for bloco in blocos {
-        enc.write_all(bloco).map_err(|e| e.to_string())?;
-    }
+    blocos(&mut enc)?;
     enc.finish().map_err(|e| format!("Não consegui comprimir: {e}"))?;
     Ok(())
 }
@@ -722,7 +788,7 @@ pub fn gerar_fshz2(pasta: &PastaBruta) -> Result<Vec<u8>, String> {
 pub fn gravar_fshz_para<W: Write>(mut destino: W, pasta: &PastaBruta) -> Result<(), String> {
     let (meta, blocos) = montar_partes(pasta)?;
     destino.write_all(MAGIC_ARROW).map_err(|e| e.to_string())?;
-    gravar_binario(destino, &meta, &blocos)
+    gravar_binario_com(destino, &meta, |enc| gravar_blocos(enc, &blocos))
 }
 
 /// Fixture FSH2 para testar a leitura dos arquivos já existentes.
@@ -735,7 +801,7 @@ pub(crate) fn gerar_fshz2_legado(pasta: &PastaBruta) -> Result<Vec<u8>, String> 
     let mut enc = GzEncoder::new(&mut saida, Compression::fast());
     enc.write_all(&(json.len() as u32).to_le_bytes()).map_err(|e| e.to_string())?;
     enc.write_all(&json).map_err(|e| e.to_string())?;
-    for bloco in blocos { enc.write_all(&bloco).map_err(|e| e.to_string())?; }
+    gravar_blocos(&mut enc, &blocos)?;
     enc.finish().map_err(|e| e.to_string())?;
     Ok(saida)
 }
@@ -743,9 +809,53 @@ pub(crate) fn gerar_fshz2_legado(pasta: &PastaBruta) -> Result<Vec<u8>, String> 
 #[cfg(test)]
 mod testes {
     use super::*;
+    use arrow::array::Array as _;
     use arrow::ipc::reader::FileReader;
     use std::io::Cursor;
     use std::io::Read as _;
+
+    #[test]
+    fn bloco_em_fatias_volta_igual_ao_inteiro() {
+        let linhas = 100u32;
+        let values: Vec<f64> = (0..linhas).map(f64::from).collect();
+        let mut bitmap = vec![0xFFu8; 13];
+        bitmap[2] = 0; // linhas 16–23 vazias
+        let indices: Vec<i32> = (0..linhas as i32).map(|r| 7 - r % 3).collect();
+        let (dict, remapa) = remapa_local(&indices, &bitmap, |id| ["a", "b", "c", "d", "e", "f", "x", "y"][id as usize]);
+        assert_eq!(dict, ["y", "x", "f"]);
+        let campos = [
+            Campo::Float { values: &values, bitmap: &bitmap },
+            Campo::Int { values: &indices, bitmap: &bitmap, remapa },
+        ];
+        let nomes = ["n0".to_string(), "t1".to_string()];
+        let mut bytes = Vec::new();
+        escrever_em_fatias(&mut bytes, &nomes, &campos, linhas, "Aba", 24).unwrap();
+        let batches: Vec<RecordBatch> = FileReader::try_new(Cursor::new(bytes), None).unwrap().map(Result::unwrap).collect();
+        assert_eq!(batches.len(), 5);
+        let mut r = 0usize;
+        for b in &batches {
+            let n = b.column(0).as_any().downcast_ref::<Float64Array>().unwrap();
+            let t = b.column(1).as_any().downcast_ref::<Int32Array>().unwrap();
+            for i in 0..b.num_rows() {
+                if (16..24).contains(&r) {
+                    assert!(!n.is_valid(i) && !t.is_valid(i));
+                } else {
+                    assert_eq!(n.value(i), r as f64);
+                    assert_eq!(t.value(i), (r % 3) as i32);
+                }
+                r += 1;
+            }
+        }
+        assert_eq!(r, linhas as usize);
+    }
+
+    #[test]
+    fn dicionario_ja_local_nao_remapeia() {
+        let indices = [0, 1, 0, 2];
+        let (dict, remapa) = remapa_local(&indices, &[0x0F], |id| ["a", "b", "c"][id as usize]);
+        assert_eq!(dict, ["a", "b", "c"]);
+        assert!(remapa.is_none());
+    }
 
     fn bitmap_de(presentes: &[bool]) -> Vec<u8> {
         let mut bitmap = vec![0u8; (presentes.len() + 7) >> 3];

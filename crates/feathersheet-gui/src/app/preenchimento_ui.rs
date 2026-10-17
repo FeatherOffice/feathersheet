@@ -73,6 +73,42 @@ impl App {
         self.aplicar_preenchimento(&origem, &destino, true);
     }
 
+    /// Fórmula descendo para uma coluna vazia (Ctrl+D, alça, até o fim): vai
+    /// em bloco pela coluna empacotada, sem o teto de células — preencher
+    /// `=MÍNIMOSES(…)` em 13,7 milhões de linhas leva milissegundos
+    /// (17/10/2026). `None` quando não é esse caso: segue o caminho normal.
+    fn preencher_formulas_em_bloco(&mut self, origem: &Rect, destino: &Rect) -> Option<usize> {
+        if origem.r0 != origem.r1 || destino.r0 != origem.r0 || destino.r1 <= origem.r1
+            || destino.c0 != origem.c0 || destino.c1 != origem.c1 {
+            return None;
+        }
+        let (de, ate) = (origem.r1 + 1, destino.r1);
+        let sheet = &self.workbook.aba(self.folha)?.sheet;
+        let mut colunas = Vec::new();
+        for c in origem.c0..=origem.c1 {
+            let celula = sheet.snapshot(origem.r0, c)?;
+            if !celula.raw.starts_with('=') || celula.style.is_some() {
+                return None;
+            }
+            let primeira = feathersheet_core::operacoes::fill::shift_formula(&celula.raw, 1, 0);
+            if !sheet.faixa_vazia(c, de, ate) || !sheet.formula_cabe_em_bloco(c, de, &primeira) {
+                return None;
+            }
+            colunas.push((c, primeira));
+        }
+        if mesclas::ler(sheet).iter().any(|area| mesclas::cruzam(area, destino)) {
+            return None;
+        }
+        self.workbook.editar(self.folha, |aba| {
+            aba.abrir_transacao();
+            for (c, primeira) in &colunas {
+                aba.preencher_formula_faixa_vazia(*c, de, ate, primeira);
+            }
+            aba.fechar_transacao();
+        })?;
+        Some(colunas.len() * (ate - de + 1) as usize)
+    }
+
     /// Validações comuns e a escrita (um Ctrl+Z). Com `selecionar_destino`,
     /// a seleção cobre o destino inteiro depois de preencher.
     pub(super) fn aplicar_preenchimento(&mut self, origem: &Rect, destino: &Rect, selecionar_destino: bool) {
@@ -80,6 +116,19 @@ impl App {
         let quantidade = tamanho(&destino).saturating_sub(tamanho(&origem));
         if quantidade == 0 {
             self.status = tr!("Não há células de destino para preencher.").into();
+            return;
+        }
+        if let Some(preenchidas) = self.preencher_formulas_em_bloco(&origem, &destino) {
+            self.alterado = true;
+            if selecionar_destino {
+                self.linha = destino.r0;
+                self.coluna = destino.c0;
+                self.fim_selecao = (destino.r1, destino.c1);
+            }
+            self.status = trf!(
+                "{preenchidas} célula(s) preenchida(s) em {}:{}; Ctrl+Z desfaz.",
+                cell_name(destino.r0, destino.c0), cell_name(destino.r1, destino.c1)
+            );
             return;
         }
         if quantidade > MAX_CELULAS_POR_ACAO {
@@ -151,6 +200,62 @@ mod testes {
         assert!(app.alterado);
         app.historico(false);
         assert!(app.workbook.aba(0).unwrap().sheet.get_raw(3, 1).is_empty());
+    }
+
+    #[test]
+    fn ctrl_d_de_formula_em_milhoes_de_linhas_vai_em_bloco() {
+        let mut app = App::default();
+        app.workbook.escrever_celula(0, 0, 0, "a".into());
+        app.workbook.escrever_celula(0, 0, 1, "5".into());
+        app.workbook.escrever_celula(0, 0, 2, "=MÍNIMOSES(B:B;A:A;A1)".into());
+        selecionar(&mut app, 0, 2, 2_999_999, 2);
+        let t = std::time::Instant::now();
+        app.preencher_selecao(DirecaoPreenchimento::Baixo);
+        assert!(t.elapsed() < std::time::Duration::from_secs(1), "{:?}", t.elapsed());
+        let s = &app.workbook.aba(0).unwrap().sheet;
+        assert_eq!(s.get_raw(2_999_999, 2), "=MÍNIMOSES(B:B;A:A;A3000000)");
+        assert_eq!(app.workbook.valor(0, 0, 2), Value::Number(5.0));
+        assert!(app.status.contains("2999999 célula"), "{}", app.status);
+        app.historico(false);
+        assert!(app.workbook.aba(0).unwrap().sheet.get_raw(2_999_999, 2).is_empty());
+    }
+
+    #[test]
+    fn colar_formula_desloca_as_referencias_como_no_excel() {
+        let mut app = App::default();
+        app.workbook.escrever_celula(0, 0, 0, "2".into());
+        app.workbook.escrever_celula(0, 4, 0, "7".into());
+        app.workbook.escrever_celula(0, 0, 1, "=A1*3+$A$1".into());
+        selecionar(&mut app, 0, 1, 0, 1);
+        let dados = app.copiar_selecao().unwrap();
+        let _ = app.update(Msg::Selecionar(4, 1));
+        let _ = app.update(Msg::Colar(dados.clone()));
+        assert_eq!(app.workbook.aba(0).unwrap().sheet.get_raw(4, 1), "=A5*3+$A$1");
+        assert_eq!(app.workbook.valor(0, 4, 1), Value::Number(23.0));
+        // Recortar e colar move: a fórmula vai como está.
+        selecionar(&mut app, 4, 1, 4, 1);
+        let _ = app.update(Msg::Recortar);
+        let recortado = app.area_copiada.as_ref().unwrap().texto.clone();
+        let _ = app.update(Msg::Selecionar(9, 3));
+        let _ = app.update(Msg::Colar(recortado));
+        assert_eq!(app.workbook.aba(0).unwrap().sheet.get_raw(9, 3), "=A5*3+$A$1");
+    }
+
+    #[test]
+    fn colar_formula_numa_coluna_ate_o_fim_vai_em_bloco() {
+        let mut app = App::default();
+        for r in 0..1000 { app.workbook.escrever_celula(0, r, 0, (r + 1).to_string()); }
+        app.workbook.escrever_celula(0, 0, 1, "=A1*2".into());
+        selecionar(&mut app, 0, 1, 0, 1);
+        let dados = app.copiar_selecao().unwrap();
+        selecionar(&mut app, 1, 1, 4_999_999, 1);
+        let t = std::time::Instant::now();
+        let _ = app.update(Msg::Colar(dados));
+        assert!(t.elapsed() < std::time::Duration::from_secs(2), "{:?}", t.elapsed());
+        let s = &app.workbook.aba(0).unwrap().sheet;
+        assert_eq!(s.get_raw(999, 1), "=A1000*2");
+        assert_eq!(s.get_raw(4_999_999, 1), "=A5000000*2");
+        assert_eq!(app.workbook.valor(0, 999, 1), Value::Number(2000.0));
     }
 
     #[test]

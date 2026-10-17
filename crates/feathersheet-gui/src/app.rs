@@ -107,6 +107,8 @@ mod novidades;
 mod aviso_xlsx;
 mod efeitos_imagem;
 mod imagens_importadas;
+mod imagem_na_celula;
+mod formatar_imagem;
 pub(crate) mod tabelas;
 pub(crate) mod mesclas;
 mod renomear_aba;
@@ -343,6 +345,10 @@ pub enum Msg {
     ImagemLaboratorioAbrir,
     /// Seleciona o objeto e inicia gesto de mover/redimensionar na grade.
     ImagemPressionar(String, imagens_importadas::Gesto),
+    /// Imagem dentro da célula: inserir, colocar na célula, tirar dela.
+    ImagemCelula(imagem_na_celula::Evento),
+    /// Painel lateral Formatar imagem.
+    FormatarImagem(formatar_imagem::Evento),
     /// Edita os pixels da última imagem incorporada na aba, sem mover o objeto.
     ImagemEfeitosAbrir,
     ImagemLaboratorioCarregada(Result<Option<(Vec<u8>, String)>, String>),
@@ -541,6 +547,11 @@ struct AreaCopiada {
     /// Largura de cada coluna copiada (`None` = padrão), para
     /// "Colar especial → Larguras das colunas".
     larguras: Vec<Option<u32>>,
+    /// Canto de cima à esquerda da origem: colar desloca as referências
+    /// relativas pela distância até ele, como no Excel.
+    origem: (u32, u32),
+    /// Veio do Ctrl+X: colar leva a fórmula sem deslocar (é mover).
+    recortada: bool,
 }
 
 /// Formatação capturada separadamente do clipboard e do conteúdo.
@@ -666,6 +677,11 @@ pub struct App {
     efeitos_imagem: efeitos_imagem::Estado,
     imagens_importadas: imagens_importadas::Cache,
     imagem_selecionada: Option<(u32, String)>,
+    /// Menu do botão direito da imagem solta aberto, na posição da janela.
+    imagem_contexto: Option<(f32, f32)>,
+    formatar_imagem: formatar_imagem::Estado,
+    /// Conta de tabela dinâmica grande em segundo plano.
+    dinamica_fundo: dinamica_ui::fundo::Fundo,
     arraste_imagem: Option<imagens_importadas::Arraste>,
     condicional: RefCell<condicional::Estado>,
     perfil_coluna: Option<perfil_coluna_ui::PerfilVisao>,
@@ -989,6 +1005,9 @@ impl Default for App {
             efeitos_imagem: efeitos_imagem::Estado::default(),
             imagens_importadas: imagens_importadas::Cache::default(),
             imagem_selecionada: None,
+            imagem_contexto: None,
+            formatar_imagem: formatar_imagem::Estado::default(),
+            dinamica_fundo: Default::default(),
             arraste_imagem: None,
             condicional: RefCell::new(condicional::Estado::default()),
             perfil_coluna: None, perfil_geracao: 0,
@@ -1138,6 +1157,16 @@ impl App {
         feathersheet_core::paralelismo::definir(app.config.nucleos as usize);
         feathersheet_core::set_locale_config(app.regionalizacao());
         ajuda::definir_idioma(&app.config.idioma);
+        // Modo de captura: FEATHERSHEET_CAPTURAR_IDIOMA=en-US mostra a tela
+        // nesse idioma sem gravar nada na configuração do usuário.
+        if std::env::var_os("FEATHERSHEET_CAPTURAR").is_some() {
+            if let Ok(idioma) = std::env::var("FEATHERSHEET_CAPTURAR_IDIOMA") {
+                ajuda::definir_idioma(&idioma);
+            }
+        }
+        // A pasta em branco nasce com o nome de aba do idioma ("Sheet1").
+        app.workbook = Self::pasta_nova();
+        app.nome_aba = app.workbook.nomes().first().cloned().unwrap_or_default();
         app.linhas_grade = app.config.linhas_grade;
         app.mostrar_fx = app.config.barra_formulas;
         app.mostrar_formulas = app.config.mostrar_formulas;
@@ -1279,6 +1308,40 @@ impl App {
         self.botao_macro_selecionado.as_ref().map(|b| format!("botao {b:?}"))
     }
 
+    /// Pasta em branco com a primeira aba no idioma da interface: "Planilha1",
+    /// "Sheet1" ou "Hoja1", como o Excel de cada idioma.
+    pub(super) fn pasta_nova() -> Workbook {
+        let mut pasta = Workbook::new();
+        let nome = format!("{}1", tr!("Planilha"));
+        pasta.editar(0, |s| s.name = nome);
+        pasta
+    }
+
+    /// Quais painéis laterais estão abertos: gráfico, dinâmica (campos) e
+    /// imagem.
+    fn paineis_laterais(&self) -> [bool; 3] {
+        [
+            self.graficos.aberto,
+            self.dinamica_lateral_aberta(),
+            self.formatar_imagem.aberto,
+        ]
+    }
+
+    /// Só um painel lateral por vez (17/10/2026: a dinâmica abria por cima do
+    /// painel do gráfico): o que acabou de abrir fecha os outros, pelo mesmo
+    /// caminho do botão de fechar de cada um.
+    fn um_painel_lateral_por_vez(&mut self, antes: [bool; 3]) {
+        let agora = self.paineis_laterais();
+        let Some(novo) = (0..3).find(|&i| agora[i] && !antes[i]) else { return };
+        for i in (0..3).filter(|&i| i != novo && agora[i]) {
+            let _ = match i {
+                0 => self.update(Msg::Grafico(graficos::Evento::Fechar)),
+                1 => self.update(Msg::Dinamica(dinamica_ui::Evento::Fechar)),
+                _ => self.update(Msg::FormatarImagem(formatar_imagem::Evento::Fechar)),
+            };
+        }
+    }
+
     pub fn update(&mut self, msg: Msg) -> Task<Msg> {
         // Toda mensagem pode mudar o que a grade mostra, menos as desta lista: o pulso
         // da soma do rodapé roda centenas de vezes numa seleção grande e só mexe no
@@ -1298,9 +1361,15 @@ impl App {
         // Só a chamada de fora compara o antes e o depois para os eventos do VBA.
         let antes = if self.profundidade_update == 0 { self.antes_dos_eventos() } else { None };
         let na_mao = if self.profundidade_update == 0 { Some(self.objeto_na_mao()) } else { None };
+        let paineis = (self.profundidade_update == 0).then(|| self.paineis_laterais());
+        // Só a chamada de fora: as de dentro já contam no tempo dela.
+        let vigia = (self.profundidade_update == 0).then(|| (std::time::Instant::now(), crate::vigia::nome_curto(&msg)));
         self.profundidade_update += 1;
         let mut tarefa = self.update_sem_eventos(msg);
         self.profundidade_update -= 1;
+        if let Some((inicio, nome)) = vigia {
+            crate::vigia::conferir(|| nome, inicio.elapsed());
+        }
         // Forma, ícone, gráfico ou imagem recém-selecionados: o campo fx
         // solta o foco, senão ele engole o Delete (e as setas) que são do objeto.
         if let Some(antes) = na_mao {
@@ -1310,6 +1379,7 @@ impl App {
             }
         }
         if let Some(antes) = antes { self.disparar_eventos(antes); }
+        if let Some(antes) = paineis { self.um_painel_lateral_por_vez(antes); }
         if self.profundidade_update == 0 { self.cuidar_apontar(selecao_antes); }
         // O rodapé decide aqui se vai somar em lotes: decidido só no desenho,
         // o pulso de 16 ms só nascia no tique seguinte do monitor (até 1 s).
@@ -1398,6 +1468,11 @@ impl App {
             vinculos::assinatura(self),
             // Caneta: toques lidos pelo XInput2 e contagem dos cliques do Iced.
             self.assinatura_caneta(),
+            // Dinâmica grande: a leitura da origem anda aos pedaços, um por pulso.
+            if self.dinamica_fundo.ativo() {
+                iced::time::every(std::time::Duration::from_millis(16))
+                    .map(|_| Msg::Dinamica(dinamica_ui::Evento::FundoPasso))
+            } else { Subscription::none() },
             // Libera a thread da UI após cada lote, inclusive com 1M+ linhas.
             // Quando não existe conversão ativa, não mantém timer adicional.
             if self.assistente_divisao.as_ref()

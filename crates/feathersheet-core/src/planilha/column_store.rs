@@ -80,6 +80,13 @@ impl<T: Copy + Default> ChunkedColumn<T> {
         mask[offset >> 3] & (1 << (offset & 7)) != 0
     }
 
+    /// A máscara de presença do bloco `idx` (`None` quando o bloco não tem
+    /// nenhuma linha). Quem precisa saber onde há dado em milhões de linhas
+    /// lê 8 linhas por byte, em vez de perguntar [`Self::has`] uma a uma.
+    pub fn mascara_do_bloco(&self, idx: usize) -> Option<&[u8]> {
+        self.presence.get(idx)?.as_deref()
+    }
+
     /// Copia a coluna para buffers contíguos — os valores e a máscara de
     /// presença — do índice 0 até `length`. É o formato que o arquivo grava
     /// (equivalente ao que o `Arrow` consumia direto no lado TypeScript).

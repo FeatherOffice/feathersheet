@@ -52,41 +52,107 @@ fn minusculas(s: &str) -> Arc<str> {
     }
 }
 
-/// Lê a chave de cada célula de critério. Quem monta o agregado implementa
-/// sobre o armazenamento da aba (`Sheet`), lendo o texto pelo id do pool
-/// quando dá — a mesma string de 1 milhão de linhas passa para minúscula uma
-/// vez, não um milhão.
+/// Lê a chave de cada célula de critério e dá a cada chave distinta um
+/// código pequeno (`u32`): o agregado agrupa por códigos, não por textos.
+/// Quem monta o agregado implementa sobre o armazenamento da aba (`Sheet`),
+/// lendo o texto pelo id do pool quando dá — a mesma string de 1 milhão de
+/// linhas passa para minúscula uma vez, não um milhão. Com textos, eram
+/// ~240 ns por linha (13,7 milhões de linhas: 3,3 s, 17/10/2026): um `Arc`
+/// clonado e o texto inteiro hasheado de novo por critério.
 pub(crate) struct LeitorChaves<'a> {
-    /// Chave já montada por id de texto no pool da aba.
-    por_id: HashMap<i32, ChaveCriterio>,
+    /// Código por id de texto no pool: [`NAO_VISTO`], [`NAO_CASA`] ou o código.
+    por_id: Vec<u32>,
+    /// Os mesmos, separados para a célula lógica (`literal`), que não casa.
+    por_id_literal: Vec<u32>,
+    por_numero: HashMap<u64, u32, std::hash::BuildHasherDefault<crate::celulas::mapa_chave::HasherChave>>,
+    /// Texto como está na célula (sem passar para minúscula) → código.
+    por_texto: HashMap<Box<str>, u32>,
+    codigos: HashMap<ChaveCriterio, u32>,
+    /// A chave de cada código.
+    pub chaves: Vec<ChaveCriterio>,
     pub texto_do_pool: &'a dyn Fn(i32) -> &'a str,
 }
 
+const NAO_VISTO: u32 = u32::MAX;
+const NAO_CASA: u32 = u32::MAX - 1;
+
 impl<'a> LeitorChaves<'a> {
     pub(crate) fn novo(texto_do_pool: &'a dyn Fn(i32) -> &'a str) -> Self {
-        LeitorChaves { por_id: HashMap::new(), texto_do_pool }
+        LeitorChaves {
+            por_id: Vec::new(), por_id_literal: Vec::new(), por_numero: Default::default(),
+            por_texto: HashMap::new(), codigos: HashMap::new(), chaves: Vec::new(), texto_do_pool,
+        }
     }
 
-    /// A chave de um valor cru (número ou id de texto no pool).
+    /// O código de uma chave.
+    pub(crate) fn codigo(&mut self, chave: ChaveCriterio) -> u32 {
+        if let Some(&c) = self.codigos.get(&chave) {
+            return c;
+        }
+        let c = self.chaves.len() as u32;
+        self.chaves.push(chave.clone());
+        self.codigos.insert(chave, c);
+        c
+    }
+
+    fn numero(&mut self, n: f64) -> Result<Option<u32>, ()> {
+        if n.is_nan() {
+            return Err(());
+        }
+        let b = bits(n);
+        if let Some(&c) = self.por_numero.get(&b) {
+            return Ok(Some(c));
+        }
+        let c = self.codigo(ChaveCriterio::Numero(b));
+        self.por_numero.insert(b, c);
+        Ok(Some(c))
+    }
+
+    /// O código de um valor cru (número ou id de texto no pool).
     /// `literal`: o cru veio da coluna de dados, onde `VERDADEIRO`/`FALSO`
     /// no pool são a célula lógica (não casa com critério indexável); o
     /// resultado de fórmula guarda lógico à parte, então ali é texto mesmo.
-    pub(crate) fn do_cru(&mut self, cru: Cru, literal: bool) -> Result<Option<ChaveCriterio>, ()> {
-        match cru {
-            Cru::Numero(n) if n.is_nan() => Err(()),
-            Cru::Numero(n) => Ok(Some(ChaveCriterio::Numero(bits(n)))),
-            Cru::Texto(id) => {
-                if let Some(c) = self.por_id.get(&id) {
-                    return Ok(Some(c.clone()));
+    pub(crate) fn do_cru(&mut self, cru: Cru, literal: bool) -> Result<Option<u32>, ()> {
+        let id = match cru {
+            Cru::Numero(n) => return self.numero(n),
+            Cru::Texto(id) => id,
+        };
+        let Ok(at) = usize::try_from(id) else { return Ok(None) };
+        let ja = if literal { &self.por_id_literal } else { &self.por_id };
+        match ja.get(at).copied() {
+            Some(NAO_CASA) => return Ok(None),
+            Some(c) if c != NAO_VISTO => return Ok(Some(c)),
+            _ => {}
+        }
+        let texto = (self.texto_do_pool)(id);
+        let codigo = if texto.is_empty() || (literal && (texto == "VERDADEIRO" || texto == "FALSO")) {
+            NAO_CASA
+        } else {
+            self.codigo(ChaveCriterio::Texto(minusculas(texto)))
+        };
+        let tabela = if literal { &mut self.por_id_literal } else { &mut self.por_id };
+        if at >= tabela.len() {
+            tabela.resize(at + 1, NAO_VISTO);
+        }
+        tabela[at] = codigo;
+        Ok((codigo != NAO_CASA).then_some(codigo))
+    }
+
+    /// O código de uma célula já calculada (a regra de
+    /// [`ChaveCriterio::da_celula`]), sem passar o texto para minúscula de
+    /// novo a cada linha.
+    pub(crate) fn da_celula(&mut self, v: &Value) -> Result<Option<u32>, ()> {
+        match v {
+            Value::Number(n) => self.numero(*n),
+            Value::Text(t) if !t.is_empty() => {
+                if let Some(&c) = self.por_texto.get(t.as_str()) {
+                    return Ok(Some(c));
                 }
-                let texto = (self.texto_do_pool)(id);
-                if texto.is_empty() || (literal && (texto == "VERDADEIRO" || texto == "FALSO")) {
-                    return Ok(None);
-                }
-                let chave = ChaveCriterio::Texto(minusculas(texto));
-                self.por_id.insert(id, chave.clone());
-                Ok(Some(chave))
+                let c = self.codigo(ChaveCriterio::Texto(minusculas(t)));
+                self.por_texto.insert(t.as_str().into(), c);
+                Ok(Some(c))
             }
+            _ => Ok(None),
         }
     }
 }
@@ -185,42 +251,62 @@ impl Agregado {
     }
 
     /// Monta o agregado lendo cada posição `(linha, coluna)` de
-    /// `0..linhas × 0..colunas`: `chave(i, r_off, c_off)` dá a chave da
-    /// faixa de critério `i` (`Err`: um `NaN`, desiste) e `numero(r_off,
-    /// c_off)` o número da faixa agregada, se for número. `None` quando um
-    /// `NaN` aparece ou há grupos demais.
+    /// `0..linhas × 0..colunas`: `chave(i, r_off, c_off)` dá o código
+    /// ([`LeitorChaves`]) da faixa de critério `i` (`Err`: um `NaN`, desiste)
+    /// e `numero(r_off, c_off)` o número da faixa agregada, se for número.
+    /// `chaves` traduz os códigos de volta no fim. `None` quando um `NaN`
+    /// aparece ou há grupos demais.
     pub(crate) fn montar(
         n_criterios: usize,
         tem_soma: bool,
         linhas: u32,
         colunas: u32,
-        mut chave: impl FnMut(usize, u32, u32) -> Result<Option<ChaveCriterio>, ()>,
+        mut chave: impl FnMut(usize, u32, u32) -> Result<Option<u32>, ()>,
         mut numero: impl FnMut(u32, u32) -> Option<f64>,
+        chaves: impl FnOnce() -> Vec<ChaveCriterio>,
     ) -> Option<Self> {
-        let mut grupos: HashMap<Vec<ChaveCriterio>, Grupo> = HashMap::new();
-        let mut chaves: Vec<ChaveCriterio> = Vec::with_capacity(n_criterios);
+        // Até 4 critérios a tupla de códigos cabe num `u128`; acima, `Vec`.
+        let mut curtos: HashMap<u128, Grupo, std::hash::BuildHasherDefault<crate::celulas::mapa_chave::HasherChave>> = Default::default();
+        let mut longos: HashMap<Vec<u32>, Grupo> = HashMap::new();
+        let curto = n_criterios <= 4;
+        let mut tupla: Vec<u32> = Vec::with_capacity(n_criterios);
         for r in 0..linhas {
             'posicao: for c in 0..colunas {
-                chaves.clear();
+                tupla.clear();
                 for i in 0..n_criterios {
                     match chave(i, r, c) {
-                        Ok(Some(chave)) => chaves.push(chave),
+                        Ok(Some(codigo)) => tupla.push(codigo),
                         Ok(None) => continue 'posicao,
                         Err(()) => return None,
                     }
                 }
                 let valor = if tem_soma { numero(r, c) } else { None };
-                if let Some(grupo) = grupos.get_mut(chaves.as_slice()) {
-                    grupo.acrescentar(valor);
-                } else {
-                    if grupos.len() >= MAX_GRUPOS {
+                let grupo = if curto {
+                    let k = tupla.iter().fold(0u128, |k, &c| (k << 32) | c as u128);
+                    if curtos.len() >= MAX_GRUPOS && !curtos.contains_key(&k) {
                         return None;
                     }
-                    let mut grupo = Grupo::default();
-                    grupo.acrescentar(valor);
-                    grupos.insert(chaves.clone(), grupo);
-                }
+                    curtos.entry(k).or_default()
+                } else {
+                    if longos.len() >= MAX_GRUPOS && !longos.contains_key(&tupla) {
+                        return None;
+                    }
+                    longos.entry(tupla.clone()).or_default()
+                };
+                grupo.acrescentar(valor);
             }
+        }
+        let chaves = chaves();
+        let traduzir = |codigos: &mut dyn Iterator<Item = u32>| -> Vec<ChaveCriterio> {
+            codigos.map(|c| chaves[c as usize].clone()).collect()
+        };
+        let mut grupos = HashMap::with_capacity(curtos.len() + longos.len());
+        for (k, g) in curtos {
+            let mut codigos = (0..n_criterios).rev().map(|i| (k >> (32 * i)) as u32);
+            grupos.insert(traduzir(&mut codigos), g);
+        }
+        for (k, g) in longos {
+            grupos.insert(traduzir(&mut k.into_iter()), g);
         }
         Some(Agregado { grupos })
     }
@@ -271,12 +357,15 @@ mod testes {
         let regiao = ["Sul", "Norte", "sul", "Sul", "Norte", ""];
         let ano = [1.0, 1.0, 1.0, 2.0, 1.0, 1.0];
         let valor = [Value::Number(10.0), Value::Number(5.0), Value::Number(7.0), Value::Number(100.0), Value::Text("x".into()), Value::Number(1.0)];
+        let sem_pool = |_: i32| "";
+        let leitor = std::cell::RefCell::new(LeitorChaves::novo(&sem_pool));
         let ag = Agregado::montar(2, true, 6, 1,
-            |i, r, _| ChaveCriterio::da_celula(&match i {
+            |i, r, _| leitor.borrow_mut().da_celula(&match i {
                 0 => Value::Text(regiao[r as usize].into()),
                 _ => Value::Number(ano[r as usize]),
             }),
             |r, _| match valor[r as usize] { Value::Number(n) => Some(n), _ => None },
+            || std::mem::take(&mut leitor.borrow_mut().chaves),
         ).expect("monta");
         let sul1 = ag.grupo(&[ChaveCriterio::Texto(Arc::from("sul")), ChaveCriterio::Numero(1.0f64.to_bits())]);
         assert_eq!(sul1, Grupo { linhas: 2, numeros: 2, soma: 17.0, maximo: 10.0, minimo: 7.0 });
@@ -290,9 +379,11 @@ mod testes {
 
     #[test]
     fn nan_desiste_do_agregado() {
+        let sem_pool = |_: i32| "";
+        let mut leitor = LeitorChaves::novo(&sem_pool);
         let ag = Agregado::montar(1, false, 3, 1,
-            |_, r, _| ChaveCriterio::da_celula(&if r == 1 { Value::Number(f64::NAN) } else { Value::Number(1.0) }),
-            |_, _| None);
+            |_, r, _| leitor.da_celula(&if r == 1 { Value::Number(f64::NAN) } else { Value::Number(1.0) }),
+            |_, _| None, Vec::new);
         assert!(ag.is_none());
     }
 
@@ -301,12 +392,17 @@ mod testes {
         let textos = ["Sul", "VERDADEIRO", ""];
         let texto = |id: i32| textos[id as usize];
         let mut leitor = LeitorChaves::novo(&texto);
-        assert_eq!(leitor.do_cru(Cru::Texto(0), true), Ok(Some(ChaveCriterio::Texto(Arc::from("sul")))));
-        assert_eq!(leitor.do_cru(Cru::Texto(0), true), Ok(Some(ChaveCriterio::Texto(Arc::from("sul")))));
-        assert_eq!(leitor.do_cru(Cru::Texto(1), true), Ok(None));
-        assert_eq!(leitor.do_cru(Cru::Texto(1), false), Ok(Some(ChaveCriterio::Texto(Arc::from("verdadeiro")))));
-        assert_eq!(leitor.do_cru(Cru::Texto(2), false), Ok(None));
-        assert_eq!(leitor.do_cru(Cru::Numero(-0.0), true), Ok(Some(ChaveCriterio::Numero(0))));
-        assert_eq!(leitor.do_cru(Cru::Numero(f64::NAN), true), Err(()));
+        let mut chave = |cru, literal| leitor.do_cru(cru, literal).map(|c| c.map(|c| c as usize));
+        assert_eq!(chave(Cru::Texto(0), true), Ok(Some(0)));
+        assert_eq!(chave(Cru::Texto(0), true), Ok(Some(0)), "mesmo código");
+        assert_eq!(chave(Cru::Texto(1), true), Ok(None));
+        assert_eq!(chave(Cru::Texto(1), false), Ok(Some(1)));
+        assert_eq!(chave(Cru::Texto(2), false), Ok(None));
+        assert_eq!(chave(Cru::Numero(-0.0), true), Ok(Some(2)));
+        assert_eq!(chave(Cru::Numero(f64::NAN), true), Err(()));
+        assert_eq!(leitor.chaves, vec![ChaveCriterio::Texto(Arc::from("sul")),
+            ChaveCriterio::Texto(Arc::from("verdadeiro")), ChaveCriterio::Numero(0)]);
+        // "SUL" escrito de outro jeito numa célula calculada: o mesmo código.
+        assert_eq!(leitor.da_celula(&Value::Text("SUL".into())), Ok(Some(0)));
     }
 }

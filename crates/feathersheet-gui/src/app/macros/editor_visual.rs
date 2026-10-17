@@ -158,7 +158,7 @@ fn propriedades<'a>(app: &'a App, altura: Length) -> Element<'a, Msg> {
     let dados = [
         ("(Nome)", nome.to_owned()),
         (tr!("Tipo"), tipo.to_owned()),
-        (tr!("Executar ao abrir"), if tem_auto { tr!("Sim (TS)") } else { tr!("Não") }.to_owned()),
+        (tr!("Executar ao abrir"), if tem_auto { tr!("Sim") } else { tr!("Não") }.to_owned()),
         (tr!("Linhas"), if tipo == "Módulo JavaScript" { linhas.to_string() } else { "—".into() }),
         (tr!("Linguagem"), if tipo == "Módulo JavaScript" { "JavaScript" } else { "—" }.to_owned()),
     ];

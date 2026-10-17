@@ -49,8 +49,10 @@ impl App {
                 "Vertical" => "arrows-vertical", "Para cima" => "arrow-up",
                 "Para baixo" => "arrow-down", _ => "arrow-right",
             };
+            // Traço Tabler sempre: `arrow-down` também é nome de um ícone
+            // colorido da faixa, e aparecia um quadradinho no lugar da seta.
             items = items.push(button(iced::widget::row![
-                container(feather_ui::icones::icone(icone, 17.0)).width(Length::Fixed(24.0)),
+                container(feather_ui::icones::icone_traco(icone, 17.0)).width(Length::Fixed(24.0)),
                 text(tr!(rotulo)).size(12),
             ].align_y(Alignment::Center).spacing(7))
                 .width(Length::Fill).padding([7, 9])

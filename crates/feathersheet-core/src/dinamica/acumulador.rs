@@ -4,6 +4,32 @@
 //! usa Welford (média e M2), com memória O(1) mesmo em milhões de linhas.
 use std::collections::HashMap;
 use super::pivot::AgregacaoOp;
+use crate::celulas::values::{to_number, Value};
+
+/// O que uma célula da origem leva para a medida, como no Excel: vazio não
+/// entra em conta nenhuma; texto que não é número entra só na Contagem.
+/// Antes os dois viravam 0 e puxavam Média, DesvPad e Mín para baixo
+/// (17/10/2026, análise de 13,7 milhões de linhas do usuário).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Medida {
+    Vazio,
+    Texto,
+    Numero(f64),
+}
+
+impl Medida {
+    pub(crate) fn de(v: &Value) -> Self {
+        match v {
+            Value::Number(n) => Medida::Numero(*n),
+            Value::Empty => Medida::Vazio,
+            Value::Text(t) if t.trim().is_empty() => Medida::Vazio,
+            outro => match to_number(outro) {
+                Ok(n) => Medida::Numero(n),
+                Err(_) => Medida::Texto,
+            },
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(super) struct Acumulador {
@@ -26,6 +52,14 @@ impl Acumulador {
             op, quantidade: 0, soma: 0., menor: f64::INFINITY,
             maior: f64::NEG_INFINITY, media_desvio: 0.0, soma_quadrados: 0.0,
             frequencias: HashMap::new(), moda: 0., moda_frequencia: 0,
+        }
+    }
+    /// Vazio fica de fora; texto só soma na Contagem.
+    pub fn receber_medida(&mut self, m: Medida) {
+        match m {
+            Medida::Numero(n) => self.receber(n),
+            Medida::Texto if self.op == AgregacaoOp::Contagem => self.quantidade += 1,
+            _ => {}
         }
     }
     pub fn receber(&mut self, n: f64) {
@@ -96,6 +130,24 @@ mod testes {
         let esperado = ((1_000_000.0_f64 / 999_999.0) * 0.25).sqrt();
         assert!((a.resultado() - esperado).abs() < 1e-8);
         assert!(a.frequencias.is_empty());
+    }
+
+    #[test]
+    fn vazio_fica_de_fora_e_texto_so_conta() {
+        let entradas = [
+            Value::Number(2.), Value::Empty, Value::Text("abc".into()),
+            Value::Number(4.), Value::Text("  ".into()), Value::Text("6".into()),
+        ];
+        let resultado = |op| {
+            let mut acc = Acumulador::novo(op);
+            for v in &entradas { acc.receber_medida(Medida::de(v)); }
+            acc.resultado()
+        };
+        assert_eq!(resultado(AgregacaoOp::Soma), 12.);
+        assert_eq!(resultado(AgregacaoOp::Media), 4.);
+        assert_eq!(resultado(AgregacaoOp::Min), 2.);
+        assert_eq!(resultado(AgregacaoOp::Contagem), 4.);
+        assert!((resultado(AgregacaoOp::DesvioPadrao) - 2.).abs() < 1e-12);
     }
 
     #[test]

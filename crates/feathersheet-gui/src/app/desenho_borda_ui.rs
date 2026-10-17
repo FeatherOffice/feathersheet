@@ -122,6 +122,14 @@ impl App {
                     self.borda_desenho.modo = None;
                 }
                 "modo" => { let _ = self.evento_desenho_borda(Evento::Modo(ModoBorda::Contorno)); }
+                // "menu:orientacao@x,y": o menu como se o botão fosse clicado em (x, y).
+                _ if item.starts_with("menu:orientacao") => {
+                    let (x, y) = item.split_once('@').and_then(|(_, p)| p.split_once(','))
+                        .and_then(|(x, y)| Some((x.parse().ok()?, y.parse().ok()?))).unwrap_or((600.0, 120.0));
+                    self.ponteiro_x = x;
+                    self.ponteiro_y = y;
+                    let _ = self.update(Msg::AlternarMenuOrientacao);
+                }
                 "menu:bordas" => {
                     self.bordas_popup_x = 300.0;
                     self.bordas_popup_y = 150.0;

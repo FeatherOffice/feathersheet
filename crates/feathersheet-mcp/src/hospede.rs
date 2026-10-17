@@ -50,6 +50,11 @@ pub trait Hospede {
     fn filtrar(&mut self, _aba: usize, _area: Rect, _acao: &str, _coluna: Option<u32>, _criterio: Option<Value>) -> Result<String, String> {
         Err("O filtro usa as tabelas do aplicativo: abra o FeatherSheet (com o MCP ligado nas Configurações) e chame de novo. Sem o app, sheet_consulta filtra para outra aba.".into())
     }
+    /// Tabela dinâmica (a regra de layout, filtros e campos calculados mora
+    /// no aplicativo): `acao` listar, criar, editar, atualizar ou excluir.
+    fn dinamica(&mut self, _args: &Value) -> Result<String, String> {
+        Err("A tabela dinâmica usa o painel do aplicativo: abra o FeatherSheet (com o MCP ligado nas Configurações) e chame de novo. Sem o app, sheet_consulta agrupa e soma para outra aba.".into())
+    }
     /// O catálogo de macros mudou: o aplicativo recarrega o editor.
     fn macros_mudaram(&mut self) {}
 }

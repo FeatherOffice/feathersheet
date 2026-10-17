@@ -5,6 +5,8 @@ impl App {
     /// A fórmula como a barra mostra: separadores e nomes das funções no
     /// idioma da interface (de-para de `funcoes.<idioma>.json`).
     pub(super) fn formula_para_mostrar(&self, raw: &str) -> String {
+        // Imagem na célula: a barra fica vazia, como no Excel (não o base64).
+        if feathersheet_core::funcoes::imagem_base64::eh_imagem_na_celula(raw) { return String::new(); }
         let nomes = crate::idioma::mostrar_formula(raw);
         feathersheet_core::celulas::locale::apresentar_formula(&nomes, &self.regionalizacao())
     }
@@ -284,7 +286,10 @@ impl App {
         let texto = linhas.join("\n");
         let larguras = (area.c0..=area.c1)
             .map(|c| aba.sheet.col_widths.get(&c).copied()).collect();
-        self.area_copiada = Some(AreaCopiada { texto: texto.clone(), celulas, valores, larguras });
+        self.area_copiada = Some(AreaCopiada {
+            texto: texto.clone(), celulas, valores, larguras,
+            origem: (area.r0, area.c0), recortada: false,
+        });
         Some(texto)
     }
     /// Captura somente estilos resolvidos. Pressionar o botão novamente desativa.
@@ -448,7 +453,7 @@ impl App {
             let lida = feathersheet_io::fshz_read::ler_fshz_arquivo(path)?;
             let folha = lida.a as usize;
             feathersheet_io::progresso::fase(feathersheet_io::progresso::Fase::Montando);
-            return Ok((feathersheet_io::para_workbook::para_workbook(&lida), folha));
+            return Ok((feathersheet_io::para_workbook::para_workbook_soltando(lida), folha));
         }
         if path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("xlsx") || e.eq_ignore_ascii_case("xlsm")) {
             // O leitor do Excel não conta bytes: barra sem porcentagem.
@@ -472,7 +477,7 @@ impl App {
         let (workbook, folha) = if ext == "fshz" {
             let lida = feathersheet_io::fshz_read::ler_fshz(&bytes)?;
             let folha = lida.a as usize;
-            (feathersheet_io::para_workbook::para_workbook(&lida), folha)
+            (feathersheet_io::para_workbook::para_workbook_soltando(lida), folha)
         } else if ext == "xlsx" || ext == "xlsm" {
             // OOXML incremental direto no armazenamento Rust, sem JSON de células.
             feathersheet_io::xlsx_read::ler_xlsx_workbook(bytes)?
@@ -736,7 +741,7 @@ impl App {
                 self.perfil_coluna = None;
                 self.estatisticas_geracao = self.estatisticas_geracao.wrapping_add(1);
                 self.estatisticas = None;
-                self.workbook = Workbook::new();
+                self.workbook = Self::pasta_nova();
                 self.vinculos_novo_documento();
                 self.recarregar_macros();
                 self.inspecoes.clear();
@@ -758,7 +763,7 @@ impl App {
                 self.ancorar_rodape = false;
                 self.trocar_selecao(0, 0);
                 self.editando_nome_aba = false;
-                self.nome_aba = "Planilha1".into();
+                self.nome_aba = self.workbook.nomes().first().cloned().unwrap_or_default();
                 self.status = tr!("Nova pasta criada").into();
                 Task::none()
             }
@@ -950,8 +955,13 @@ impl App {
     /// Escolhe o arquivo antes de gerar os dados — cancelar não dispara IO.
     /// true = TSV e false = CSV; exporta apenas a aba atual.
     pub(super) fn dialogo_exportar_delimitado(&self, tsv: bool) -> Task<Msg> {
-        let nome = self.workbook.aba(self.folha)
-            .map(|aba| aba.sheet.name.as_str()).unwrap_or(tr!("Planilha"));
+        // O nome do documento (como o Excel); com mais de uma aba, a aba
+        // exportada vai junto. Antes sugeria só "Planilha1".
+        let documento = self.nome_base_documento();
+        let nome = match self.workbook.aba(self.folha) {
+            Some(aba) if self.workbook.len() > 1 => format!("{documento} - {}", aba.sheet.name),
+            _ => documento,
+        };
         // Um nome de aba pode conter barras; não usá-las como diretórios.
         let nome: String = nome.chars().map(|c|
             if "/\\:*?\"<>|".contains(c) { '_' } else { c }

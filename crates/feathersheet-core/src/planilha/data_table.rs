@@ -355,6 +355,14 @@ impl DataTable {
             || entry.text_col.as_ref().is_some_and(|c| c.has(row))
     }
 
+    /// As máscaras de presença (número e texto) do bloco `idx` da coluna —
+    /// ver [`crate::planilha::column_store::ChunkedColumn::mascara_do_bloco`].
+    pub fn mascaras_do_bloco(&self, col: u32, idx: usize) -> [Option<&[u8]>; 2] {
+        let Some(entry) = self.columns.get(&col) else { return [None, None] };
+        [entry.float_col.as_ref().and_then(|c| c.mascara_do_bloco(idx)),
+         entry.text_col.as_ref().and_then(|c| c.mascara_do_bloco(idx))]
+    }
+
     pub fn clear_cell(&mut self, row: u32, col: u32) {
         let Some(entry) = self.columns.get_mut(&col) else {
             return;

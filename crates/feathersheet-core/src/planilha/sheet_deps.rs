@@ -8,6 +8,17 @@ use crate::formula::ast::Node;
 use crate::celulas::refs::{key_col, key_row, CellKey, Rect};
 
 const BLOCK_SHIFT: u32 = 10;
+/// Faixa com mais blocos de linhas que isto (64 mil linhas) e mais blocos
+/// que colunas é "alta" (`A:A`, `A2:C1000000`): vai para o índice por
+/// coluna. Pelo índice de blocos, `A:A` (100 milhões de linhas) eram ~98 mil
+/// entradas por faixa — 70 ms por fórmula, e `MÍNIMOSES(AO:AO;A:A;A2;…)`
+/// preenchida em 13,7 milhões de linhas travou o app (17/10/2026).
+const BLOCOS_FAIXA_ALTA: u32 = 64;
+
+fn faixa_alta(rect: &Rect) -> bool {
+    let blocos = (rect.r1 >> BLOCK_SHIFT).saturating_sub(rect.r0 >> BLOCK_SHIFT) + 1;
+    blocos > BLOCOS_FAIXA_ALTA && rect.c1.saturating_sub(rect.c0) + 1 < blocos
+}
 
 /// Nomes de função voláteis: recalculam mesmo sem nenhuma dependência ter
 /// mudado. As mesmas oito da versão TypeScript, em PT-BR e EN-US.
@@ -100,6 +111,9 @@ pub struct DependencyGraph {
     pub range_deps: HashMap<CellKey, Vec<Rect>>,
     /// bloco de linhas -> fórmulas com intervalos que tocam o bloco.
     pub range_index: HashMap<u32, HashSet<CellKey>>,
+    /// coluna -> fórmulas com intervalos **altos** ([`faixa_alta`]) que
+    /// passam pela coluna. Esses não entram em `range_index`.
+    pub range_cols: HashMap<u32, HashSet<CellKey>>,
     /// fórmula -> células simples que ela lê.
     pub precedents: HashMap<CellKey, Vec<CellKey>>,
     pub volatiles: HashSet<CellKey>,
@@ -115,6 +129,7 @@ impl DependencyGraph {
         self.dependents.clear();
         self.range_deps.clear();
         self.range_index.clear();
+        self.range_cols.clear();
         self.precedents.clear();
         self.volatiles.clear();
         self.array_cells.clear();
@@ -219,16 +234,7 @@ impl DependencyGraph {
         }
         self.range_deps = new_range_deps;
 
-        self.range_index.clear();
-        for (&fk, rects) in &self.range_deps {
-            for rect in rects {
-                let b0 = rect.r0 >> BLOCK_SHIFT;
-                let b1 = rect.r1 >> BLOCK_SHIFT;
-                for b in b0..=b1 {
-                    self.range_index.entry(b).or_default().insert(fk);
-                }
-            }
-        }
+        self.reindexar_faixas();
 
         let mut new_volatiles = HashSet::with_capacity(self.volatiles.len());
         for fk in self.volatiles.drain() {
@@ -346,16 +352,7 @@ impl DependencyGraph {
         }
         self.range_deps = new_range_deps;
 
-        self.range_index.clear();
-        for (&fk, rects) in &self.range_deps {
-            for rect in rects {
-                let b0 = rect.r0 >> BLOCK_SHIFT;
-                let b1 = rect.r1 >> BLOCK_SHIFT;
-                for b in b0..=b1 {
-                    self.range_index.entry(b).or_default().insert(fk);
-                }
-            }
-        }
+        self.reindexar_faixas();
 
         let mut new_volatiles = HashSet::with_capacity(self.volatiles.len());
         for fk in self.volatiles.drain() {
@@ -425,11 +422,7 @@ impl DependencyGraph {
         }
         if !rects.is_empty() {
             for rect in &rects {
-                let b0 = rect.r0 >> BLOCK_SHIFT;
-                let b1 = rect.r1 >> BLOCK_SHIFT;
-                for b in b0..=b1 {
-                    self.range_index.entry(b).or_default().insert(k);
-                }
+                self.indexar_faixa(k, rect);
             }
             self.range_deps.insert(k, rects);
         }
@@ -452,17 +445,8 @@ impl DependencyGraph {
         }
 
         if let Some(rects) = self.range_deps.remove(&k) {
-            for rect in rects {
-                let b0 = rect.r0 >> BLOCK_SHIFT;
-                let b1 = rect.r1 >> BLOCK_SHIFT;
-                for b in b0..=b1 {
-                    if let Some(set) = self.range_index.get_mut(&b) {
-                        set.remove(&k);
-                        if set.is_empty() {
-                            self.range_index.remove(&b);
-                        }
-                    }
-                }
+            for rect in &rects {
+                self.desindexar_faixa(k, rect);
             }
         }
 
@@ -483,17 +467,66 @@ impl DependencyGraph {
             }
         }
 
+        let contem = |rect: &Rect| row >= rect.r0 && row <= rect.r1 && col >= rect.c0 && col <= rect.c1;
         if let Some(candidates) = self.range_index.get(&(row >> BLOCK_SHIFT)) {
             for &dep in candidates {
                 let Some(rects) = self.range_deps.get(&dep) else { continue };
-                for rect in rects {
-                    if row >= rect.r0 && row <= rect.r1 && col >= rect.c0 && col <= rect.c1 {
-                        visit(dep);
-                        break;
-                    }
+                if rects.iter().any(|r| !faixa_alta(r) && contem(r)) {
+                    visit(dep);
                 }
             }
         }
+        // Cada fórmula uma vez só: pelas altas, só se nenhuma baixa já casou.
+        if let Some(candidates) = self.range_cols.get(&col) {
+            for &dep in candidates {
+                let Some(rects) = self.range_deps.get(&dep) else { continue };
+                if rects.iter().any(|r| faixa_alta(r) && contem(r))
+                    && !rects.iter().any(|r| !faixa_alta(r) && contem(r)) {
+                    visit(dep);
+                }
+            }
+        }
+    }
+
+    fn indexar_faixa(&mut self, k: CellKey, rect: &Rect) {
+        if faixa_alta(rect) {
+            for c in rect.c0..=rect.c1 {
+                self.range_cols.entry(c).or_default().insert(k);
+            }
+        } else {
+            for b in (rect.r0 >> BLOCK_SHIFT)..=(rect.r1 >> BLOCK_SHIFT) {
+                self.range_index.entry(b).or_default().insert(k);
+            }
+        }
+    }
+
+    fn desindexar_faixa(&mut self, k: CellKey, rect: &Rect) {
+        let (indice, de, ate) = if faixa_alta(rect) {
+            (&mut self.range_cols, rect.c0, rect.c1)
+        } else {
+            (&mut self.range_index, rect.r0 >> BLOCK_SHIFT, rect.r1 >> BLOCK_SHIFT)
+        };
+        for i in de..=ate {
+            if let Some(set) = indice.get_mut(&i) {
+                set.remove(&k);
+                if set.is_empty() {
+                    indice.remove(&i);
+                }
+            }
+        }
+    }
+
+    /// Refaz os dois índices de faixas a partir de `range_deps`.
+    fn reindexar_faixas(&mut self) {
+        self.range_index.clear();
+        self.range_cols.clear();
+        let deps = std::mem::take(&mut self.range_deps);
+        for (&fk, rects) in &deps {
+            for rect in rects {
+                self.indexar_faixa(fk, rect);
+            }
+        }
+        self.range_deps = deps;
     }
 
     /// Marca como suja, em cascata, toda fórmula que depende (direta ou
@@ -599,6 +632,26 @@ mod tests {
     }
 
     #[test]
+    fn faixa_de_coluna_inteira_vai_para_o_indice_por_coluna() {
+        let mut grafo = DependencyGraph::new();
+        let k = crate::celulas::refs::key(1, 46);
+        let ast = crate::formula::parser::parse_formula("MINIFS(AO:AO;A:A;A2;AP2:AP200)").unwrap();
+        let inicio = std::time::Instant::now();
+        grafo.link(k, &ast, &|_| true, &mut |_, _| {});
+        assert!(inicio.elapsed() < std::time::Duration::from_millis(5), "{:?}", inicio.elapsed());
+        assert_eq!(grafo.range_cols.len(), 2, "AO e A");
+        assert_eq!(grafo.range_index.len(), 1, "AP2:AP200 num bloco só");
+        let visitas = |r, c| { let mut v = 0; grafo.step_dependents(crate::celulas::refs::key(r, c), |_| v += 1); v };
+        assert_eq!(visitas(50_000_000, 40), 1, "AO lá embaixo");
+        assert_eq!(visitas(5, 0), 1, "A");
+        assert_eq!(visitas(5, 41), 1, "AP dentro");
+        assert_eq!(visitas(500, 41), 0, "AP fora");
+        assert_eq!(visitas(5, 1), 0, "B");
+        grafo.unlink(k, &mut |_, _| {});
+        assert!(grafo.range_cols.is_empty() && grafo.range_index.is_empty());
+    }
+
+    #[test]
     fn range_deps_indexa_por_bloco_e_step_dependents_confere_o_retangulo() {
         let mut g = DependencyGraph::new();
         // =SOMA(A1:A5) em B1
@@ -696,6 +749,7 @@ mod tests {
 
         grafo.unlink(formula, &mut |_, _| {});
         assert!(grafo.range_index.is_empty());
+        assert!(grafo.range_cols.is_empty());
         assert!(grafo.range_deps.is_empty());
     }
 }

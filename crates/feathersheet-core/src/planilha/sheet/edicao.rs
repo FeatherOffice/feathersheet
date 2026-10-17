@@ -594,6 +594,65 @@ impl Sheet {
         self.data.has_cell(row, col) || self.formulas.has(row, col)
     }
 
+    /// As sequências `(primeira, última)` de linhas seguidas com conteúdo na
+    /// coluna, de 0 até `ate` — o mesmo que [`Self::has_content`] linha a
+    /// linha, mas lendo as máscaras de presença bloco a bloco (8 linhas por
+    /// byte). É o que deixa a Região atual e o Ctrl+T rápidos em 13 milhões
+    /// de linhas: perguntar célula a célula travava a janela (17/10/2026).
+    pub fn sequencias_com_conteudo(&self, col: u32, ate: u32) -> Vec<(u32, u32)> {
+        use crate::planilha::column_store::{CHUNK_SHIFT, CHUNK_SIZE};
+        // Células soltas mandam na linha delas, como no `has_content`.
+        let mut soltas: Vec<(u32, bool)> = self.cells.iter()
+            .filter(|(k, _)| key_col(**k) == col && key_row(**k) <= ate)
+            .map(|(k, c)| (key_row(*k), !c.raw.is_empty()))
+            .collect();
+        soltas.sort_unstable_by_key(|s| s.0);
+        let mut soltas = soltas.into_iter().peekable();
+        let mut sequencias: Vec<(u32, u32)> = Vec::new();
+        let mut marca = |r0: u32, r1: u32| match sequencias.last_mut() {
+            Some(ultima) if ultima.1 + 1 == r0 => ultima.1 = r1,
+            _ => sequencias.push((r0, r1)),
+        };
+        let mut mascara = vec![0u8; CHUNK_SIZE >> 3];
+        for bloco in 0..=(ate >> CHUNK_SHIFT) as usize {
+            let base = (bloco as u32) << CHUNK_SHIFT;
+            let partes = self.data.mascaras_do_bloco(col, bloco);
+            let formulas = self.formulas.mascara_do_bloco(col, bloco);
+            let com_solta = soltas.peek().is_some_and(|s| s.0 >> CHUNK_SHIFT == bloco as u32);
+            if partes.iter().all(Option::is_none) && formulas.is_none() && !com_solta {
+                continue;
+            }
+            mascara.fill(0);
+            for m in partes.into_iter().chain([formulas]).flatten() {
+                for (destino, bits) in mascara.iter_mut().zip(m) { *destino |= bits; }
+            }
+            while let Some(&(r, cheia)) = soltas.peek() {
+                if r >> CHUNK_SHIFT != bloco as u32 { break; }
+                let o = (r - base) as usize;
+                if cheia { mascara[o >> 3] |= 1 << (o & 7); } else { mascara[o >> 3] &= !(1 << (o & 7)); }
+                soltas.next();
+            }
+            let ultimo_byte = ((ate - base).min(CHUNK_SIZE as u32 - 1) >> 3) as usize;
+            for (i, &byte) in mascara[..=ultimo_byte].iter().enumerate() {
+                let linha = base + ((i as u32) << 3);
+                match byte {
+                    0 => {}
+                    0xff => marca(linha, linha + 7),
+                    _ => for b in 0..8 {
+                        if byte & (1 << b) != 0 { marca(linha + b, linha + b); }
+                    },
+                }
+            }
+        }
+        // O último byte pode passar de `ate`.
+        while let Some(ultima) = sequencias.last_mut() {
+            if ultima.0 > ate { sequencias.pop(); continue; }
+            ultima.1 = ultima.1.min(ate);
+            break;
+        }
+        sequencias
+    }
+
     /// A região contígua em volta da célula — o que o Ctrl+T do Excel pega, e
     /// a origem da tabela dinâmica e do filtro. Tradução do `regiaoAtual` do
     /// `table.ts` (sem diagonal; célula vazia devolve só ela). Pela ponte ele
@@ -605,24 +664,26 @@ impl Sheet {
             return Rect::new(row, col, row, col);
         }
         let (mut r0, mut r1, mut c0, mut c1) = (row, row, col, col);
-        let linha_tem = |s: &Self, r: u32, c0: u32, c1: u32| r <= max_r && (c0..=c1).any(|c| s.has_content(r, c));
-        let coluna_tem = |s: &Self, c: u32, r0: u32, r1: u32| c <= max_c && (r0..=r1).any(|r| s.has_content(r, c));
+        // Pelas sequências de linhas cheias de cada coluna (lidas das
+        // máscaras, bloco a bloco), não célula a célula: o gráfico a partir
+        // de uma célula de 13 milhões de linhas travava como o Ctrl+T.
+        let mut colunas = crate::operacoes::ops::regiao::Colunas::novas(self, max_r);
         let mut cresceu = true;
         while cresceu {
             cresceu = false;
-            while r0 > 0 && linha_tem(self, r0 - 1, c0, c1) {
-                r0 -= 1;
+            if let Some(novo) = r0.checked_sub(1).and_then(|r| colunas.bloco_de_linhas(r, c0, c1, false)) {
+                r0 = novo;
                 cresceu = true;
             }
-            while linha_tem(self, r1 + 1, c0, c1) {
-                r1 += 1;
+            if let Some(novo) = (r1 < max_r).then(|| colunas.bloco_de_linhas(r1 + 1, c0, c1, true)).flatten() {
+                r1 = novo.min(max_r);
                 cresceu = true;
             }
-            while c0 > 0 && coluna_tem(self, c0 - 1, r0, r1) {
+            while c0 > 0 && colunas.tem_na_faixa(c0 - 1, r0, r1) {
                 c0 -= 1;
                 cresceu = true;
             }
-            while coluna_tem(self, c1 + 1, r0, r1) {
+            while c1 < max_c && colunas.tem_na_faixa(c1 + 1, r0, r1) {
                 c1 += 1;
                 cresceu = true;
             }
@@ -1172,7 +1233,7 @@ impl Sheet {
     /// Se existe fórmula nesta aba que leia outra célula: o grafo (fórmula
     /// avulsa, por célula ou intervalo) ou a coluna de fórmulas empacotadas.
     fn alguma_formula_le(&self) -> bool {
-        !self.deps.dependents.is_empty() || !self.deps.range_index.is_empty() || self.formulas.size() > 0
+        !self.deps.dependents.is_empty() || !self.deps.range_deps.is_empty() || self.formulas.size() > 0
     }
 
     /// `paste`: um bloco de textos a partir de (`row`, `col`). Sem desfazer é
@@ -1988,6 +2049,47 @@ impl Sheet {
         true
     }
 
+    /// Se a fórmula `raw`, escrita em (`row`, `col`), pode ir em bloco pela
+    /// coluna empacotada ([`Self::preencher_formula_faixa_vazia`]).
+    pub fn formula_cabe_em_bloco(&self, col: u32, row: u32, raw: &str) -> bool {
+        use crate::formula::formula_pattern::pattern_for;
+        let raw = raw.trim();
+        raw.starts_with('=') && pattern_for(raw, row as i32, col as i32).is_some_and(|padrao|
+            crate::formula::formula_table::FormulaTable::aceitaria(&padrao, raw, super::pattern_check)
+                && self.formulas.caberia_na_coluna(&padrao, col))
+    }
+
+    /// A fórmula `raw` — o texto dela na linha `r0` — levada para `r0..=r1`
+    /// da coluna `col`, que tem de estar vazia ([`Self::faixa_vazia`]), como
+    /// o Ctrl+D a levaria: referências relativas andam. Um padrão para a
+    /// faixa toda, em blocos na coluna empacotada; um passo de Ctrl+Z.
+    /// `MÍNIMOSES(AO:AO;A:A;A2;…)` em 13,7 milhões de linhas travou o app
+    /// pelo caminho de uma fórmula por célula (17/10/2026). `false` quando a
+    /// fórmula não cabe na coluna empacotada (volátil, matriz, nome, lê a
+    /// própria coluna…): use o caminho de sempre.
+    pub fn preencher_formula_faixa_vazia(&mut self, col: u32, r0: u32, r1: u32, raw: &str) -> bool {
+        let raw = raw.trim();
+        if r0 > r1 || !self.formula_cabe_em_bloco(col, r0, raw) { return false; }
+        let raw = raw.to_string();
+        let refazer = Refazer(Arc::new(move |s: &mut Sheet| {
+            if !s.formulas.preencher_padrao(col, r0, r1, &raw, super::pattern_check) { return; }
+            s.cresce_limites(r0, col);
+            s.cresce_limites(r1, col);
+            s.rastro.borrow_mut().desconhecer();
+            // Quem lê estas linhas (inclusive por intervalo) recalcula, por
+            // coluna: célula a célula seriam milhões de entradas.
+            let usos = s.formulas.columns_in_use();
+            s.invalidar_colunas_e_dependentes(std::iter::once(col).collect(), &usos);
+        }));
+        self.abrir_transacao();
+        if let Some(pendente) = self.hist.pendente.as_mut() {
+            pendente.push(Passo::Divisao { area: [r0, col, r1, col], antes: Vec::new(), refazer: refazer.clone() });
+        }
+        (refazer.0)(self);
+        self.fechar_transacao();
+        true
+    }
+
     fn limpar_area_sem_registro(&mut self, area: [u32; 4]) {
         let [r0, c0, r1, c1] = area;
         let dentro = |k: &CellKey| {
@@ -2001,10 +2103,14 @@ impl Sheet {
         for k in avulsas {
             self.soltar_para_literal(key_row(k), key_col(k));
         }
-        let mut formulas = Vec::new();
-        self.formulas.for_each_in_range(r0, r1, c0, c1, |r, c| formulas.push((r, c)));
-        for (r, c) in formulas {
-            self.soltar_para_literal(r, c);
+        // Fórmula empacotada: em blocos, como entrou (`preencher_formula_faixa_vazia`).
+        for c in c0..=c1 {
+            self.formulas.limpar_faixa(c, r0, r1);
+        }
+        {
+            let calc = self.calc.get_mut();
+            calc.cache.retain(|k, _| !dentro(k));
+            calc.dirty.retain(|k| !dentro(k));
         }
         for c in c0..=c1 {
             self.data.limpar_faixa(c, r0, r1);
@@ -2047,11 +2153,20 @@ impl Sheet {
         let Some(t) = self.hist.desfazer.pop() else {
             return false;
         };
+        // Só células (nada muda de lugar no meio): uma cascata de "sujo" no
+        // fim, como na escrita em lote ([`Sheet::adiar_cascata`]).
+        let em_lote = Self::so_celulas(&t);
+        if em_lote { self.adiar_cascata(); }
         for passo in t.iter().rev() {
             self.desfazer_passo(passo);
         }
+        if em_lote { self.soltar_cascata(); }
         self.hist.refazer.push(t);
         true
+    }
+
+    fn so_celulas(t: &[Passo]) -> bool {
+        t.len() > 1 && t.iter().all(|p| matches!(p, Passo::Celula(_) | Passo::Compacto(_) | Passo::CompactoNoDisco(_)))
     }
 
     pub fn redo(&mut self) -> bool {
@@ -2059,9 +2174,12 @@ impl Sheet {
         let Some(t) = self.hist.refazer.pop() else {
             return false;
         };
+        let em_lote = Self::so_celulas(&t);
+        if em_lote { self.adiar_cascata(); }
         for passo in &t {
             self.refazer_passo(passo);
         }
+        if em_lote { self.soltar_cascata(); }
         self.hist.desfazer.push(t);
         true
     }
@@ -2321,7 +2439,7 @@ impl Sheet {
     }
 
     /// Suja as colunas dadas e, por coluna, tudo o que depende delas nesta aba.
-    fn invalidar_colunas_e_dependentes(
+    pub(super) fn invalidar_colunas_e_dependentes(
         &self,
         mut colunas: std::collections::HashSet<u32>,
         usos: &[crate::formula::formula_table::ColumnUse],
@@ -2333,7 +2451,8 @@ impl Sheet {
                     let local = r.sheet.as_deref().is_none_or(|s| super::mesmo_nome(s, &self.name));
                     let c = if r.col_lock { r.col } else { uso.col as i32 + r.col };
                     local && c >= 0 && colunas.contains(&(c as u32))
-                })) {
+                }) || p.faixas.iter().any(|f| f.colunas_em(uso.col)
+                    .is_some_and(|(c0, c1)| colunas.iter().any(|c| *c >= c0 && *c <= c1)))) {
                     colunas.insert(uso.col);
                 }
             }

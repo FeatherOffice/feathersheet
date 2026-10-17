@@ -707,13 +707,14 @@ impl App {
             .width(Length::Fill)
             .height(Length::Fill)
             .clip(true);
+        let mut linha = iced::widget::row![sobre_grade].height(Length::Fill);
         if self.graficos.aberto {
-            iced::widget::row![sobre_grade, self.view_graficos()]
-                .height(Length::Fill)
-                .into()
-        } else {
-            sobre_grade.into()
+            linha = linha.push(self.view_graficos());
         }
+        if self.formatar_imagem.aberto {
+            linha = linha.push(self.view_formatar_imagem());
+        }
+        linha.into()
     }
 }
 

@@ -51,3 +51,28 @@ pub(super) fn comparando_so_a_d_a_linha_inteira_sobe_junto() {
     assert_eq!(linha(&s, 3), ["", "", "", "", ""]);
     assert_eq!(s.get_raw(0, 6), "longe");
 }
+
+#[test]
+pub(super) fn sequencias_batem_com_has_content_na_divisa_dos_blocos() {
+    let mut s = Sheet::new("Planilha1");
+    // Número, texto, fórmula empacotada e fórmula solta, com um buraco,
+    // atravessando a linha 65.536 (começo do segundo bloco).
+    for r in 65_520..65_560u32 {
+        if r == 65_540 { continue; }
+        let raw = match r % 4 { 0 => r.to_string(), 1 => format!("t{r}"), 2 => "=1+1".into(), _ => "=AGORA()".into() };
+        s.set_cell_raw(r, 0, raw, None);
+    }
+    s.set_cell_raw(3, 0, "x".into(), None);
+    let esperado = {
+        let mut v: Vec<(u32, u32)> = Vec::new();
+        for r in 0..=65_600u32 {
+            if !s.has_content(r, 0) { continue; }
+            match v.last_mut() { Some(u) if u.1 + 1 == r => u.1 = r, _ => v.push((r, r)) }
+        }
+        v
+    };
+    assert_eq!(s.sequencias_com_conteudo(0, 65_600), esperado);
+    assert_eq!(esperado, vec![(3, 3), (65_520, 65_539), (65_541, 65_559)]);
+    assert_eq!(s.sequencias_com_conteudo(0, 65_530), vec![(3, 3), (65_520, 65_530)]);
+    assert_eq!(regiao_atual(&s, Rect::new(65_530, 0, 65_530, 0)), Rect::new(65_520, 0, 65_539, 0), "para na linha vazia");
+}

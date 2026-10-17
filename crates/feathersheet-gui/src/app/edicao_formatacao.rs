@@ -393,6 +393,17 @@ impl App {
         let copia = self.area_copiada.as_ref().filter(|copia| copia.texto == dados);
         let internas = copia.map(|copia| &copia.celulas);
         let valores_internos = copia.map(|copia| &copia.valores);
+        // Fórmula copiada no FeatherSheet anda com o destino (`=A1` de B1
+        // colada em B5 vira `=A5`), como no Excel; recortada vai como está.
+        // Até 17/10/2026 o texto ia igual para qualquer lugar.
+        let desloca = copia.filter(|c| !c.recortada).map(|c| c.origem);
+        let deslocar = |raw: &str, r: u32, c: u32, or: usize, oc: usize| -> String {
+            match desloca {
+                Some((r0, c0)) if raw.starts_with('=') => feathersheet_core::operacoes::fill::shift_formula(
+                    raw, r as i32 - (r0 + or as u32) as i32, c as i32 - (c0 + oc as u32) as i32),
+                _ => raw.to_owned(),
+            }
+        };
         if dados.is_empty() && internas.is_none() { return; }
         if matches!(modo, ModoColagem::SomenteFormato | ModoColagem::ValoresComFormato)
             && internas.is_none()
@@ -442,6 +453,16 @@ impl App {
                     (Some(_), _) => valores_internos?.first()?.get(oc)?.clone(),
                     (None, _) => externas.as_ref()?.first()?.get(oc).cloned().unwrap_or_default(),
                 };
+                // Fórmula copiada aqui vai em bloco pela coluna empacotada
+                // (`preencher_formula_faixa_vazia`); a de fora ou recortada
+                // seria o mesmo texto em todas as linhas, não um padrão.
+                if raw.starts_with('=') {
+                    let c = selecao.c0 + oc as u32;
+                    let no_topo = deslocar(&raw, selecao.r0, c, 0, oc);
+                    let cabe = self.workbook.aba(self.folha)
+                        .is_some_and(|a| a.sheet.formula_cabe_em_bloco(c, selecao.r0, &no_topo));
+                    return (desloca.is_some() && cabe).then_some(raw);
+                }
                 feathersheet_core::planilha::sheet::Sheet::valor_de_faixa(&raw).map(|_| raw)
             }).collect()
         })();
@@ -517,16 +538,24 @@ impl App {
         let mut sem_bloco: Option<u32> = None;
         self.workbook.editar(self.folha, |sheet| {
             sheet.abrir_transacao();
-            // Com a colagem rápida, célula a célula só até onde a aba tem
-            // conteúdo; a parte vazia abaixo vai em blocos, no fim.
-            let altura_celulas = match &rapida {
-                Some(_) if sheet.max_row < plano.r0 => 0,
-                Some(_) => ((sheet.max_row - plano.r0) as usize + 1).min(plano.altura),
-                None => plano.altura,
-            };
+            // Com a colagem rápida, célula a célula só até a última célula
+            // usada de cada coluna; a parte vazia abaixo vai em bloco, no
+            // fim. Era até a última linha da aba: colar ao lado de 13,7
+            // milhões de linhas de dados ia célula a célula (17/10/2026).
+            let ate = plano.r0 + plano.altura as u32 - 1;
+            let inicio_bloco: Vec<Option<u32>> = (0..plano.largura).map(|dc| {
+                rapida.as_ref()?;
+                let c = plano.c0 + dc as u32;
+                let de = plano.r0.max(sheet.ultima_linha_na_coluna(c));
+                (de <= ate && sheet.faixa_vazia(c, de, ate)).then_some(de)
+            }).collect();
+            let altura_celulas = inicio_bloco.iter()
+                .map(|i| i.map_or(plano.altura, |de| (de - plano.r0) as usize))
+                .max().unwrap_or(0);
             for dr in 0..altura_celulas {
                 for dc in 0..plano.largura {
                     let (r, c) = (plano.r0 + dr as u32, plano.c0 + dc as u32);
+                    if inicio_bloco[dc].is_some_and(|de| r >= de) { continue; }
                     // Na transposição, linhas da origem tornam-se colunas;
                     // a repetição usa as dimensões já transpostas.
                     let (or, oc) = if modo == ModoColagem::Transposta {
@@ -539,7 +568,8 @@ impl App {
                             if let Some(linhas) = internas {
                                 let celula = linhas[or].get(oc);
                                 let destino = celula
-                                    .filter(|s| !s.raw.is_empty() || s.style.is_some()).cloned();
+                                    .filter(|s| !s.raw.is_empty() || s.style.is_some())
+                                    .map(|s| Snap { raw: deslocar(&s.raw, r, c, or, oc), style: s.style.clone() });
                                 sheet.apply(r, c, destino, true);
                             } else if let Some(linhas) = externas.as_ref() {
                                 let conteudo = linhas[or].get(oc).map(String::as_str).unwrap_or("");
@@ -549,9 +579,11 @@ impl App {
                         ModoColagem::SomenteValores
                         | ModoColagem::ValoresComFormato
                         | ModoColagem::FormulasSemFormato => {
+                            let deslocada;
                             let valor = if let Some(linhas) = internas {
                                 if modo == ModoColagem::FormulasSemFormato {
-                                    linhas[or].get(oc).map(|s| s.raw.as_str()).unwrap_or("")
+                                    deslocada = deslocar(linhas[or].get(oc).map(|s| s.raw.as_str()).unwrap_or(""), r, c, or, oc);
+                                    deslocada.as_str()
                                 } else {
                                     valores_internos
                                         .and_then(|linhas| linhas[or].get(oc))
@@ -591,11 +623,16 @@ impl App {
                 }
             }
             if let Some(textos) = &rapida {
-                let (de, ate) = (plano.r0 + altura_celulas as u32, plano.r0 + plano.altura as u32 - 1);
                 for dc in 0..plano.largura {
                     let c = plano.c0 + dc as u32;
-                    let preenchida = de > ate || (sheet.faixa_vazia(c, de, ate)
-                        && sheet.preencher_faixa_vazia(c, de, ate, &textos[dc % origem_largura]));
+                    let oc = dc % origem_largura;
+                    let texto = &textos[oc];
+                    let de = inicio_bloco[dc].unwrap_or(plano.r0 + altura_celulas as u32);
+                    let preenchida = de > ate || (sheet.faixa_vazia(c, de, ate) && if texto.starts_with('=') {
+                        sheet.preencher_formula_faixa_vazia(c, de, ate, &deslocar(texto, de, c, 0, oc))
+                    } else {
+                        sheet.preencher_faixa_vazia(c, de, ate, texto)
+                    });
                     if !preenchida { sem_bloco.get_or_insert(c); }
                 }
             }

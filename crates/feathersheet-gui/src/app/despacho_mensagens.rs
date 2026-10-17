@@ -106,11 +106,15 @@ impl App {
                 self.menu_aberto = false;
                 self.contexto = None;
                 let selecao = self.area_selecionada();
+                let inicio = std::time::Instant::now();
                 match tabelas::sugerir(&self.workbook, self.folha, selecao)
                     .and_then(|(area, cab, branca)| Ok((
                         area, cab, branca, tabelas::nome_sugerido(&self.workbook)?
                     ))) {
                     Ok((area, cab, branca, nome)) => {
+                        self.monitor.registrar(Nivel::Info, tr!("Tabela"), &trf!(
+                            "área sugerida {}:{} · {:.1} ms", cell_name(area.r0, area.c0),
+                            cell_name(area.r1, area.c1), inicio.elapsed().as_secs_f64() * 1000.0));
                         self.tabela_area = Some(area);
                         self.tabela_cabecalho = cab;
                         self.tabela_branca = branca;
@@ -148,10 +152,14 @@ impl App {
             }
             Msg::TabelaConfirmar => {
                 if let Some(area) = self.tabela_area.clone() {
+                    let inicio = std::time::Instant::now();
                     match tabelas::criar(&mut self.workbook, self.folha,
                         area.clone(), &self.tabela_nome, self.tabela_cabecalho, self.tabela_branca)
                     {
                         Ok(()) => {
+                            self.monitor.registrar(Nivel::Info, tr!("Tabela"), &trf!(
+                                "{} criada · {:.1} ms", self.tabela_nome,
+                                inicio.elapsed().as_secs_f64() * 1000.0));
                             self.alterado = true;
                             self.status = trf!("Tabela {} criada em {}:{}",
                                 self.tabela_nome, cell_name(area.r0,area.c0),
@@ -176,6 +184,8 @@ impl App {
                 }
                 Task::none()
             }
+            Msg::ImagemCelula(evento) => self.evento_imagem_celula(evento),
+            Msg::FormatarImagem(evento) => self.evento_formatar_imagem(evento),
             Msg::ImagemPressionar(id, gesto) => {
                 self.pressionar_imagem(id, gesto);
                 Task::none()
@@ -247,7 +257,7 @@ impl App {
                                 self.imagens_importadas.handles.borrow_mut().insert(
                                     id, iced::widget::image::Handle::from_bytes(bytes),
                                 );
-                                self.status = trf!("Imagem inserida na planilha: {nome}. Arraste para mover ou use a alça ↘ para dimensionar.");
+                                self.status = trf!("Imagem inserida na planilha: {nome}. Arraste para mover ou use as alças para dimensionar.");
                             }
                             Err(e) => self.status = e,
                         }
@@ -1257,6 +1267,9 @@ impl App {
                 if matches!(key, keyboard::Key::Named(keyboard::key::Named::Shift)) {
                     self.imagens_importadas.shift.set(false);
                 }
+                if matches!(key, keyboard::Key::Named(keyboard::key::Named::Alt)) {
+                    self.imagens_importadas.alt.set(false);
+                }
                 Task::none()
             }
             Msg::Copiar => match self.copiar_selecao() {
@@ -1269,6 +1282,7 @@ impl App {
             Msg::Recortar => {
                 match self.copiar_selecao() {
                     Some(dados) => {
+                        if let Some(copia) = self.area_copiada.as_mut() { copia.recortada = true; }
                         // A origem é limpa agora: não fica marca tracejada.
                         self.marca_copia = None;
                         // Recortar remove também o estilo direto da origem.
